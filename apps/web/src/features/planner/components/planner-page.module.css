@@ -1582,8 +1582,24 @@
     width: 78%;
   }
 
-  .scriptFieldRow {
+  .assetModal {
+    width: min(92vw, 800px);
+    min-height: auto;
+    max-height: 92vh;
+    padding: 14px;
+  }
+
+  .assetModalBody {
     grid-template-columns: 1fr;
+  }
+
+  .assetPreviewPane {
+    min-height: 240px;
+  }
+
+  .assetModalFooter {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .tocRail {

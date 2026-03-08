@@ -1,0 +1,10 @@
+{
+  "name": "aiv-workspace",
+  "private": true,
+  "packageManager": "pnpm@10.25.0",
+  "scripts": {
+    "dev": "pnpm --filter @aiv/web dev",
+    "build": "pnpm --filter @aiv/web build",
+    "typecheck": "pnpm --filter @aiv/web typecheck"
+  }
+}

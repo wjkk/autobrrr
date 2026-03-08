@@ -1,0 +1,24 @@
+{
+  "name": "@aiv/web",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aiv/domain": "workspace:*",
+    "@aiv/mock-data": "workspace:*",
+    "@aiv/ui": "workspace:*",
+    "next": "16.0.7",
+    "react": "19.2.1",
+    "react-dom": "19.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "typescript": "^5.9.3"
+  }
+}

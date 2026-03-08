@@ -1,0 +1,252 @@
+.modalSplit {
+  display: grid;
+  grid-template-columns: 0.96fr 1.04fr;
+  gap: 18px;
+}
+
+.previewCard,
+.optionCard,
+.warningCard,
+.modelCard,
+.versionSourceCard,
+.frameButton,
+.uploadCard {
+  border: 1px solid rgba(126, 148, 190, 0.14);
+  border-radius: 22px;
+  background: rgba(10, 17, 31, 0.88);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.previewCard,
+.optionCard,
+.warningCard,
+.modelCard,
+.versionSourceCard,
+.frameButton,
+.uploadCard {
+  padding: 14px;
+}
+
+.previewCard {
+  display: grid;
+  gap: 14px;
+}
+
+.previewFrame {
+  min-height: 280px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 18% 16%, rgba(255, 255, 255, 0.12), transparent 16%),
+    radial-gradient(circle at 84% 12%, rgba(79, 123, 255, 0.2), transparent 24%),
+    linear-gradient(145deg, rgba(11, 18, 34, 0.96), rgba(6, 10, 18, 0.98));
+}
+
+.previewMeta,
+.previewStats,
+.optionStack,
+.versionSourceList,
+.modelMeta,
+.modelGrid,
+.frameGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.previewMeta h3,
+.warningCard strong,
+.modelCard strong,
+.versionSourceCard strong {
+  margin: 0;
+  color: #eef4ff;
+  letter-spacing: -0.03em;
+}
+
+.previewMeta p,
+.previewMeta small,
+.warningCard p,
+.modelCard p,
+.versionSourceCard p,
+.modelCard small,
+.previewStatCard small {
+  margin: 0;
+  color: #90a0c3;
+}
+
+.previewStats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.previewStatCard {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid rgba(126, 148, 190, 0.14);
+  border-radius: 18px;
+  background: rgba(15, 24, 42, 0.8);
+}
+
+.previewStatCard strong {
+  color: #eef4ff;
+  font-size: 16px;
+}
+
+.optionStack {
+  align-content: start;
+}
+
+.optionCard {
+  display: grid;
+  gap: 12px;
+}
+
+.optionCard h4,
+.modelGridTitle {
+  margin: 0;
+  color: #eef4ff;
+  font-size: 16px;
+  letter-spacing: -0.03em;
+}
+
+.optionCard p,
+.modelGridTitle small {
+  margin: 0;
+  color: #8ea0c4;
+}
+
+.inlinePillRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.frameGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.frameButton {
+  display: grid;
+  gap: 10px;
+  text-align: left;
+  color: inherit;
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.frameButton:hover {
+  transform: translateY(-1px);
+  border-color: rgba(96, 165, 250, 0.26);
+}
+
+.frameButtonActive,
+.versionSourceCardActive,
+.modelCardActive {
+  border-color: rgba(96, 165, 250, 0.32);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
+.frameThumb {
+  min-height: 88px;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 18% 16%, rgba(255, 255, 255, 0.12), transparent 14%),
+    radial-gradient(circle at 82% 12%, rgba(95, 145, 255, 0.22), transparent 24%),
+    linear-gradient(145deg, rgba(45, 74, 128, 0.34), rgba(10, 18, 34, 0.96));
+}
+
+.frameMeta {
+  display: grid;
+  gap: 4px;
+}
+
+.versionSourceList {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.versionSourceCard {
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  color: inherit;
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.versionSourceCard:hover,
+.modelCard:hover {
+  transform: translateY(-1px);
+  border-color: rgba(96, 165, 250, 0.24);
+}
+
+.versionSourceBadge,
+.modelTag {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(18, 29, 56, 0.96);
+  color: #b9c8e6;
+  font-size: 11px;
+}
+
+.warningCard {
+  gap: 10px;
+  background: linear-gradient(180deg, rgba(58, 33, 8, 0.88), rgba(22, 14, 10, 0.94));
+  border-color: rgba(249, 115, 22, 0.24);
+}
+
+.modelCategoryTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.modelGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.modelCard {
+  display: grid;
+  gap: 12px;
+  text-align: left;
+  color: inherit;
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.modelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modelTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.uploadCard {
+  display: grid;
+  gap: 12px;
+}
+
+.uploadCard input {
+  width: 100%;
+}
+
+.footerNote {
+  color: #8ea2cb;
+}
+
+@media (max-width: 980px) {
+  .modalSplit,
+  .frameGrid,
+  .versionSourceList,
+  .modelGrid,
+  .previewStats {
+    grid-template-columns: 1fr;
+  }
+}

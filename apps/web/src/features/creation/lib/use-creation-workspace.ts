@@ -1,0 +1,559 @@
+'use client';
+
+import type { CreationTrack, CreationViewMode, StudioFixture } from '@aiv/domain';
+import { useEffect, useMemo, useRef, useState } from 'react';
+
+import { creationCopy } from '@/lib/copy';
+
+import {
+  addLipsyncDialogueState,
+  advancePlaybackState,
+  applyCanvasDraftState,
+  applyCropStoryboardState,
+  applySelectedVersionState,
+  attachMaterialState,
+  cloneCreationFixture,
+  confirmModelChangeState,
+  deriveStoryboardFromFramesState,
+  finishBatchGenerationState,
+  finishShotGenerationState,
+  removeLipsyncDialogueState,
+  removeMaterialState,
+  resetShotState,
+  seekPlaybackState,
+  selectShotState,
+  selectVersionState,
+  setActiveMaterialState,
+  setCreationTrack,
+  setCreationViewMode,
+  setInlineShotFieldState,
+  setLipsyncFieldState,
+  setMusicFieldState,
+  setVoiceFieldState,
+  startBatchGenerationState,
+  startShotGenerationState,
+  toggleInlineCropState,
+  togglePlaybackState,
+  toggleSubtitleState,
+  updateLipsyncDialogueState,
+} from './creation-state';
+import { formatClock, formatShotDuration, shotAccent, statusLabel } from './creation-utils';
+import type { CanvasDraft, CreationDialogState, GenerationDraft, MaterialTab, ModelPickerDraft, StoryToolDraft, StoryToolMode } from './ui-state';
+import { makeCanvasDraft, makeGenerationDraft, makeModelPickerDraft, makeStoryToolDraft } from './ui-state';
+
+interface UseCreationWorkspaceOptions {
+  studio: StudioFixture;
+  initialShotId?: string;
+  initialView?: CreationViewMode;
+}
+
+export function useCreationWorkspace({ studio, initialShotId, initialView }: UseCreationWorkspaceOptions) {
+  const initialCreation = cloneCreationFixture(studio, initialShotId, initialView);
+  const timersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const [creation, setCreation] = useState(initialCreation);
+  const [dialog, setDialog] = useState<CreationDialogState>({ type: 'none' });
+  const [notice, setNotice] = useState<string | null>(null);
+  const [materialTab, setMaterialTab] = useState<MaterialTab>('local');
+  const [uploadedMaterialName, setUploadedMaterialName] = useState('');
+  const [generateDraft, setGenerateDraft] = useState<GenerationDraft>(() => makeGenerationDraft(initialCreation.shots.find((shot) => shot.id === initialCreation.selectedShotId) ?? initialCreation.shots[0]));
+  const [canvasDraft, setCanvasDraft] = useState<CanvasDraft>(() => makeCanvasDraft(initialCreation.shots.find((shot) => shot.id === initialCreation.selectedShotId) ?? initialCreation.shots[0]));
+  const [storyToolDraft, setStoryToolDraft] = useState<StoryToolDraft>(() => makeStoryToolDraft(initialCreation.shots.find((shot) => shot.id === initialCreation.selectedShotId) ?? initialCreation.shots[0]));
+  const [modelPickerDraft, setModelPickerDraft] = useState<ModelPickerDraft>(() => makeModelPickerDraft(initialCreation.shots.find((shot) => shot.id === initialCreation.selectedShotId) ?? initialCreation.shots[0]));
+  const [lipsyncNotice, setLipsyncNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach((timer) => clearTimeout(timer));
+      if (playbackIntervalRef.current) {
+        clearInterval(playbackIntervalRef.current);
+      }
+    };
+  }, []);
+
+  const activeShot = useMemo(() => creation.shots.find((shot) => shot.id === creation.selectedShotId) ?? creation.shots[0], [creation.selectedShotId, creation.shots]);
+
+  const activeVersion = useMemo(() => {
+    if (!activeShot) {
+      return null;
+    }
+    return activeShot.versions.find((version) => version.id === activeShot.activeVersionId) ?? activeShot.versions[0] ?? null;
+  }, [activeShot]);
+
+  const selectedVersion = useMemo(() => {
+    if (!activeShot) {
+      return null;
+    }
+    return activeShot.versions.find((version) => version.id === activeShot.selectedVersionId) ?? activeVersion;
+  }, [activeShot, activeVersion]);
+
+  const pendingVersion = useMemo(() => {
+    if (!activeShot) {
+      return null;
+    }
+    return activeShot.versions.find((version) => version.id === activeShot.pendingApplyVersionId) ?? null;
+  }, [activeShot]);
+
+  const activeMaterial = useMemo(() => {
+    if (!activeShot) {
+      return null;
+    }
+    return activeShot.materials.find((item) => item.id === activeShot.activeMaterialId) ?? activeShot.materials[0] ?? null;
+  }, [activeShot]);
+
+  useEffect(() => {
+    if (!activeShot) {
+      return;
+    }
+    setGenerateDraft(makeGenerationDraft(activeShot));
+    setCanvasDraft(makeCanvasDraft(activeShot));
+    setStoryToolDraft(makeStoryToolDraft(activeShot));
+    setModelPickerDraft(makeModelPickerDraft(activeShot));
+  }, [activeShot]);
+
+  useEffect(() => {
+    if (!creation.playback.playing) {
+      if (playbackIntervalRef.current) {
+        clearInterval(playbackIntervalRef.current);
+        playbackIntervalRef.current = null;
+      }
+      return;
+    }
+
+    playbackIntervalRef.current = setInterval(() => {
+      setCreation((current) => advancePlaybackState(current, 0.2));
+    }, 200);
+
+    return () => {
+      if (playbackIntervalRef.current) {
+        clearInterval(playbackIntervalRef.current);
+        playbackIntervalRef.current = null;
+      }
+    };
+  }, [creation.playback.playing]);
+
+  const setViewMode = (viewMode: CreationViewMode) => {
+    setCreation((current) => setCreationViewMode(current, viewMode));
+    setNotice(viewMode === 'lipsync' ? '已切换到对口型副工作区。' : `已切换到${viewMode === 'default' ? '默认视图' : '故事版视图'}。`);
+  };
+
+  const setActiveTrack = (activeTrack: CreationTrack) => {
+    setCreation((current) => setCreationTrack(current, activeTrack));
+  };
+
+  const selectShot = (shotId: string, syncPlayback = false) => {
+    setCreation((current) => selectShotState(current, shotId, syncPlayback));
+  };
+
+  const setInlineShotField = <T extends 'resolution' | 'durationMode'>(field: T, value: typeof activeShot[T]) => {
+    if (!activeShot) {
+      return;
+    }
+    setCreation((current) => setInlineShotFieldState(current, activeShot.id, field, value));
+    setGenerateDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const toggleInlineCrop = () => {
+    if (!activeShot) {
+      return;
+    }
+    setCreation((current) => toggleInlineCropState(current, activeShot.id));
+    setGenerateDraft((current) => ({ ...current, cropToVoice: !current.cropToVoice }));
+  };
+
+  const togglePlayback = () => {
+    if (!creation.playback.totalSecond) {
+      return;
+    }
+    setCreation((current) => togglePlaybackState(current));
+  };
+
+  const seekPlayback = (nextSecond: number) => {
+    setCreation((current) => seekPlaybackState(current, nextSecond));
+  };
+
+  const toggleSubtitle = () => {
+    setCreation((current) => toggleSubtitleState(current));
+    setNotice(creation.playback.subtitleVisible ? '已关闭字幕显示。' : '已开启字幕显示。');
+  };
+
+  const openGenerateDialog = () => {
+    if (!activeShot) {
+      return;
+    }
+    setGenerateDraft(makeGenerationDraft(activeShot));
+    setDialog({ type: 'generate' });
+  };
+
+  const submitGeneration = () => {
+    if (!activeShot) {
+      return;
+    }
+    const targetShotId = activeShot.id;
+    const wasFailed = activeShot.status === 'failed';
+    setDialog({ type: 'none' });
+    setNotice(creationCopy.bootCopy);
+    setCreation((current) => startShotGenerationState(current, targetShotId, generateDraft));
+
+    const timer = setTimeout(() => {
+      setCreation((current) => finishShotGenerationState(current, targetShotId, generateDraft.model));
+      setNotice(wasFailed ? creationCopy.retrySubmitted : '已提交当前分镜生成任务。');
+    }, 960);
+
+    timersRef.current.push(timer);
+  };
+
+  const openBatchDialog = (target: 'all' | 'missing') => {
+    setDialog({ type: 'batch', target });
+  };
+
+  const submitBatch = (target: 'all' | 'missing') => {
+    setDialog({ type: 'none' });
+    setNotice(`${creationCopy.batchSubmitted} 目标：${target === 'all' ? '全部分镜' : '仅缺失分镜'}`);
+    setCreation((current) => startBatchGenerationState(current, target));
+
+    const timer = setTimeout(() => {
+      setCreation((current) => finishBatchGenerationState(current, target));
+      setNotice(target === 'all' ? '批量任务已结束，存在 1 条失败分镜。' : '缺失分镜已补齐，但失败分镜仍需单独重试。');
+    }, 1180);
+
+    timersRef.current.push(timer);
+  };
+
+  const selectVersion = (versionId: string) => {
+    if (!activeShot) {
+      return;
+    }
+    setCreation((current) => selectVersionState(current, activeShot.id, versionId));
+    setNotice(versionId === activeShot.activeVersionId ? '已恢复查看当前生效版本。' : '已选择版本，点击替换即可生效。');
+  };
+
+  const applySelectedVersion = (shotId?: string, versionId?: string) => {
+    const targetShot = creation.shots.find((shot) => shot.id === (shotId ?? activeShot?.id));
+    if (!targetShot) {
+      return;
+    }
+
+    const targetVersionId = versionId ?? targetShot.pendingApplyVersionId;
+    if (!targetVersionId) {
+      return;
+    }
+
+    setCreation((current) => {
+      const withSelection = targetVersionId === targetShot.selectedVersionId ? current : selectVersionState(current, targetShot.id, targetVersionId);
+      return applySelectedVersionState(withSelection, targetShot.id, targetVersionId);
+    });
+    setNotice(`${targetShot.title} 已切换到 ${targetShot.versions.find((version) => version.id === targetVersionId)?.label ?? '目标版本'}。`);
+  };
+
+  const downloadVersion = (shotId?: string, versionId?: string) => {
+    const targetShot = creation.shots.find((shot) => shot.id === (shotId ?? activeShot?.id));
+    if (!targetShot) {
+      return;
+    }
+
+    const targetVersion = targetShot.versions.find((version) => version.id === (versionId ?? targetShot.selectedVersionId ?? targetShot.activeVersionId));
+    if (!targetVersion) {
+      return;
+    }
+
+    setNotice(`已模拟下载 ${targetShot.title} · ${targetVersion.label}。`);
+  };
+
+  const retryShot = (shotId?: string) => {
+    const targetShot = creation.shots.find((shot) => shot.id === (shotId ?? activeShot?.id));
+    if (!targetShot) {
+      return;
+    }
+
+    const retryDraft = makeGenerationDraft(targetShot);
+    setDialog({ type: 'none' });
+    setNotice(creationCopy.bootCopy);
+    setCreation((current) => {
+      const started = startShotGenerationState(current, targetShot.id, retryDraft);
+      return selectShotState(started, targetShot.id, false);
+    });
+
+    const timer = setTimeout(() => {
+      setCreation((current) => finishShotGenerationState(current, targetShot.id, retryDraft.model));
+      setNotice(`${targetShot.title} 已提交重试，新的候选版本已追加。`);
+    }, 960);
+
+    timersRef.current.push(timer);
+  };
+
+  const openStoryboardTool = (mode: StoryToolMode) => {
+    if (!activeShot) {
+      return;
+    }
+
+    setStoryToolDraft(makeStoryToolDraft(activeShot));
+    setDialog({ type: 'story-tool', mode });
+  };
+
+  const setStoryToolField = <T extends keyof StoryToolDraft>(field: T, value: StoryToolDraft[T]) => {
+    setStoryToolDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const toggleStoryToolFrame = (frame: number) => {
+    setStoryToolDraft((current) => {
+      const selectedFrames = current.selectedFrames.includes(frame)
+        ? current.selectedFrames.filter((item) => item !== frame)
+        : [...current.selectedFrames, frame].sort((left, right) => left - right);
+
+      return {
+        ...current,
+        selectedFrames: selectedFrames.length ? selectedFrames : [frame],
+      };
+    });
+  };
+
+  const submitStoryboardTool = () => {
+    if (!activeShot || dialog.type !== 'story-tool') {
+      return;
+    }
+
+    if (dialog.mode === 'crop') {
+      setCreation((current) => applyCropStoryboardState(current, activeShot.id, storyToolDraft));
+      setNotice(`${activeShot.title} 的裁剪参数已回写到当前分镜。`);
+    } else {
+      setCreation((current) => deriveStoryboardFromFramesState(current, activeShot.id, storyToolDraft));
+      setNotice(`已从 ${storyToolDraft.selectedFrames.length} 个关键帧生成新的衍生分镜。`);
+    }
+
+    setDialog({ type: 'none' });
+  };
+
+  const openModelPicker = () => {
+    if (!activeShot) {
+      return;
+    }
+
+    setModelPickerDraft(makeModelPickerDraft(activeShot));
+    setDialog({ type: 'model-picker' });
+  };
+
+  const setModelPickerField = <T extends keyof ModelPickerDraft>(field: T, value: ModelPickerDraft[T]) => {
+    setModelPickerDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const applyModelPicker = () => {
+    if (!activeShot) {
+      return;
+    }
+
+    if (modelPickerDraft.selectedModel === activeShot.preferredModel) {
+      setDialog({ type: 'none' });
+      setNotice('当前分镜继续使用现有模型。');
+      return;
+    }
+
+    setDialog({ type: 'confirm-model-reset', nextModel: modelPickerDraft.selectedModel });
+  };
+
+  const requestModelChange = (nextModel: string) => {
+    if (!activeShot || nextModel === activeShot.preferredModel) {
+      setNotice('当前分镜已使用该模型。');
+      return;
+    }
+    setDialog({ type: 'confirm-model-reset', nextModel });
+  };
+
+  const confirmModelChange = (nextModel: string) => {
+    if (!activeShot) {
+      return;
+    }
+    setCreation((current) => confirmModelChangeState(current, activeShot.id, nextModel));
+    setDialog({ type: 'none' });
+    setNotice(creationCopy.modelWarning);
+  };
+
+  const resetShot = () => {
+    if (!activeShot) {
+      return;
+    }
+    setCreation((current) => resetShotState(current, activeShot.id));
+    setNotice(creationCopy.resetSuccess);
+  };
+
+  const attachLocalMaterial = () => {
+    if (!activeShot || !uploadedMaterialName.trim()) {
+      setNotice('请先选择本地素材。');
+      return;
+    }
+    setCreation((current) => attachMaterialState(current, activeShot.id, uploadedMaterialName.trim(), 'local'));
+    setUploadedMaterialName('');
+    setDialog({ type: 'none' });
+    setNotice('素材已绑定到当前分镜。');
+  };
+
+  const attachHistoryMaterial = (label: string) => {
+    if (!activeShot) {
+      return;
+    }
+    setCreation((current) => attachMaterialState(current, activeShot.id, label, 'history'));
+    setDialog({ type: 'none' });
+    setNotice('历史作品素材已绑定到当前分镜。');
+  };
+
+  const setActiveMaterial = (materialId: string) => {
+    if (!activeShot) {
+      return;
+    }
+    setCreation((current) => setActiveMaterialState(current, activeShot.id, materialId));
+    setNotice('已切换主素材。');
+  };
+
+  const removeMaterial = (materialId: string) => {
+    if (!activeShot) {
+      return;
+    }
+    setCreation((current) => removeMaterialState(current, activeShot.id, materialId));
+    setNotice('素材已从当前分镜移除。');
+  };
+
+  const applyCanvasDraft = () => {
+    if (!activeShot) {
+      return;
+    }
+    setCreation((current) => applyCanvasDraftState(current, activeShot.id, canvasDraft));
+    setDialog({ type: 'none' });
+    setNotice('画布参数已应用到当前分镜。');
+  };
+
+  const resetCanvasDraft = () => {
+    if (!activeShot) {
+      return;
+    }
+    setCanvasDraft(makeCanvasDraft(activeShot));
+  };
+
+  const setCanvasField = (field: keyof CanvasDraft, value: CanvasDraft[keyof CanvasDraft]) => {
+    setCanvasDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const setVoiceField = <T extends keyof typeof creation.voice>(field: T, value: typeof creation.voice[T]) => {
+    setCreation((current) => setVoiceFieldState(current, field, value));
+  };
+
+  const setMusicField = <T extends keyof typeof creation.music>(field: T, value: typeof creation.music[T]) => {
+    setCreation((current) => setMusicFieldState(current, field, value));
+  };
+
+  const setLipsyncField = <T extends keyof typeof creation.lipSync>(field: T, value: typeof creation.lipSync[T]) => {
+    setCreation((current) => setLipsyncFieldState(current, field, value));
+  };
+
+  const addLipsyncDialogue = () => {
+    setCreation((current) => addLipsyncDialogueState(current));
+  };
+
+  const updateLipsyncDialogue = (dialogueId: string, field: 'speaker' | 'text', value: string) => {
+    setCreation((current) => updateLipsyncDialogueState(current, dialogueId, field, value));
+  };
+
+  const removeLipsyncDialogue = (dialogueId: string) => {
+    if (creation.lipSync.dialogues.length <= 1) {
+      setLipsyncNotice('多人模式至少保留 1 条对白。');
+      return;
+    }
+    setCreation((current) => removeLipsyncDialogueState(current, dialogueId));
+  };
+
+  const submitLipsync = () => {
+    const { lipSync } = creation;
+    if (!lipSync.baseShotId) {
+      setLipsyncNotice('请先选择底图。');
+      return;
+    }
+    if (lipSync.inputMode === 'text' && !lipSync.dialogues.some((item) => item.text.trim())) {
+      setLipsyncNotice('文本模式下必须输入对白。');
+      return;
+    }
+    if (lipSync.inputMode === 'audio' && !lipSync.audioName.trim()) {
+      setLipsyncNotice('上传模式下必须选择音频文件。');
+      return;
+    }
+    setLipsyncNotice('对口型任务已提交，当前为 mock 成功态。');
+  };
+
+  const openMaterialsDialog = () => setDialog({ type: 'materials' });
+  const openCanvasDialog = () => setDialog({ type: 'canvas' });
+
+  return {
+    studio,
+    creation,
+    dialog,
+    notice,
+    materialTab,
+    uploadedMaterialName,
+    generateDraft,
+    canvasDraft,
+    storyToolDraft,
+    modelPickerDraft,
+    lipsyncNotice,
+    activeShot,
+    activeVersion,
+    selectedVersion,
+    pendingVersion,
+    activeMaterial,
+    statusLabel,
+    shotAccent,
+    formatClock,
+    formatShotDuration,
+    setDialog,
+    setNotice,
+    setMaterialTab,
+    setUploadedMaterialName,
+    setGenerateDraft,
+    setCanvasField,
+    setCanvasDraft,
+    setStoryToolField,
+    setStoryToolDraft,
+    toggleStoryToolFrame,
+    setModelPickerField,
+    setModelPickerDraft,
+    setLipsyncNotice,
+    setViewMode,
+    setActiveTrack,
+    selectShot,
+    setInlineShotField,
+    toggleInlineCrop,
+    togglePlayback,
+    seekPlayback,
+    toggleSubtitle,
+    openGenerateDialog,
+    openBatchDialog,
+    submitGeneration,
+    submitBatch,
+    openStoryboardTool,
+    submitStoryboardTool,
+    openModelPicker,
+    applyModelPicker,
+    selectVersion,
+    applySelectedVersion,
+    downloadVersion,
+    retryShot,
+    requestModelChange,
+    confirmModelChange,
+    resetShot,
+    openMaterialsDialog,
+    attachLocalMaterial,
+    attachHistoryMaterial,
+    setActiveMaterial,
+    removeMaterial,
+    openCanvasDialog,
+    applyCanvasDraft,
+    resetCanvasDraft,
+    setVoiceField,
+    setMusicField,
+    setLipsyncField,
+    addLipsyncDialogue,
+    updateLipsyncDialogue,
+    removeLipsyncDialogue,
+    submitLipsync,
+  };
+}
+
+export type CreationWorkspaceController = ReturnType<typeof useCreationWorkspace>;

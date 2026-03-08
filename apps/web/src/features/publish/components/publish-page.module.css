@@ -1,0 +1,564 @@
+.page {
+  position: relative;
+  display: grid;
+  gap: 20px;
+}
+
+.page::before,
+.page::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.page::before {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(31, 111, 235, 0.12), transparent 24%),
+    radial-gradient(circle at 88% 4%, rgba(255, 171, 98, 0.08), transparent 18%);
+}
+
+.page::after {
+  inset: 36px 0 auto;
+  height: 340px;
+  border-radius: 30px;
+  background: linear-gradient(180deg, rgba(5, 10, 23, 0.28), transparent 100%);
+}
+
+.page :global(.studio-frame__hero) {
+  position: relative;
+  min-height: 204px;
+  padding: 28px 30px 30px;
+  border-color: rgba(103, 123, 171, 0.18);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(38, 99, 219, 0.22), transparent 24%),
+    radial-gradient(circle at 90% 0%, rgba(255, 166, 92, 0.1), transparent 18%),
+    linear-gradient(180deg, rgba(12, 18, 33, 0.96), rgba(9, 15, 28, 0.92));
+  box-shadow: 0 30px 70px rgba(2, 8, 23, 0.24);
+}
+
+.page :global(.studio-frame__hero)::before {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px) 0 0 / 64px 64px,
+    linear-gradient(0deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px) 0 0 / 64px 64px;
+}
+
+.page :global(.studio-frame__title) {
+  color: #f4f8ff;
+  font-size: 42px;
+  line-height: 0.98;
+}
+
+.page :global(.studio-frame__summary p),
+.page :global(.studio-frame__eyebrow),
+.metricCard small,
+.metricCard span,
+.posterMeta small,
+.boundCard small,
+.checkItem small,
+.counter,
+.notice,
+.pickerCardMeta small,
+.successCard p,
+.sectionEyebrow,
+.sourceSummary small,
+.pickerSummary small,
+.successMetaRow span {
+  color: rgba(182, 196, 221, 0.76);
+}
+
+.page :global(.stage-links__item) {
+  border-color: rgba(118, 136, 175, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #edf4ff;
+}
+
+.page :global(.stage-links__item--active) {
+  border-color: rgba(84, 146, 255, 0.36);
+  background: linear-gradient(180deg, rgba(35, 84, 193, 0.28), rgba(18, 44, 108, 0.16));
+}
+
+.page :global(.ui-button--secondary) {
+  border-color: rgba(118, 136, 175, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #eef5ff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.page :global(.ui-button--secondary:hover:not(:disabled)) {
+  border-color: rgba(84, 146, 255, 0.3);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.metricStrip,
+.workspaceGrid,
+.publishShellHead,
+.publishShellBody,
+.posterActionRow,
+.posterMeta,
+.formFooter,
+.sourceSummary,
+.sourceMetaRow,
+.historyCategoryRow,
+.historyPickerGrid,
+.successMetaRow,
+.metricCard,
+.posterColumn,
+.fieldStack,
+.sideRail,
+.boundCard,
+.checkList,
+.checkItem,
+.historyPickerBody,
+.pickerSummary,
+.pickerCardMeta {
+  display: grid;
+  gap: 14px;
+}
+
+.metricStrip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.metricCard,
+.publishShell,
+.page :global(.ui-panel) {
+  border: 1px solid rgba(118, 136, 175, 0.16);
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(13, 20, 36, 0.92), rgba(9, 15, 29, 0.84));
+  box-shadow: 0 24px 60px rgba(2, 8, 23, 0.2);
+}
+
+.metricCard {
+  padding: 16px 18px;
+}
+
+.metricCard strong,
+.publishShellTitle,
+.posterSurface strong,
+.boundCard strong,
+.sourceSummary strong,
+.pickerSummary strong,
+.successCard strong {
+  color: #f4f8ff;
+  letter-spacing: -0.04em;
+}
+
+.metricCard strong {
+  font-size: 20px;
+}
+
+.workspaceGrid {
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
+  align-items: start;
+}
+
+.publishShell {
+  padding: 22px;
+}
+
+.publishShellHead {
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  margin-bottom: 18px;
+}
+
+.sectionEyebrow {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.publishShellTitle {
+  margin: 4px 0 0;
+  font-size: 34px;
+  line-height: 1.02;
+}
+
+.publishShellBody {
+  grid-template-columns: minmax(280px, 0.92fr) minmax(0, 1.08fr);
+  gap: 18px;
+}
+
+.posterCard,
+.historyTrigger,
+.categoryChip,
+.pickerCard {
+  width: 100%;
+  text-align: left;
+}
+
+.posterCard,
+.historyTrigger,
+.categoryChip,
+.pickerCard,
+.boundCover,
+.notice,
+.sourceSummary,
+.pickerSummary {
+  border: 1px solid rgba(118, 136, 175, 0.16);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(15, 24, 42, 0.86), rgba(9, 16, 30, 0.74));
+}
+
+.posterCard,
+.pickerCard {
+  overflow: hidden;
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.posterCard:hover,
+.pickerCard:hover {
+  transform: translateY(-2px);
+  border-color: rgba(84, 146, 255, 0.3);
+  box-shadow: 0 20px 40px rgba(7, 19, 44, 0.28);
+}
+
+.posterFrame,
+.pickerCardCover,
+.boundCover {
+  position: relative;
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.14), transparent 18%),
+    radial-gradient(circle at 82% 14%, rgba(73, 127, 255, 0.22), transparent 28%),
+    linear-gradient(145deg, rgba(18, 27, 46, 0.98), rgba(12, 22, 46, 0.84) 48%, rgba(7, 12, 24, 0.96));
+}
+
+.posterSurface {
+  width: min(100%, 280px);
+  min-height: 360px;
+  padding: 22px;
+  display: grid;
+  align-content: end;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(123, 170, 255, 0.22), transparent 32%),
+    linear-gradient(180deg, #0f1628 0%, #1a2c4b 46%, #203863 100%);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.28);
+}
+
+.posterSurface small {
+  color: rgba(215, 226, 247, 0.74);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.posterSurface strong {
+  font-size: 28px;
+  line-height: 0.98;
+}
+
+.posterSurface p,
+.pickerCardMeta em,
+.boundCover i {
+  margin: 0;
+  color: rgba(205, 216, 237, 0.78);
+  font-style: normal;
+}
+
+.posterOverlay {
+  position: absolute;
+  inset: 12px;
+  display: grid;
+  align-items: start;
+  justify-items: end;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.posterOverlay span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid rgba(118, 136, 175, 0.18);
+  border-radius: 999px;
+  background: rgba(8, 16, 31, 0.78);
+  color: #f4f8ff;
+  font-size: 12px;
+}
+
+.posterCard:hover .posterOverlay {
+  opacity: 1;
+}
+
+.posterMeta,
+.sourceMetaRow,
+.successMetaRow {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.posterMeta,
+.sourceSummary,
+.pickerSummary,
+.notice {
+  padding: 14px;
+}
+
+.posterMeta strong,
+.boundCard strong,
+.sourceSummary strong,
+.pickerSummary strong {
+  font-size: 18px;
+}
+
+.posterActionRow {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.historyTrigger,
+.categoryChip {
+  min-height: 44px;
+  padding: 0 16px;
+  color: #eef5ff;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.historyTrigger:hover,
+.categoryChip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(84, 146, 255, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.fieldStack {
+  gap: 16px;
+}
+
+.fieldBlock {
+  display: grid;
+  gap: 8px;
+}
+
+.fieldBlock > span {
+  color: #eef5ff;
+  font-size: 13px;
+}
+
+.fieldInput,
+.fieldTextarea {
+  width: 100%;
+  border: 1px solid rgba(103, 123, 171, 0.2);
+  border-radius: 18px;
+  padding: 13px 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f3f7ff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.fieldTextarea {
+  min-height: 126px;
+  resize: vertical;
+}
+
+.fieldInput:focus,
+.fieldTextarea:focus {
+  outline: none;
+  border-color: rgba(84, 146, 255, 0.42);
+  box-shadow: 0 0 0 3px rgba(57, 132, 255, 0.16);
+}
+
+.counter {
+  justify-self: end;
+  font-size: 12px;
+}
+
+.notice {
+  color: #bfd6ff;
+  font-size: 13px;
+}
+
+.formFooter {
+  grid-template-columns: auto auto;
+  justify-content: end;
+}
+
+.sideRail {
+  gap: 16px;
+}
+
+.page :global(.ui-panel) {
+  overflow: hidden;
+  border-color: rgba(118, 136, 175, 0.16);
+  background: linear-gradient(180deg, rgba(12, 19, 34, 0.92), rgba(9, 15, 29, 0.84));
+}
+
+.page :global(.ui-panel__eyebrow),
+.page :global(.ui-panel__actions small) {
+  color: rgba(182, 196, 221, 0.72);
+}
+
+.page :global(.ui-panel__title) {
+  color: #f4f8ff;
+}
+
+.boundCard {
+  gap: 12px;
+}
+
+.boundCover {
+  min-height: 132px;
+  align-content: space-between;
+  justify-items: start;
+}
+
+.boundCover span,
+.pickerCardCover span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #eef5ff;
+  font-size: 12px;
+}
+
+.boundCard .ui-button,
+.checkItem {
+  margin-top: 2px;
+}
+
+.checkItem {
+  padding: 12px 0;
+  border-top: 1px solid rgba(118, 136, 175, 0.12);
+}
+
+.checkItem:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.checkItem strong,
+.pickerCardMeta strong {
+  color: #f4f8ff;
+  font-size: 16px;
+  letter-spacing: -0.03em;
+}
+
+.historyPickerBody {
+  gap: 16px;
+}
+
+.historyCategoryRow {
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  overflow-x: auto;
+}
+
+.categoryChipActive,
+.pickerCardActive {
+  border-color: rgba(84, 146, 255, 0.34);
+  background: linear-gradient(180deg, rgba(35, 84, 193, 0.28), rgba(18, 44, 108, 0.16));
+}
+
+.historyPickerGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.pickerCardCover {
+  min-height: 168px;
+  align-content: space-between;
+  justify-items: start;
+}
+
+.pickerCardCover small {
+  color: rgba(205, 216, 237, 0.78);
+}
+
+.pickerCardMeta {
+  padding: 16px;
+}
+
+.pickerCardMeta em {
+  font-size: 12px;
+}
+
+.successCard {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.successIcon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  background: rgba(18, 167, 120, 0.16);
+  color: #8df0c8;
+  font-size: 28px;
+  box-shadow: inset 0 0 0 1px rgba(18, 167, 120, 0.22);
+}
+
+.successCard strong {
+  font-size: 24px;
+  line-height: 1.18;
+}
+
+.successMetaRow {
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  justify-content: center;
+  gap: 10px;
+}
+
+.successMetaRow span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(118, 136, 175, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 1260px) {
+  .metricStrip,
+  .workspaceGrid,
+  .publishShellBody,
+  .historyPickerGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 980px) {
+  .page :global(.studio-frame__title) {
+    font-size: 34px;
+  }
+
+  .metricStrip {
+    grid-template-columns: 1fr;
+  }
+
+  .publishShellTitle {
+    font-size: 28px;
+  }
+
+  .posterActionRow,
+  .formFooter,
+  .posterMeta,
+  .sourceSummary,
+  .pickerSummary,
+  .successMetaRow {
+    grid-template-columns: 1fr;
+  }
+
+  .sourceMetaRow,
+  .successMetaRow {
+    grid-auto-flow: row;
+    justify-content: stretch;
+  }
+}

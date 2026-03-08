@@ -1,0 +1,71 @@
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 32px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border-default);
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    backdrop-filter: blur(12px);
+}
+
+.identity {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.backButton {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    background: var(--bg-subtle);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-default);
+    transition: all var(--transition-fast);
+}
+
+.backButton:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+}
+
+.titleBlock {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.eyebrowRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.brandPill {
+    font-size: 11px;
+    font-weight: 600;
+    color: white;
+    background: var(--text-primary);
+    padding: 2px 8px;
+    border-radius: var(--radius-xs);
+}
+
+.titleBlock h1 {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}

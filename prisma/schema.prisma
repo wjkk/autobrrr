@@ -1,0 +1,627 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProjectContentMode {
+  SINGLE
+  SERIES
+}
+
+enum ExecutionMode {
+  AUTO
+  REVIEW_REQUIRED
+}
+
+enum ProjectStatus {
+  DRAFT
+  PLANNING
+  READY_FOR_STORYBOARD
+  CREATING
+  EXPORT_READY
+  EXPORTED
+  PUBLISHED
+  FAILED
+  ARCHIVED
+}
+
+enum EpisodeStatus {
+  DRAFT
+  PLANNING
+  READY_FOR_STORYBOARD
+  CREATING
+  EXPORT_READY
+  EXPORTED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum PlannerStatus {
+  IDLE
+  UPDATING
+  READY
+}
+
+enum PlannerStepStatus {
+  WAITING
+  RUNNING
+  DONE
+}
+
+enum PlannerMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum NodeType {
+  PLANNER_DOC
+  STORYBOARD_GENERATION
+  SHOT_RENDER
+  AUDIO_WORKSPACE
+  EXPORT
+  PUBLISH
+}
+
+enum NodeStatus {
+  IDLE
+  RUNNING
+  READY
+  FAILED
+  WAITING_INPUT
+}
+
+enum RunType {
+  PLANNER_DOC_UPDATE
+  STORYBOARD_GENERATION
+  SHOT_RENDER
+  MUSIC_GENERATION
+  LIPSYNC_GENERATION
+  EXPORT
+  PUBLISH
+}
+
+enum ExecutorType {
+  SYSTEM_WORKER
+  OPENCLAW_AGENT_WORKER
+  MANUAL
+}
+
+enum RunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELED
+  TIMED_OUT
+}
+
+enum ShotStatus {
+  PENDING
+  QUEUED
+  GENERATING
+  SUCCESS
+  FAILED
+}
+
+enum ShotVersionStatus {
+  PENDING_APPLY
+  ACTIVE
+  ARCHIVED
+}
+
+enum ShotMaterialSource {
+  UPLOAD
+  HISTORY
+  LEGACY
+}
+
+enum AssetType {
+  DOCUMENT
+  REFERENCE_IMAGE
+  STORYBOARD_IMAGE
+  MATERIAL_IMAGE
+  SHOT_VIDEO
+  VOICE_AUDIO
+  MUSIC_AUDIO
+  LIPSYNC_VIDEO
+  COVER_IMAGE
+  FINAL_VIDEO
+  EXPORT_PACKAGE
+}
+
+enum ReviewAction {
+  APPROVE
+  REJECT
+  EDIT_AND_CONTINUE
+  RETRY
+  RESET
+  APPLY_VERSION
+}
+
+enum PublishDraftStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  FAILED
+}
+
+enum PublishChannel {
+  INTERNAL_PREVIEW
+  OFFICIAL
+}
+
+enum PublishStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
+enum LogLevel {
+  INFO
+  WARNING
+  ERROR
+}
+
+enum EventSource {
+  SYSTEM
+  USER
+  OPENCLAW
+  WORKER
+}
+
+model Project {
+  id                       String             @id @default(cuid())
+  title                    String             @db.VarChar(255)
+  brief                    String?            @db.Text
+  contentMode              ProjectContentMode @default(SINGLE)
+  executionMode            ExecutionMode      @default(REVIEW_REQUIRED)
+  aspectRatio              String             @default("9:16") @db.VarChar(16)
+  globalStyleTemplateId    String?            @db.VarChar(64)
+  status                   ProjectStatus      @default(DRAFT)
+  currentEpisodeId         String?
+  currentNodeId            String?
+  coverAssetId             String?
+  audioWorkspaceSnapshot   Json?
+  lipsyncWorkspaceSnapshot Json?
+  createdById              String?            @db.VarChar(64)
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+  archivedAt               DateTime?
+
+  globalStyleTemplate StyleTemplate? @relation("ProjectGlobalStyleTemplate", fields: [globalStyleTemplateId], references: [id], onDelete: SetNull)
+  currentEpisode      Episode?       @relation("ProjectCurrentEpisode", fields: [currentEpisodeId], references: [id], onDelete: SetNull)
+  currentNode         PipelineNode?  @relation("ProjectCurrentNode", fields: [currentNodeId], references: [id], onDelete: SetNull)
+  coverAsset          Asset?         @relation("ProjectCoverAsset", fields: [coverAssetId], references: [id], onDelete: SetNull)
+
+  episodes          Episode[]
+  plannerSessions   PlannerSession[]
+  pipelineNodes     PipelineNode[] @relation("ProjectPipelineNodes")
+  runs              Run[]
+  shots             Shot[]
+  shotVersions      ShotVersion[]
+  publishDrafts     PublishDraft[] @relation("ProjectPublishDrafts")
+  boundAsHistoryIn  PublishDraft[] @relation("PublishDraftHistoryProject")
+  publishRecords    PublishRecord[]
+  reviewRecords     ReviewRecord[]
+  eventLogs         EventLog[]
+
+  @@index([status, updatedAt])
+}
+
+model Episode {
+  id              String        @id @default(cuid())
+  projectId       String
+  sequence        Int
+  title           String        @db.VarChar(255)
+  summary         String?       @db.Text
+  styleTemplateId String?       @db.VarChar(64)
+  status          EpisodeStatus @default(DRAFT)
+  exportedAt      DateTime?
+  publishedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  archivedAt      DateTime?
+
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  styleTemplate StyleTemplate? @relation("EpisodeStyleTemplate", fields: [styleTemplateId], references: [id], onDelete: SetNull)
+
+  currentForProjects Project[]       @relation("ProjectCurrentEpisode")
+  plannerSessions    PlannerSession[]
+  pipelineNodes      PipelineNode[]  @relation("EpisodePipelineNodes")
+  runs               Run[]
+  shots              Shot[]
+  shotVersions       ShotVersion[]
+  publishDrafts      PublishDraft[]
+  reviewRecords      ReviewRecord[]
+  eventLogs          EventLog[]
+
+  @@unique([projectId, sequence])
+  @@index([projectId, status])
+}
+
+model StyleTemplate {
+  id             String   @id @db.VarChar(64)
+  name           String   @db.VarChar(120)
+  category       String   @db.VarChar(80)
+  tone           String?  @db.Text
+  provider       String?  @db.VarChar(80)
+  isSystemPreset Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  globalForProjects  Project[] @relation("ProjectGlobalStyleTemplate")
+  episodeAssignments Episode[] @relation("EpisodeStyleTemplate")
+  shotAssignments    Shot[]    @relation("ShotStyleTemplate")
+}
+
+model PlannerSession {
+  id                       String        @id @default(cuid())
+  projectId                String
+  episodeId                String
+  submittedRequirement     String?       @db.Text
+  status                   PlannerStatus @default(IDLE)
+  docProgressPercent       Int           @default(0)
+  storyboardProgressPercent Int          @default(0)
+  allowGenerate            Boolean       @default(false)
+  pointCost                Int           @default(0)
+  isActive                 Boolean       @default(true)
+  startedAt                DateTime?
+  finishedAt               DateTime?
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  episode   Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  steps     PlannerStep[]
+  messages  PlannerMessage[]
+  references PlannerReference[]
+  storyboards StoryboardDraft[]
+
+  @@index([projectId, episodeId, isActive])
+}
+
+model PlannerStep {
+  id               String            @id @default(cuid())
+  plannerSessionId String
+  sortOrder        Int
+  title            String            @db.VarChar(255)
+  status           PlannerStepStatus @default(WAITING)
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  plannerSession PlannerSession @relation(fields: [plannerSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([plannerSessionId, sortOrder])
+}
+
+model PlannerMessage {
+  id               String             @id @default(cuid())
+  plannerSessionId String
+  role             PlannerMessageRole
+  content          String             @db.Text
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  plannerSession PlannerSession @relation(fields: [plannerSessionId], references: [id], onDelete: Cascade)
+
+  @@index([plannerSessionId, createdAt])
+}
+
+model PlannerReference {
+  id               String   @id @default(cuid())
+  plannerSessionId String
+  sortOrder        Int
+  title            String   @db.VarChar(255)
+  prompt           String   @db.Text
+  modelId          String   @db.VarChar(120)
+  variantIndex     Int      @default(1)
+  previewAssetId   String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  deletedAt        DateTime?
+
+  plannerSession PlannerSession @relation(fields: [plannerSessionId], references: [id], onDelete: Cascade)
+  previewAsset   Asset?         @relation("PlannerReferencePreviewAsset", fields: [previewAssetId], references: [id], onDelete: SetNull)
+
+  @@unique([plannerSessionId, sortOrder])
+}
+
+model StoryboardDraft {
+  id                String   @id @default(cuid())
+  plannerSessionId  String
+  sortOrder         Int
+  title             String   @db.VarChar(255)
+  visualPrompt      String   @db.Text
+  compositionPrompt String   @db.Text
+  motionPrompt      String   @db.Text
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime?
+
+  plannerSession    PlannerSession @relation(fields: [plannerSessionId], references: [id], onDelete: Cascade)
+  materializedShots Shot[]
+
+  @@unique([plannerSessionId, sortOrder])
+}
+
+model PipelineNode {
+  id              String     @id @default(cuid())
+  projectId       String
+  episodeId       String?
+  nodeType        NodeType
+  title           String     @db.VarChar(120)
+  nodeOrder       Int
+  status          NodeStatus @default(IDLE)
+  progressPercent Int        @default(0)
+  currentRunId    String?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  project    Project  @relation("ProjectPipelineNodes", fields: [projectId], references: [id], onDelete: Cascade)
+  episode    Episode? @relation("EpisodePipelineNodes", fields: [episodeId], references: [id], onDelete: Cascade)
+  currentRun Run?     @relation("PipelineNodeCurrentRun", fields: [currentRunId], references: [id], onDelete: SetNull)
+
+  currentForProjects Project[] @relation("ProjectCurrentNode")
+  runs               Run[]     @relation("RunNode")
+  reviewRecords      ReviewRecord[]
+
+  @@index([projectId, episodeId, nodeType])
+}
+
+model Run {
+  id              String       @id @default(cuid())
+  projectId       String
+  episodeId       String?
+  shotId          String?
+  nodeId          String?
+  runType         RunType
+  runNumber       Int          @default(1)
+  executorType    ExecutorType @default(SYSTEM_WORKER)
+  executorRef     String?      @db.VarChar(120)
+  status          RunStatus    @default(QUEUED)
+  progressPercent Int          @default(0)
+  inputPayload    Json?
+  outputPayload   Json?
+  errorCode       String?      @db.VarChar(120)
+  errorMessage    String?      @db.Text
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  project Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  episode Episode?     @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  shot    Shot?        @relation("RunShot", fields: [shotId], references: [id], onDelete: Cascade)
+  node    PipelineNode? @relation("RunNode", fields: [nodeId], references: [id], onDelete: SetNull)
+
+  currentForNodes  PipelineNode[] @relation("PipelineNodeCurrentRun")
+  lastForShots     Shot[]         @relation("ShotLastRun")
+  producedVersions ShotVersion[]
+  eventLogs        EventLog[]
+
+  @@index([projectId, runType, status])
+  @@index([shotId, createdAt])
+}
+
+model Shot {
+  id               String     @id @default(cuid())
+  projectId        String
+  episodeId        String
+  storyboardDraftId String?
+  sequence         Int
+  title            String     @db.VarChar(255)
+  imagePrompt      String     @db.Text
+  cameraPrompt     String?    @db.Text
+  motionPrompt     String?    @db.Text
+  narrationText    String?    @db.Text
+  subtitleText     String?    @db.Text
+  durationSec      Int        @default(4)
+  aspectRatio      String     @default("9:16") @db.VarChar(16)
+  styleTemplateId  String?    @db.VarChar(64)
+  preferredModel   String     @default("智能选择") @db.VarChar(120)
+  resolution       String     @default("1080P") @db.VarChar(32)
+  durationMode     String     @default("智能") @db.VarChar(32)
+  cropToVoice      Boolean    @default(true)
+  status           ShotStatus @default(PENDING)
+  failCount        Int        @default(0)
+  lastErrorCode    String?    @db.VarChar(120)
+  lastErrorMessage String?    @db.Text
+  activeVersionId  String?
+  lastRunId        String?
+  canvasZoom       Int        @default(100)
+  canvasOffsetX    Int        @default(0)
+  canvasOffsetY    Int        @default(0)
+  canvasRatio      String     @default("9:16") @db.VarChar(16)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  deletedAt        DateTime?
+
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  episode        Episode         @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  storyboardDraft StoryboardDraft? @relation(fields: [storyboardDraftId], references: [id], onDelete: SetNull)
+  styleTemplate  StyleTemplate?  @relation("ShotStyleTemplate", fields: [styleTemplateId], references: [id], onDelete: SetNull)
+  activeVersion  ShotVersion?    @relation("ShotActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+  lastRun        Run?            @relation("ShotLastRun", fields: [lastRunId], references: [id], onDelete: SetNull)
+
+  runs             Run[]               @relation("RunShot")
+  versions         ShotVersion[]       @relation("ShotAllVersions")
+  materialBindings ShotMaterialBinding[]
+  reviewRecords    ReviewRecord[]
+  eventLogs        EventLog[]
+
+  @@unique([episodeId, sequence])
+  @@index([projectId, status])
+}
+
+model ShotVersion {
+  id            String            @id @default(cuid())
+  projectId     String
+  episodeId     String
+  shotId        String
+  sourceRunId   String?
+  versionNumber Int
+  status        ShotVersionStatus @default(PENDING_APPLY)
+  modelId       String            @db.VarChar(120)
+  resolution    String?           @db.VarChar(32)
+  durationMode  String?           @db.VarChar(32)
+  previewAssetId String?
+  videoAssetId  String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  archivedAt    DateTime?
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  episode     Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  shot        Shot    @relation("ShotAllVersions", fields: [shotId], references: [id], onDelete: Cascade)
+  sourceRun   Run?    @relation(fields: [sourceRunId], references: [id], onDelete: SetNull)
+  previewAsset Asset? @relation("ShotVersionPreviewAsset", fields: [previewAssetId], references: [id], onDelete: SetNull)
+  videoAsset   Asset? @relation("ShotVersionVideoAsset", fields: [videoAssetId], references: [id], onDelete: SetNull)
+
+  activeForShots Shot[] @relation("ShotActiveVersion")
+
+  @@unique([shotId, versionNumber])
+  @@index([projectId, episodeId, status])
+}
+
+model ShotMaterialBinding {
+  id        String             @id @default(cuid())
+  shotId     String
+  assetId    String
+  source     ShotMaterialSource
+  sortOrder  Int                @default(0)
+  isActive   Boolean            @default(false)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  deletedAt  DateTime?
+
+  shot  Shot  @relation(fields: [shotId], references: [id], onDelete: Cascade)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([shotId, assetId])
+  @@index([shotId, isActive])
+}
+
+model Asset {
+  id         String    @id @default(cuid())
+  type       AssetType
+  name       String    @db.VarChar(255)
+  storageKey String?   @db.VarChar(255)
+  url        String    @db.Text
+  mimeType   String?   @db.VarChar(120)
+  sizeBytes  BigInt?
+  metadata   Json?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  projectCovers           Project[]             @relation("ProjectCoverAsset")
+  plannerReferencePreviews PlannerReference[]   @relation("PlannerReferencePreviewAsset")
+  shotVersionPreviews     ShotVersion[]         @relation("ShotVersionPreviewAsset")
+  shotVersionVideos       ShotVersion[]         @relation("ShotVersionVideoAsset")
+  shotMaterialBindings    ShotMaterialBinding[]
+  publishDraftCovers      PublishDraft[]        @relation("PublishDraftCoverAsset")
+  publishDraftFinalVideos PublishDraft[]        @relation("PublishDraftFinalVideoAsset")
+}
+
+model ReviewRecord {
+  id            String       @id @default(cuid())
+  projectId      String
+  episodeId      String?
+  shotId         String?
+  nodeId         String?
+  publishDraftId String?
+  action         ReviewAction
+  comment        String?      @db.Text
+  reviewerId     String?      @db.VarChar(64)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  episode     Episode?     @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  shot        Shot?        @relation(fields: [shotId], references: [id], onDelete: Cascade)
+  node        PipelineNode? @relation(fields: [nodeId], references: [id], onDelete: SetNull)
+  publishDraft PublishDraft? @relation(fields: [publishDraftId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+}
+
+model PublishDraft {
+  id                  String             @id @default(cuid())
+  projectId           String
+  episodeId           String?
+  boundHistoryProjectId String?
+  title               String             @db.VarChar(255)
+  intro               String             @db.Text
+  script              String?            @db.Text
+  tag                 String?            @db.VarChar(120)
+  coverAssetId        String?
+  finalVideoAssetId   String?
+  status              PublishDraftStatus @default(DRAFT)
+  submittedAt         DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  project            Project  @relation("ProjectPublishDrafts", fields: [projectId], references: [id], onDelete: Cascade)
+  episode            Episode? @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  boundHistoryProject Project? @relation("PublishDraftHistoryProject", fields: [boundHistoryProjectId], references: [id], onDelete: SetNull)
+  coverAsset         Asset?   @relation("PublishDraftCoverAsset", fields: [coverAssetId], references: [id], onDelete: SetNull)
+  finalVideoAsset    Asset?   @relation("PublishDraftFinalVideoAsset", fields: [finalVideoAssetId], references: [id], onDelete: SetNull)
+
+  publishRecords PublishRecord[]
+  reviewRecords  ReviewRecord[]
+
+  @@index([projectId, status, updatedAt])
+}
+
+model PublishRecord {
+  id             String        @id @default(cuid())
+  projectId      String
+  publishDraftId String
+  channel        PublishChannel
+  status         PublishStatus @default(PENDING)
+  receiptPayload Json?
+  errorCode      String?       @db.VarChar(120)
+  errorMessage   String?       @db.Text
+  submittedAt    DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  publishDraft PublishDraft @relation(fields: [publishDraftId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status, createdAt])
+}
+
+model EventLog {
+  id         String      @id @default(cuid())
+  projectId  String
+  episodeId  String?
+  shotId     String?
+  runId      String?
+  level      LogLevel    @default(INFO)
+  source     EventSource @default(SYSTEM)
+  eventType  String      @db.VarChar(120)
+  message    String      @db.Text
+  payload    Json?
+  createdAt  DateTime    @default(now())
+
+  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  episode Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  shot    Shot?    @relation(fields: [shotId], references: [id], onDelete: Cascade)
+  run     Run?     @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([shotId, createdAt])
+}

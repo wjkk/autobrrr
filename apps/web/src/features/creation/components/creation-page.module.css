@@ -1,0 +1,218 @@
+.creationShell {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 64px);
+  background: var(--bg-app);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-panel);
+}
+
+.creationHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.creationHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.backButton {
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color var(--transition-fast);
+}
+
+.backButton:hover {
+  color: var(--text-primary);
+}
+
+.projectTitleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.projectTitleGroup small {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+
+.projectTitleGroup h1 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.creationHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pointBadge {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent-primary);
+  background: var(--accent-soft);
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+}
+
+.stageHeaderBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.stageHeaderMeta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.stageHeaderNav {
+  display: flex;
+  gap: 8px;
+}
+
+.headerNavChip {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-radius: var(--radius-full);
+  transition: all var(--transition-fast);
+}
+
+.headerNavChip:hover {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+}
+
+.headerNavChipActive {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.workspaceFrame {
+  display: grid;
+  grid-template-columns: 80px 320px 1fr 340px;
+  flex: 1;
+  min-height: 0;
+}
+
+.trackRail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 8px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border-default);
+}
+
+.trackButton {
+  width: 100%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.trackButton span {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+}
+
+.trackButton:hover {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+}
+
+.trackButtonActive {
+  background: var(--accent-soft);
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.centerColumn {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-app);
+  overflow: hidden;
+  position: relative;
+}
+
+.viewModeRow {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  background: var(--bg-panel);
+  padding: 4px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-float);
+  z-index: 10;
+}
+
+.viewModeButton {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-radius: var(--radius-full);
+  transition: all var(--transition-fast);
+  background: transparent;
+  border: none;
+}
+
+.viewModeButton:hover {
+  color: var(--text-primary);
+}
+
+.viewModeButtonActive {
+  background: var(--text-primary);
+  color: white;
+}
+
+/* Base styles for sidebar and version rail components to inherit */
+.sidebar,
+.versionRail {
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.versionRail {
+  border-right: none;
+  border-left: 1px solid var(--border-default);
+}

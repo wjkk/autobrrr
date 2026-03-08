@@ -1,7 +1,7 @@
 'use client';
 
 import type { PlannerReference, PlannerStepStatus, StoryboardDraft, StudioFixture } from '@aiv/domain';
-import { Badge, Button, Panel, cx } from '@aiv/ui';
+import { Badge, Panel, cx } from '@aiv/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -685,16 +685,6 @@ export function PlannerPage({ studio }: PlannerPageProps) {
           </div>
 
           <div className={styles.headerToolbar}>
-            <Button variant="secondary" className={styles.backButton} onClick={() => router.push('/explore')}>
-              返回广场
-            </Button>
-            <StageLinks projectId={studio.project.id} activeStage="planner" />
-            <Button onClick={startCreation}>生成分镜</Button>
-          </div>
-        </header>
-
-        <div className={styles.workspaceShell}>
-          <aside className={styles.episodeSidebar}>
             <div className={styles.modeBar}>
               <button type="button" className={cx(styles.modeChip, plannerMode === 'single' && styles.modeChipActive)} onClick={() => handlePlannerModeChange('single')}>
                 单片模式
@@ -703,387 +693,265 @@ export function PlannerPage({ studio }: PlannerPageProps) {
                 多剧集模式
               </button>
             </div>
+            <button type="button" className={styles.headerBtn} onClick={() => router.push('/explore')}>
+              返回广场
+            </button>
+            <StageLinks projectId={studio.project.id} activeStage="planner" />
+            <button type="button" className={styles.headerBtn} onClick={startCreation}>生成分镜</button>
+          </div>
+        </header>
 
-            <div className={styles.sidebarStats}>
-              <article className={styles.sidebarStatCard}>
-                <small>文档进度</small>
-                <strong>{docProgressPercent}%</strong>
+        <div className={styles.workspaceShell}>
+          {plannerMode === 'series' && (
+            <aside className={styles.episodeSidebar}>
+              {plannerEpisodes.map((item, index) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={cx(styles.narrowEpisodeBtn, activeEpisodeId === item.id && styles.narrowEpisodeBtnActive)}
+                  onClick={() => {
+                    setActiveEpisodeId(item.id);
+                    setNotice(`已切换到 ${item.title} 的策划视图。`);
+                  }}
+                  title={item.title}
+                >
+                  {String(index + 1).padStart(2, '0')}
+                </button>
+              ))}
+              <button type="button" className={styles.narrowEpisodeAdd} onClick={addEpisode} title="新增剧集">
+                +
+              </button>
+            </aside>
+          )}
+
+          <section className={styles.chatPanel}>
+            <div className={styles.chatScrollable}>
+              <div className={styles.agentProgressBlock}>
+                <div>
+                  <strong>{ready ? '文档已准备好' : '需求正在拆解'}</strong>
+                  <small>{ready ? '可以进入分片生成，并继续替换与重试。' : '正在调用专家 Agent 按步骤撰写大纲与分镜。'}</small>
+                </div>
                 <div className={styles.progressTrack} aria-hidden="true">
                   <span className={styles.progressFill} style={{ width: `${docProgressPercent}%` }} />
                 </div>
-              </article>
-              <article className={styles.sidebarStatCard}>
-                <small>协作摘要</small>
-                <strong>{summaryText}</strong>
-                <span>{`预计消耗 ${studio.planner.pointCost} 积分`}</span>
-              </article>
-            </div>
-
-            <section className={styles.sidebarPanel}>
-              <div className={styles.sidebarPanelHead}>
-                <div>
-                  <span className={styles.panelEyebrow}>剧集管理</span>
-                  <h2>多集结构与顺序</h2>
-                </div>
-                <Badge>{`${plannerEpisodes.length} 集`}</Badge>
               </div>
 
-              <div className={styles.episodeList}>
-                {plannerEpisodes.map((item, index) => {
-                  const disabledBySingle = plannerMode === 'single';
+              <div className="message-stack" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                {messages.map((item, index) => {
+                  const isUser = item.role === 'user';
+                  // In Seko, the first assistant message usually contains the checklist and outline
+                  const isMainAssistantMsg = !isUser && index === 1;
 
                   return (
-                    <article key={item.id} className={cx(styles.episodeCard, activeEpisodeId === item.id && styles.episodeCardActive)}>
-                      <button
-                        type="button"
-                        className={styles.episodeMain}
-                        onClick={() => {
-                          setActiveEpisodeId(item.id);
-                          setNotice(`已切换到 ${item.title} 的策划视图。`);
-                        }}
-                      >
-                        <div className={styles.episodeLabelRow}>
-                          <span>{item.label}</span>
-                          <Badge>{`${item.shotCount} 分镜`}</Badge>
+                    <article key={item.id} className={cx(styles.messageRow, isUser && styles.messageRowUser)}>
+                      {!isUser && (
+                        <div className={styles.messageAvatar}>
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
                         </div>
-                        <strong>{item.title}</strong>
-                        <p>{item.summary}</p>
-                        <small>{`风格 ${styleNameById(item.styleId)}`}</small>
-                      </button>
+                      )}
+                      <div className={styles.messageContent}>
+                        {!isUser && (
+                          <div className={styles.messageName}>
+                            Seko <span>AI 策划顾问</span>
+                          </div>
+                        )}
+                        {isUser ? (
+                          <div className={styles.bubbleUser}>{item.content}</div>
+                        ) : (
+                          <div>
+                            <p style={{ fontSize: '14px', lineHeight: 1.6, color: 'var(--text-primary)', margin: 0 }}>{item.content}</p>
 
-                      <div className={styles.episodeTools}>
-                        <button type="button" onClick={() => moveEpisode(item.id, 'up')} disabled={disabledBySingle || index === 0}>
-                          上移
-                        </button>
-                        <button type="button" onClick={() => moveEpisode(item.id, 'down')} disabled={disabledBySingle || index === plannerEpisodes.length - 1}>
-                          下移
-                        </button>
-                        <button type="button" onClick={() => duplicateEpisode(item.id)} disabled={disabledBySingle}>
-                          复制
-                        </button>
-                        <button type="button" onClick={() => deleteEpisode(item.id)} disabled={disabledBySingle || plannerEpisodes.length <= 1}>
-                          删除
-                        </button>
+                            {isMainAssistantMsg && steps.length > 0 && (
+                              <div className={styles.sekoChecklistGroup}>
+                                {steps.map((step) => (
+                                  <div key={step.id} className={cx(styles.sekoChecklistItem, styles[`checklistItem--${step.status}`])}>
+                                    <span className={styles.sekoChecklistIcon}>
+                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
+                                    </span>
+                                    <span>{step.title}</span>
+                                    {step.status === 'done' && <span className={styles.sekoSubChip}>已完备</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {isMainAssistantMsg && ready && (
+                              <div className={styles.outlineCard}>
+                                <div className={styles.outlineCardHeader}>
+                                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                                  第{activeEpisode?.label.replace('EP ', '') || '1'}集：{activeEpisode?.title || displayTitle}
+                                </div>
+                                <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                                  已为您更新策划文档，可以基于此大纲开始生成分镜。
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </article>
                   );
                 })}
               </div>
+            </div>
 
-              <button type="button" className={styles.addEpisodeButton} onClick={addEpisode} disabled={plannerMode === 'single'}>
-                + 新增剧集
-              </button>
-            </section>
-          </aside>
-
-          <main className={styles.mainColumn}>
-            <Panel className={styles.configPanel} eyebrow="项目设置" title="当前剧集策划">
-              <div className={styles.fieldGrid}>
-                <label className="field-block">
-                  <span>项目标题</span>
-                  <input className="field-input" value={displayTitle} onChange={(event) => setDisplayTitle(event.target.value)} />
-                </label>
-                <label className="field-block">
-                  <span>画面比例</span>
-                  <select className="field-select" value={aspectRatio} onChange={(event) => setAspectRatio(event.target.value as typeof aspectRatio)}>
-                    <option value="9:16">9:16</option>
-                    <option value="16:9">16:9</option>
-                    <option value="1:1">1:1</option>
-                  </select>
-                </label>
-                <label className="field-block">
-                  <span>全局风格</span>
-                  <select className="field-select" value={globalStyleId} onChange={(event) => setGlobalStyleId(Number(event.target.value))}>
-                    {STYLE_LIBRARY.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field-block">
-                  <span>当前剧集风格</span>
-                  <select
-                    className="field-select"
-                    value={activeEpisode?.styleId ?? globalStyleId}
-                    onChange={(event) => {
-                      if (!activeEpisode) {
-                        return;
-                      }
-
-                      updateEpisode(activeEpisode.id, { styleId: Number(event.target.value) });
-                    }}
+            <div className={styles.chatStickyInputWrap}>
+              <div className={styles.chatStickyInput}>
+                <textarea
+                  className={styles.chatInputTextarea}
+                  value={requirement}
+                  onChange={(event) => setRequirement(event.target.value)}
+                  placeholder="输入你的问题，Shift+Enter换行"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      runPlanner();
+                    }
+                  }}
+                />
+                <div className={styles.chatInputActions}>
+                  <div style={{ display: 'flex', gap: '12px', color: 'var(--text-tertiary)' }}>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" style={{ cursor: 'pointer' }}><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" style={{ cursor: 'pointer' }}><circle cx="12" cy="12" r="4" /><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" /></svg>
+                  </div>
+                  <button
+                    className={cx(styles.chatSendBtn, requirement.trim() && styles.chatSendBtnActive)}
+                    onClick={runPlanner}
+                    disabled={status === 'updating' || !requirement.trim()}
+                    title="发送"
+                    type="button"
                   >
-                    {STYLE_LIBRARY.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <div className={styles.fieldGridStack}>
-                <label className="field-block">
-                  <span>当前剧集标题</span>
-                  <input
-                    className="field-input"
-                    value={activeEpisode?.title ?? ''}
-                    onChange={(event) => {
-                      if (!activeEpisode) {
-                        return;
-                      }
-
-                      updateEpisode(activeEpisode.id, { title: event.target.value });
-                    }}
-                  />
-                </label>
-                <label className="field-block">
-                  <span>当前剧集摘要</span>
-                  <textarea
-                    className="field-textarea field-textarea--compact"
-                    value={activeEpisode?.summary ?? ''}
-                    onChange={(event) => {
-                      if (!activeEpisode) {
-                        return;
-                      }
-
-                      updateEpisode(activeEpisode.id, { summary: event.target.value });
-                    }}
-                  />
-                </label>
-              </div>
-            </Panel>
-
-            <Panel className={styles.documentPanel} eyebrow="策划文档" title="文档分区与章节折叠" actions={<small>{activeSectionLabel}</small>}>
-              <div className={styles.sectionTabRow}>
-                {sections.map((item) => (
-                  <button key={item.id} type="button" className={cx(styles.sectionTab, activeSectionId === item.id && styles.sectionTabActive)} onClick={() => openSection(item.id)}>
-                    {inferSectionLabel(item.id)}
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></svg>
                   </button>
-                ))}
+                </div>
               </div>
+              {notice && <div className="inline-toast">{notice}</div>}
+            </div>
+          </section>
 
-              <div className={styles.docSummaryCard}>
-                <small>当前焦点剧集</small>
-                <strong>{activeEpisode?.title ?? 'EP 01'}</strong>
-                <p>{activeEpisode?.summary ?? '当前为单片模式的主剧集。'}</p>
-                <div className={styles.docSummaryMeta}>
-                  <Badge>{styleNameById(activeEpisode?.styleId ?? globalStyleId)}</Badge>
-                  <Badge>{`${activeEpisode?.shotCount ?? storyboards.length} 分镜`}</Badge>
-                  <Badge>{aspectRatio}</Badge>
+          <main className={styles.documentPanelSpace}>
+            <div className={styles.documentContainer}>
+              <div className={styles.docHeaderRow}>
+                <div className={styles.docTitleRow}>
+                  <svg className={styles.docIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                    <polyline points="10 9 9 9 8 9" />
+                  </svg>
+                  <h2 className={styles.docTitleText}>
+                    第{activeEpisode?.label.replace('EP ', '') || '1'}集：{activeEpisode?.title || displayTitle}
+                  </h2>
+                  <span className={styles.aiGeneratedTag}>内容由 AI 生成</span>
+                  <svg className={styles.docActionIcon} viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" onClick={() => setNotice('重置当前文档')}>
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                    <path d="M3 3v5h5" />
+                  </svg>
                 </div>
               </div>
 
-              <div className="doc-section-list">
-                {sections.map((item) => (
-                  <article key={item.id} className={cx('doc-section', item.open && 'doc-section--open')}>
-                    <button type="button" className="doc-section__head" onClick={() => toggleSection(item.id)}>
-                      <strong>{inferSectionLabel(item.id)}</strong>
-                      <span>{item.open ? '收起' : '展开'}</span>
-                    </button>
-                    {item.open ? <div className="doc-section__body">{renderSectionBody(item.id)}</div> : null}
-                  </article>
-                ))}
-              </div>
-            </Panel>
-
-            <div className={styles.bodyGrid}>
-              <Panel className={styles.agentPanel} eyebrow="Agent 协作" title="需求提交与生成节奏" actions={<small>{ready ? '全部完成' : status === 'updating' ? '进行中' : '待启动'}</small>}>
-                <div className={styles.agentProgressBlock}>
-                  <div>
-                    <strong>{ready ? '文档已准备好' : '需求正在拆解'}</strong>
-                    <small>{ready ? '可以进入分片生成，并继续替换与重试。' : '会依次推进行文、风格、主体与分镜草稿。'}</small>
-                  </div>
-                  <div className={styles.progressTrack} aria-hidden="true">
-                    <span className={styles.progressFill} style={{ width: `${docProgressPercent}%` }} />
-                  </div>
+              {status === 'updating' && !ready ? (
+                <div className={styles.docSkeletonBlock}>
+                  <div className={styles.skeletonLine} style={{ width: '30%', height: '32px', marginBottom: '32px' }} />
+                  <div className={styles.skeletonLine} style={{ width: '100%' }} />
+                  <div className={styles.skeletonLine} style={{ width: '90%' }} />
+                  <div className={styles.skeletonLine} style={{ width: '95%' }} />
+                  <div className={styles.skeletonLine} style={{ width: '80%' }} />
                 </div>
-
-                <div className="timeline-list">
-                  {steps.map((item) => (
-                    <article key={item.id} className={cx('timeline-list__item', `timeline-list__item--${item.status}`)}>
-                      <span className="timeline-list__dot" />
-                      <div>
-                        <strong>{item.title}</strong>
-                        <small>{item.status === 'done' ? '已完成' : item.status === 'running' ? '执行中' : '待执行'}</small>
+              ) : (
+                <>
+                  <section className={styles.docSection}>
+                    <div className={styles.docSectionHeaderRow}>
+                      <div className={styles.docSectionIcon}>
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
                       </div>
-                    </article>
-                  ))}
-                </div>
+                      <h3 className={styles.docSectionTitle}>故事梗概</h3>
+                    </div>
+                    <ul className={styles.docContentList}>
+                      <li><span style={{ color: 'var(--text-tertiary)', marginRight: '4px' }}>•</span> <strong>内容梗概：</strong>{activeEpisode?.summary || displayTitle}。单片模式，当前全部分镜围绕同一条主线推进。</li>
+                    </ul>
+                    <div className={styles.highlightCard}>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '12px', fontSize: '14px' }}>剧本亮点</div>
+                      <ul>
+                        <li>世界观：宏大且具有赛博朋克深邃质感体系，视觉细节拉满。</li>
+                        <li>情感内核：在数字废墟之中寻找人性的微光，剧情跌宕起伏。</li>
+                      </ul>
+                    </div>
+                  </section>
 
-                <div className="sub-panel">
-                  <strong>需求输入</strong>
-                  <textarea className="field-textarea field-textarea--compact" value={requirement} onChange={(event) => setRequirement(event.target.value)} placeholder="输入新的需求，覆盖当前策划。" />
-                  <div className="planner-cta-row">
-                    <small>重新提交后会刷新右侧文档、主体参考和分镜草稿。</small>
-                    <Button onClick={runPlanner}>提交需求</Button>
-                  </div>
-                  {notice ? <div className="inline-toast">{notice}</div> : null}
-                </div>
+                  <section className={styles.docSection}>
+                    <div className={styles.docSectionHeaderRow}>
+                      <div className={styles.docSectionIcon}>
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><circle cx="10" cy="10" r="2" /><path d="M10 14a2 2 0 1 0 4 0" /></svg>
+                      </div>
+                      <h3 className={styles.docSectionTitle}>画面主体参考</h3>
+                    </div>
+                    <div className={styles.refGrid}>
+                      {references.map((item) => (
+                        <article
+                          key={item.id}
+                          className={styles.refCard}
+                          onClick={() => setDialog({ type: 'reference', id: item.id })}
+                          style={{ backgroundImage: `url(https://source.unsplash.com/random/320x180?cyberpunk,${item.id})`, backgroundSize: 'cover' }}
+                        >
+                          <span>{item.title} - {item.variantLabel.replace('变体 ', '')}态</span>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
 
-                <div className="message-stack">
-                  {messages.map((item) => (
-                    <article key={item.id} className={cx('message-card', item.role === 'assistant' && 'message-card--assistant')}>
-                      <header>{item.role === 'assistant' ? studio.assistantName : '你'}</header>
-                      <p>{item.content}</p>
-                    </article>
-                  ))}
-                </div>
-              </Panel>
-
-              <div className={styles.assetStack}>
-                <Panel className={styles.referencePanel} eyebrow="主体参考图" title="Hover 后显示编辑 / 重生成 / 删除" actions={<small>{references.length} 张参考</small>}>
-                  <div className="planner-card-grid">
-                    {references.map((item) => (
-                      <article
-                        key={item.id}
-                        className="planner-ref-card hover-card"
-                        onClick={() => setDialog({ type: 'reference', id: item.id })}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            setDialog({ type: 'reference', id: item.id });
-                          }
-                        }}
-                      >
-                        <div className="planner-ref-card__preview">
-                          <span>{item.variantLabel}</span>
-                          <div className="hover-card__actions hover-card__actions--top-right">
-                            <button
-                              type="button"
-                              className="hover-action"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setDialog({ type: 'reference', id: item.id });
-                              }}
-                            >
-                              编辑
-                            </button>
-                            <button
-                              type="button"
-                              className="hover-action"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                regenerateReference(item.id);
-                              }}
-                            >
-                              重生成
-                            </button>
-                            <button
-                              type="button"
-                              className="hover-action hover-action--danger"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setDialog({ type: 'delete-reference', id: item.id });
-                              }}
-                            >
-                              删除
-                            </button>
-                          </div>
-                        </div>
-                        <strong>{item.title}</strong>
-                        <small>{item.prompt}</small>
-                        <Badge>{item.modelId}</Badge>
-                      </article>
-                    ))}
-                  </div>
-                </Panel>
-
-                <Panel className={styles.storyboardPanel} eyebrow="分镜草稿" title="Hover 后显示编辑 / 复制 / 删除" actions={<Button variant="secondary" onClick={addStoryboard}>新增分镜</Button>}>
-                  <div className="planner-storyboard-list">
-                    {storyboards.map((item, index) => (
-                      <article
-                        key={item.id}
-                        className={cx('planner-storyboard-card hover-card', styles.storyboardCard)}
-                        onClick={() => setDialog({ type: 'storyboard', id: item.id })}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            setDialog({ type: 'storyboard', id: item.id });
-                          }
-                        }}
-                      >
-                        <div className="planner-storyboard-card__head">
-                          <div className={styles.storyboardHeadMeta}>
-                            <span className={styles.storyboardIndex}>{`SHOT ${String(index + 1).padStart(2, '0')}`}</span>
+                  <section className={styles.docSection}>
+                    <div className={styles.docSectionHeaderRow}>
+                      <div className={cx(styles.docSectionIcon, styles.docSectionIconBlue)}>
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
+                      </div>
+                      <h3 className={styles.docSectionTitle}>场景列表</h3>
+                    </div>
+                    <div className={styles.shotStack}>
+                      {storyboards.map((item, index) => (
+                        <article
+                          key={item.id}
+                          className={styles.shotCard}
+                          onClick={() => setDialog({ type: 'storyboard', id: item.id })}
+                          style={{ backgroundImage: `url(https://source.unsplash.com/random/320x180?neon,${index})`, backgroundSize: 'cover' }}
+                        >
+                          <div className={styles.shotCardContent} style={{ opacity: 0 }}>
                             <strong>{item.title}</strong>
+                            <p>{item.visualPrompt.slice(0, 10)}</p>
                           </div>
-                          <div className="hover-card__actions">
-                            <button
-                              type="button"
-                              className="hover-action"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setDialog({ type: 'storyboard', id: item.id });
-                              }}
-                            >
-                              编辑
-                            </button>
-                            <button
-                              type="button"
-                              className="hover-action"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                duplicateStoryboard(item.id);
-                              }}
-                            >
-                              复制
-                            </button>
-                            <button
-                              type="button"
-                              className="hover-action hover-action--danger"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setDialog({ type: 'delete-storyboard', id: item.id });
-                              }}
-                              disabled={storyboards.length <= 1}
-                            >
-                              删除
-                            </button>
-                          </div>
-                        </div>
-                        <ul className="plain-list">
-                          <li>画面描述：{item.visualPrompt}</li>
-                          <li>构图设计：{item.compositionPrompt}</li>
-                          <li>运镜调度：{item.motionPrompt}</li>
-                        </ul>
-                      </article>
-                    ))}
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+
+                  <div className={styles.docBottomBarSpace} />
+
+                  {/* Sticky Render Controls at Bottom of Container */}
+                  <div className={styles.sekoBottomBar}>
+                    <div className={styles.docMetaRow}>
+                      <span className={styles.docSelectLabel}>分镜图模型</span>
+                      <select className={styles.docSelect} value={globalStyleId} onChange={(e) => setGlobalStyleId(Number(e.target.value))}>
+                        <option value={61}>默认基础模型 ▾</option>
+                        {STYLE_LIBRARY.map((item) => <option key={item.id} value={item.id}>{item.name} ▾</option>)}
+                      </select>
+
+                      <span className={styles.docSelectLabel} style={{ marginLeft: '16px' }}>画面比例</span>
+                      <select className={styles.docSelect} value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value as typeof aspectRatio)}>
+                        <option value="9:16">📱 9:16 ▾</option>
+                        <option value="16:9">💻 16:9 ▾</option>
+                        <option value="1:1">⬛ 1:1 ▾</option>
+                      </select>
+                    </div>
+
+                    <button className={styles.generateBtnBlack} onClick={startCreation} type="button">
+                      生成分镜 ✦ 38
+                    </button>
                   </div>
-                </Panel>
-              </div>
+                </>
+              )}
             </div>
           </main>
-        </div>
-
-        <div className={styles.bottomBar}>
-          <div className={styles.bottomMeta}>
-            <div>
-              <small>生成配置</small>
-              <strong>{plannerMode === 'single' ? '单片模式' : '多剧集模式'}</strong>
-            </div>
-            <div>
-              <small>当前集</small>
-              <strong>{activeEpisode?.title ?? 'EP 01'}</strong>
-            </div>
-            <div>
-              <small>风格继承</small>
-              <strong>{`${styleNameById(activeEpisode?.styleId ?? globalStyleId)} / ${styleNameById(globalStyleId)}`}</strong>
-            </div>
-            <div>
-              <small>预计扣点</small>
-              <strong>{studio.planner.pointCost} 积分</strong>
-            </div>
-          </div>
-          <div className={styles.bottomActions}>
-            <Badge tone={remainingPoints >= studio.planner.pointCost ? 'success' : 'warning'}>{`剩余 ${remainingPoints} 积分`}</Badge>
-            <Button onClick={startCreation}>生成分镜</Button>
-          </div>
         </div>
       </div>
 
@@ -1094,13 +962,13 @@ export function PlannerPage({ studio }: PlannerPageProps) {
         onClose={() => setDialog({ type: 'none' })}
         footer={
           <>
-            <Button variant="secondary" onClick={() => referenceDraft && regenerateReference(referenceDraft.id)}>
+            <button type="button" className={styles.headerBtn} onClick={() => referenceDraft && regenerateReference(referenceDraft.id)}>
               重生成
-            </Button>
-            <Button variant="secondary" onClick={() => setDialog({ type: 'none' })}>
+            </button>
+            <button type="button" className={styles.headerBtn} onClick={() => setDialog({ type: 'none' })}>
               取消
-            </Button>
-            <Button onClick={saveReference}>保存</Button>
+            </button>
+            <button type="button" className={styles.primaryBtn} onClick={saveReference}>保存</button>
           </>
         }
       >
@@ -1140,10 +1008,10 @@ export function PlannerPage({ studio }: PlannerPageProps) {
         onClose={() => setDialog({ type: 'none' })}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setDialog({ type: 'none' })}>
+            <button type="button" className={styles.headerBtn} onClick={() => setDialog({ type: 'none' })}>
               取消
-            </Button>
-            <Button onClick={saveStoryboard}>保存</Button>
+            </button>
+            <button type="button" className={styles.primaryBtn} onClick={saveStoryboard}>保存</button>
           </>
         }
       >
@@ -1176,12 +1044,12 @@ export function PlannerPage({ studio }: PlannerPageProps) {
         onClose={() => setDialog({ type: 'none' })}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setDialog({ type: 'none' })}>
+            <button type="button" className={styles.headerBtn} onClick={() => setDialog({ type: 'none' })}>
               取消
-            </Button>
-            <Button onClick={confirmDeleteStoryboard} disabled={storyboards.length <= 1}>
+            </button>
+            <button type="button" className={styles.primaryBtn} onClick={confirmDeleteStoryboard} disabled={storyboards.length <= 1}>
               确认删除
-            </Button>
+            </button>
           </>
         }
       >
@@ -1195,10 +1063,10 @@ export function PlannerPage({ studio }: PlannerPageProps) {
         onClose={() => setDialog({ type: 'none' })}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setDialog({ type: 'none' })}>
+            <button type="button" className={styles.headerBtn} onClick={() => setDialog({ type: 'none' })}>
               取消
-            </Button>
-            <Button onClick={confirmDeleteReference}>确认删除</Button>
+            </button>
+            <button type="button" className={styles.primaryBtn} onClick={confirmDeleteReference}>确认删除</button>
           </>
         }
       >

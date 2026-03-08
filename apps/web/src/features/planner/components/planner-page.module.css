@@ -1,22 +1,47 @@
 .page {
+  /* Override global tokens with strict light theme for Planner Phase 13 */
+  --bg-app: #f4f5f7;
+  /* Seamless light gray background */
+  --bg-panel: #ffffff;
+  /* Solid white card background */
+  --bg-surface: #f2f3f5;
+  /* Interactive element gray background */
+  --bg-subtle: #f7f8fa;
+  --bg-highlight: #e5e6eb;
+  /* Borders */
+  --border-default: #e5e6eb;
+  --border-subtle: rgba(0, 0, 0, 0.04);
+  --border-strong: rgba(0, 0, 0, 0.15);
+  /* Text Colors */
+  --text-primary: #1d2129;
+  --text-secondary: #4e5969;
+  --text-tertiary: #86909c;
+  /* Shadows */
+  --shadow-panel: 0 4px 12px rgba(0, 0, 0, 0.03);
+  --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.08);
+
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-app);
+  color: var(--text-primary);
 }
 
 .workspaceHeader {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  padding: 24px 32px;
-  background: var(--bg-panel);
-  border-bottom: 1px solid var(--border-default);
+  align-items: center;
+  padding: 16px 24px;
+  background: transparent;
+  flex-shrink: 0;
+  z-index: 20;
 }
 
 .headerIdentity {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .headerEyebrowRow {
@@ -35,7 +60,7 @@
 }
 
 .headerTitle {
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -43,7 +68,7 @@
 }
 
 .headerDescription {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-secondary);
   margin: 0;
   max-width: 600px;
@@ -55,17 +80,79 @@
   gap: 12px;
 }
 
-.workspaceShell {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 24px;
-  padding: 0 32px 32px;
+.headerBtn {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 6px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
 }
 
+.headerBtn:hover {
+  background: var(--bg-subtle);
+}
+
+.primaryBtn {
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.primaryBtn:hover {
+  background: var(--accent-hover);
+}
+
+.primaryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.workspaceShell {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  background: transparent;
+}
+
+/* 12.1: 3-Column Layout Panes */
 .episodeSidebar {
+  width: 64px;
+  background: transparent;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  align-items: center;
+  padding: 16px 0;
+  gap: 16px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.chatPanel {
+  flex: 0 0 540px;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 5;
+  padding-bottom: 24px;
+}
+
+.documentPanelSpace {
+  flex: 1;
+  background: var(--bg-app);
+  padding: 0 24px 24px 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .modeBar {
@@ -77,14 +164,17 @@
 }
 
 .modeChip {
-  flex: 1;
-  padding: 8px 0;
+  padding: 6px 16px;
   text-align: center;
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
   border-radius: var(--radius-full);
   transition: all var(--transition-fast);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .modeChip:hover {
@@ -97,39 +187,53 @@
   box-shadow: var(--shadow-panel);
 }
 
-.sidebarStats {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.sidebarStatCard {
-  background: var(--bg-panel);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.sidebarStatCard small {
-  font-size: 11px;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  letter-spacing: 0.05em;
+/* Narrow Episode Sidebar */
+.narrowEpisodeBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
   font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.sidebarStatCard strong {
-  font-size: 20px;
-  font-weight: 600;
+.narrowEpisodeBtn:hover {
+  background: var(--bg-surface);
   color: var(--text-primary);
 }
 
-.sidebarStatCard span {
-  font-size: 13px;
+.narrowEpisodeBtnActive {
+  background: var(--text-primary);
+  color: white;
+  box-shadow: var(--shadow-panel);
+}
+
+.narrowEpisodeAdd {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-default);
+  background: var(--bg-panel);
   color: var(--text-secondary);
+  font-size: 18px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-panel);
+}
+
+.narrowEpisodeAdd:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 .progressTrack {
@@ -147,259 +251,205 @@
   transition: width 0.3s ease-out;
 }
 
-.sidebarPanel {
-  background: var(--bg-panel);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  padding: 20px;
+/* Chat Panel Components */
+.chatScrollable {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 32px;
+}
+
+.chatStickyInputWrap {
+  padding: 0 24px;
+  flex-shrink: 0;
+}
+
+.chatStickyInput {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   box-shadow: var(--shadow-panel);
 }
 
-.sidebarPanelHead {
+.chatInputActions {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
 }
 
-.panelEyebrow {
-  display: block;
-  font-size: 11px;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  margin-bottom: 4px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-}
-
-.sidebarPanelHead h2 {
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0;
-  color: var(--text-primary);
-}
-
-.episodeList {
+.chatSendBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  border: none;
+  color: var(--text-secondary);
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.episodeCard {
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  background: var(--bg-subtle);
-  overflow: hidden;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
   transition: all var(--transition-fast);
 }
 
-.episodeCard:hover {
-  border-color: var(--border-strong);
+.chatSendBtn:hover {
+  background: var(--bg-highlight);
+  color: var(--text-primary);
 }
 
-.episodeCardActive {
-  background: var(--bg-panel);
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 1px var(--border-focus);
+.chatSendBtnActive {
+  background: var(--text-primary);
+  color: var(--bg-panel);
 }
 
-.episodeMain {
+.chatInputHint {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+/* Chat Messages */
+.messageRow {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 16px;
-  text-align: left;
+  gap: 16px;
+  align-items: flex-start;
   width: 100%;
 }
 
-.episodeLabelRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.messageRow--user {
+  flex-direction: row-reverse;
 }
 
-.episodeLabelRow span {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent-primary);
-}
-
-.episodeMain strong {
-  font-size: 15px;
-  color: var(--text-primary);
-}
-
-.episodeMain p {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin: 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.episodeMain small {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin-top: 4px;
-}
-
-.episodeTools {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  border-top: 1px solid var(--border-default);
+.messageAvatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   background: var(--bg-panel);
-}
-
-.episodeTools button {
-  padding: 8px 0;
-  font-size: 12px;
-  color: var(--text-secondary);
-  border-right: 1px solid var(--border-default);
-  transition: all var(--transition-fast);
-}
-
-.episodeTools button:last-child {
-  border-right: none;
-}
-
-.episodeTools button:hover:not(:disabled) {
-  background: var(--bg-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
   color: var(--text-primary);
 }
 
-.episodeTools button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.addEpisodeButton {
-  padding: 12px;
-  border-radius: var(--radius-md);
-  border: 1px dashed var(--border-strong);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 14px;
-  font-weight: 500;
-  transition: all var(--transition-fast);
-}
-
-.addEpisodeButton:hover:not(:disabled) {
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-  background: var(--accent-soft);
-}
-
-.addEpisodeButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.mainColumn {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.configPanel {
-  margin-bottom: 8px;
-}
-
-.fieldGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.requirementRow {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
-.chatPanel {
-  background: var(--bg-subtle);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
-.chatFeed {
-  max-height: 300px;
-  overflow-y: auto;
-  padding: 16px;
+.messageContent {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  max-width: 85%;
 }
 
-.messageRow {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.messageRow[data-role="user"] {
-  align-items: flex-end;
-}
-
-.messageRow[data-role="assistant"] {
-  align-items: flex-flex-start;
-}
-
-.messageLabel {
-  font-size: 11px;
-  color: var(--text-tertiary);
+.messageName {
+  font-size: 13px;
   font-weight: 600;
-  text-transform: uppercase;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.messageBubble {
+.messageName span {
+  font-weight: 400;
+}
+
+.bubbleUser {
+  background: var(--bg-surface);
   padding: 12px 16px;
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  line-height: 1.5;
-  max-width: 80%;
-}
-
-.messageRow[data-role="user"] .messageBubble {
-  background: var(--bg-panel);
-  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  border-top-right-radius: 4px;
   color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
 }
 
-.messageRow[data-role="assistant"] .messageBubble {
-  background: var(--accent-soft);
-  color: var(--accent-primary);
+.bubbleAssistantText {
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
 }
 
-.workspaceGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-}
-
-.listPanel {
+.outlineCard {
+  background: var(--bg-panel);
+  border-radius: 12px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  border: 1px solid var(--border-subtle);
 }
 
-.listPanelHead {
+.outlineCardHeader {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-}
-
-.listPanelHead h3 {
-  font-size: 16px;
+  gap: 8px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0;
+}
+
+/* Seko Style Checklist (Inside Assistant message) */
+.sekoChecklistGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 0 20px 0;
+}
+
+.sekoChecklistItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.sekoChecklistIcon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--text-secondary);
+  color: white;
+}
+
+.sekoChecklistIcon svg {
+  width: 10px;
+  height: 10px;
+}
+
+.sekoSubChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 100px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-panel);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.checklistItem--running .sekoChecklistIcon {
+  background: transparent;
+  border: 2px solid var(--text-secondary);
+  border-top-color: transparent;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .referenceGrid {
@@ -417,91 +467,310 @@
   transition: all var(--transition-fast);
 }
 
-.referenceCard:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-hover);
-}
-
-.referencePreview {
-  height: 140px;
-  background: var(--bg-subtle);
+/* Document Panel Styles */
+.documentContainer {
+  background: white;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
   position: relative;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 
-.referencePreview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.referenceOverlay {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  opacity: 0;
-  transition: opacity var(--transition-fast);
-}
-
-.referenceCard:hover .referenceOverlay {
-  opacity: 1;
-}
-
-.referenceMeta {
-  padding: 12px;
+.docHeaderRow {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border-default);
 }
 
-.referenceMetaTitle {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-  display: flex;
-  justify-content: space-between;
-}
-
-.referenceMetaTitle span {
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--text-tertiary);
-}
-
-.referenceMeta p {
+.aiGeneratedTag {
   font-size: 13px;
-  color: var(--text-secondary);
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: var(--text-tertiary);
+  margin-left: 12px;
+  font-weight: normal;
 }
 
-.referenceEmpty {
-  grid-column: 1 / -1;
-  padding: 32px;
-  text-align: center;
-  background: var(--bg-subtle);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  font-size: 14px;
-}
-
-.storyboardGrid {
+.docTitleRow {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 12px;
 }
 
-.emptyState {
-  padding: 40px;
-  text-align: center;
-  background: var(--bg-subtle);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-md);
+.docIcon {
+  width: 24px;
+  height: 24px;
   color: var(--text-secondary);
+}
+
+.docTitleText {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.docSubtitleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 36px;
+}
+
+.docAiBadge {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.docActionIcon {
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+  margin-left: auto;
+}
+
+.docActionIcon:hover {
+  color: var(--text-primary);
+}
+
+/* Document Sections */
+.docSection {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.docSectionHeaderRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.docSectionTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.docSectionIcon {
+  color: #10B981;
+  /* Default to emerald color like Seko's headings */
+}
+
+.docSectionIconBlue {
+  color: #3B82F6;
+}
+
+.docTextarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 16px;
   font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  resize: vertical;
+  transition: all var(--transition-fast);
+  outline: none;
+}
+
+.docTextarea:focus {
+  border-color: var(--text-secondary);
+  background: var(--bg-highlight);
+}
+
+/* Formatted Text Content for Read-Only mode */
+.docContentList {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  margin: 0;
+  padding-left: 0;
+  list-style-type: none;
+}
+
+.docContentList li {
+  margin-bottom: 8px;
+}
+
+.docContentList li strong {
+  color: var(--text-primary);
+}
+
+.highlightCard {
+  background: var(--bg-surface);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-top: 16px;
+}
+
+.highlightCard ul {
+  padding-left: 20px;
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+/* Reference Grid */
+.refGrid {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.refCard {
+  width: 160px;
+  flex-shrink: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  transition: all var(--transition-fast);
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: flex-end;
+  cursor: pointer;
+}
+
+.refCard:hover {
+  border-color: var(--text-secondary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  transform: translateY(-2px);
+}
+
+.refCard span {
+  width: 100%;
+  padding: 24px 8px 8px;
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.8) 100%);
+  font-size: 13px;
+  color: #fff;
+  font-weight: 600;
+  text-align: left;
+  z-index: 10;
+}
+
+/* Storyboard Stack */
+.shotStack {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.shotCard {
+  width: 160px;
+  flex-shrink: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.shotCard:hover {
+  border-color: var(--text-secondary);
+  box-shadow: 0 0 16px rgba(59, 130, 246, 0.2);
+}
+
+.shotCardContent {
+  padding: 12px;
+  text-align: center;
+}
+
+.shotCardContent strong {
+  font-size: 14px;
+  color: var(--text-primary);
+  display: block;
+}
+
+.shotCardContent p {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+}
+
+/* Sticky Bottom Bar */
+.docBottomBarSpace {
+  height: 80px;
+}
+
+.sekoBottomBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 32px;
+  background: white;
+  border-top: 1px solid var(--border-default);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 20;
+}
+
+.docMetaRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.docSelectLabel {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.docSelect {
+  font-size: 13px;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  outline: none;
+}
+
+.docSelect:hover {
+  color: var(--text-secondary);
+}
+
+.generateBtnBlack {
+  background: #1d2129;
+  color: white;
+  border: none;
+  padding: 8px 24px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.generateBtnBlack:hover {
+  background: #4e5969;
+  transform: translateY(-1px);
 }
 
 .notice {

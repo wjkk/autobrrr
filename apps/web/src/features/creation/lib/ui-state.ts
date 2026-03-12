@@ -11,6 +11,7 @@ export type CreationDialogState =
   | { type: 'batch'; target: BatchTarget }
   | { type: 'materials' }
   | { type: 'canvas' }
+  | { type: 'lipsync' }
   | { type: 'story-tool'; mode: StoryToolMode }
   | { type: 'model-picker' }
   | { type: 'confirm-model-reset'; nextModel: string };

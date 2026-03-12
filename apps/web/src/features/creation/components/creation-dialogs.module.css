@@ -241,6 +241,135 @@
   color: #8ea2cb;
 }
 
+.videoTaskPanel {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: 8px 0 4px;
+}
+
+.videoTaskBadge {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  color: #f3f4f6;
+}
+
+.videoTaskStack {
+  position: relative;
+  width: 68px;
+  height: 48px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(54, 54, 58, 0.94), rgba(29, 29, 32, 0.98));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.videoTaskStack::before,
+.videoTaskStack::after {
+  content: '';
+  position: absolute;
+  inset: -6px 8px auto;
+  height: 16px;
+  border-radius: 8px 8px 0 0;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.videoTaskStack::after {
+  inset-top: -11px;
+  inset-left: 14px;
+  inset-right: 14px;
+}
+
+.videoTaskCard {
+  width: 100%;
+  display: grid;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(30, 30, 33, 0.88);
+}
+
+.videoTaskHeader,
+.videoTaskRow,
+.videoTaskCostRow {
+  padding: 12px 14px;
+}
+
+.videoTaskHeader {
+  background: rgba(255, 255, 255, 0.04);
+  color: #f5f5f5;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.videoTaskRow,
+.videoTaskCostRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 13px;
+}
+
+.videoTaskRow small,
+.videoTaskValue small {
+  display: block;
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 11px;
+}
+
+.videoTaskValue {
+  text-align: right;
+}
+
+.videoTaskSeg {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.videoTaskSegButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.54);
+  font-size: 12px;
+}
+
+.videoTaskSegButtonActive {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.videoTaskCrown {
+  color: #f2b84b;
+}
+
+.videoTaskModeRow {
+  display: flex;
+  gap: 8px;
+  padding: 12px 14px 0;
+}
+
+.videoTaskModeButton {
+  flex: 1;
+  min-height: 30px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 12px;
+}
+
+.videoTaskModeButtonActive {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.96);
+}
+
 @media (max-width: 980px) {
   .modalSplit,
   .frameGrid,
@@ -248,5 +377,471 @@
   .modelGrid,
   .previewStats {
     grid-template-columns: 1fr;
+  }
+}
+
+
+.lightToolLayout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 18px;
+}
+
+.lightToolPreviewCard,
+.lightToolOptionCard,
+.lightToolDialogueCard,
+.lightToolStatCard,
+.lightToolUploadCard {
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 244, 240, 0.94));
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.lightToolPreviewCard,
+.lightToolOptionCard,
+.lightToolDialogueCard,
+.lightToolStatCard,
+.lightToolUploadCard {
+  padding: 14px;
+}
+
+.lightToolPreviewCard,
+.lightToolOptionCard,
+.lightToolPreviewMeta,
+.lightToolStats,
+.lightToolFieldGrid,
+.lightToolSliderGrid,
+.lightToolDialogueStack,
+.lightToolUploadCard {
+  display: grid;
+  gap: 12px;
+}
+
+.canvasPreviewViewport {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(100%, 258px);
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(233, 229, 223, 0.96), rgba(244, 241, 237, 0.98));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.68);
+}
+
+.canvasPreviewViewport::after {
+  content: '';
+  position: absolute;
+  inset: 12px;
+  border: 1px dashed rgba(17, 24, 39, 0.18);
+  border-radius: 18px;
+  pointer-events: none;
+}
+
+.canvasPreviewInner {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.canvasShotPoster {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  border-radius: 24px !important;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.14) !important;
+}
+
+.lightToolPreviewMeta h3,
+.lightToolOptionCard h4,
+.lightToolDialogueCard strong,
+.lightToolStatCard strong,
+.lightToolUploadCard strong {
+  margin: 0;
+  color: #111827;
+  letter-spacing: -0.03em;
+}
+
+.lightToolPreviewMeta p,
+.lightToolPreviewMeta small,
+.lightToolOptionCard p,
+.lightToolStatCard small,
+.lightToolUploadCard small {
+  margin: 0;
+  color: #6b7280;
+}
+
+.lightToolStats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.lightToolStatCard,
+.lightToolDialogueCard {
+  display: grid;
+  gap: 12px;
+}
+
+.lightToolStatCard {
+  gap: 6px;
+}
+
+.lightToolFieldGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lightToolSliderGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lightSegmentRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lightToolLayout :global([class*='fieldInput']),
+.lightToolLayout :global([class*='fieldSelect']),
+.lightToolLayout :global([class*='fieldTextarea']) {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  background: rgba(255, 255, 255, 0.94);
+  color: #1f2937;
+  outline: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.lightToolLayout :global([class*='fieldInput']:focus),
+.lightToolLayout :global([class*='fieldSelect']:focus),
+.lightToolLayout :global([class*='fieldTextarea']:focus) {
+  border-color: rgba(37, 99, 235, 0.24);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+}
+
+.lightToolLayout :global([class*='fieldTextarea']) {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.lightToolLayout :global([class*='segmentedButton']) {
+  min-height: 34px;
+  padding-inline: 12px;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  color: #374151;
+}
+
+.lightToolLayout :global([class*='segmentedButtonActive']) {
+  border-color: rgba(17, 24, 39, 0.12);
+  background: #111827;
+  color: #ffffff;
+}
+
+.lightToolLayout :global([class*='fieldBlock']) > span,
+.lightToolLayout :global([class*='sliderBlock']) > span {
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.lightToolLayout :global([class*='sliderBlock']) input {
+  width: 100%;
+  accent-color: #111827;
+}
+
+.lipsyncPreviewShot {
+  width: 118px !important;
+  margin: 0 auto;
+  border-radius: 18px !important;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12) !important;
+}
+
+.lipsyncDialogueHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lightActionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.lightFooterNote {
+  color: #6b7280;
+}
+
+@media (max-width: 980px) {
+  .lightToolLayout,
+  .lightToolFieldGrid,
+  .lightToolSliderGrid,
+  .lightToolStats {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.lightToolPreviewFrame {
+  min-height: 280px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(239, 235, 229, 0.96), rgba(247, 244, 240, 0.98));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* ========================================
+   Dark tool panel refinements
+   ======================================== */
+
+.lightToolPreviewCard,
+.lightToolOptionCard,
+.lightToolDialogueCard,
+.lightToolStatCard,
+.lightToolUploadCard {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(17, 20, 28, 0.96), rgba(12, 14, 20, 0.98));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.canvasPreviewViewport {
+  background: linear-gradient(180deg, rgba(22, 25, 35, 0.96), rgba(15, 17, 24, 0.98));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.canvasPreviewViewport::after {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.lightToolPreviewMeta h3,
+.lightToolOptionCard h4,
+.lightToolDialogueCard strong,
+.lightToolStatCard strong,
+.lightToolUploadCard strong {
+  color: #eef4ff;
+}
+
+.lightToolPreviewMeta p,
+.lightToolPreviewMeta small,
+.lightToolOptionCard p,
+.lightToolStatCard small,
+.lightToolUploadCard small,
+.lightFooterNote {
+  color: #8ea2cb;
+}
+
+.lightToolLayout :global([class*='fieldInput']),
+.lightToolLayout :global([class*='fieldSelect']),
+.lightToolLayout :global([class*='fieldTextarea']) {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(7, 10, 17, 0.92);
+  color: #eef4ff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.lightToolLayout :global([class*='fieldInput']:focus),
+.lightToolLayout :global([class*='fieldSelect']:focus),
+.lightToolLayout :global([class*='fieldTextarea']:focus) {
+  border-color: rgba(96, 165, 250, 0.34);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.lightToolLayout :global([class*='segmentedButton']) {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #aebbd6;
+}
+
+.lightToolLayout :global([class*='segmentedButtonActive']) {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.lightToolLayout :global([class*='fieldBlock']) > span,
+.lightToolLayout :global([class*='sliderBlock']) > span {
+  color: #c8d4ea;
+}
+
+.lightToolLayout :global([class*='sliderBlock']) input {
+  accent-color: #ffffff;
+}
+
+.hiddenUploadInput {
+  display: none;
+}
+
+.historyPickerLayout {
+  display: grid;
+  gap: 14px;
+  min-height: 420px;
+}
+
+.historyCategoryTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.historyCategoryTab {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #b5c2dc;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.historyCategoryTabActive {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.historyWorksGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  align-content: start;
+}
+
+.historyWorkCard {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  text-align: left;
+}
+
+.historyWorkCardActive {
+  border-color: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+.historyWorkPoster {
+  position: relative;
+  min-height: 220px;
+  background:
+    radial-gradient(circle at 30% 16%, rgba(255, 255, 255, 0.14), transparent 18%),
+    linear-gradient(145deg, rgba(69, 75, 89, 0.92), rgba(24, 27, 34, 0.98));
+}
+
+.historyWorkPosterLabel {
+  position: absolute;
+  right: 14px;
+  bottom: 16px;
+  left: 14px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.historyWorkMeta {
+  display: grid;
+  gap: 4px;
+  padding: 0 14px 14px;
+}
+
+.historyWorkMeta strong {
+  color: #eef4ff;
+  font-size: 14px;
+}
+
+.historyWorkMeta small,
+.historyPickerHint {
+  color: #8ea2cb;
+  font-size: 12px;
+}
+
+.cropLayout {
+  display: grid;
+  gap: 16px;
+}
+
+.cropPreviewSurface {
+  display: grid;
+  place-items: center;
+  min-height: 360px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.cropPreviewFrame {
+  position: relative;
+  width: min(100%, 540px);
+  aspect-ratio: 1 / 1;
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.cropPreviewFrame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 18px;
+  pointer-events: none;
+}
+
+.cropPreviewInner {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.cropPreviewPoster {
+  width: min(100%, 340px) !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  border-radius: 20px !important;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22) !important;
+}
+
+.cropPreviewImage {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.cropRatioRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cropRatioChip {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #b7c4dd;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cropRatioChipActive {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+@media (max-width: 980px) {
+  .historyWorksGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

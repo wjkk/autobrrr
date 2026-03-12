@@ -3,6 +3,7 @@ import type {
   CreationWorkspace,
   MockStudioScenarioId,
   PlannerWorkspace,
+  ProjectContentMode,
   ProjectSummary,
   Shot,
   ShotVersion,
@@ -74,13 +75,13 @@ const projectCatalog: Record<MockStudioScenarioId, ProjectSummary & { scenarioLa
   },
   partial_failed: {
     id: 'proj-rain-cat',
-    title: '雨夜街头的橘色微光',
-    brief: '一个三镜头治愈短片，从雨夜躲雨到暖意递来的瞬间。',
+    title: '第1集：小绿的领地危机',
+    brief: '明亮科技感客厅里，大刘抱着喵霸走入画面，小绿在鸟架上注视这个新来者。',
     contentMode: 'single',
     executionMode: 'review_required',
     aspectRatio: '9:16',
     status: 'creating',
-    scenarioLabel: '分镜部分失败',
+    scenarioLabel: 'Seko Creation 基线',
     stageLabel: '分片生成',
   },
   publish_ready: {
@@ -119,6 +120,27 @@ const continueProjects: ContinueProjectCard[] = (Object.keys(projectCatalog) as 
     stageLabel: item.stageLabel,
   };
 });
+
+const sekoReplicaProject: ProjectSummary & { scenarioLabel: string; stageLabel: ContinueProjectCard['stageLabel'] } = {
+  id: 'proj-seko-replica',
+  title: '第1集：小绿的领地危机',
+  brief: 'Seko creation 页面定向复刻样例，聚焦左侧编辑栏、中心预览和底部时间轴。',
+  contentMode: 'single',
+  executionMode: 'review_required',
+  aspectRatio: '9:16',
+  status: 'creating',
+  scenarioLabel: 'Seko 定向复刻',
+  stageLabel: '分片生成',
+};
+
+const sekoReplicaContinueProject: ContinueProjectCard = {
+  id: sekoReplicaProject.id,
+  title: sekoReplicaProject.title,
+  brief: sekoReplicaProject.brief,
+  aspectRatio: sekoReplicaProject.aspectRatio,
+  status: sekoReplicaProject.status,
+  stageLabel: sekoReplicaProject.stageLabel,
+};
 
 function makeVersion(id: string, label: string, modelId: string, status: ShotVersion['status'], mediaKind: ShotVersion['mediaKind'] = 'video'): ShotVersion {
   return {
@@ -330,6 +352,94 @@ const partialFailedShots: Shot[] = [
   }),
 ];
 
+const sekoReplicaPrompt =
+  '[画风：皮克斯3D卡通风格][全景视角][现代科技感客厅]明亮的午后阳光洒在整洁的木质地板上，科技模型反射着细腻光泽。画面中央，[大刘]（黑短碎发黑框眼镜青年）正抱着[喵霸-常规态]（银灰色流线型金属机器猫）从入口处走入，脸上洋溢着兴奋的笑容；画面左侧，[小绿-常规态]（翠绿背羽亮黄腹部虎皮鹦鹉）正站在专属鸟架最高处，歪着头注视着大刘。';
+
+const sekoReplicaShotDurations = [4, 4, 2, 2, 3, 3, 1, 2, 5, 5, 5, 4, 4, 3] as const;
+
+const sekoReplicaShots: Shot[] = sekoReplicaShotDurations.map((durationSeconds, index) => {
+  const shotNumber = index + 1;
+  const shotId = `shot-${shotNumber}`;
+  const title = `分镜${shotNumber}`;
+
+  if (shotNumber === 1) {
+    return makeShot({
+      id: shotId,
+      title,
+      subtitleText: '科技宅大刘',
+      narrationText: '',
+      imagePrompt: sekoReplicaPrompt,
+      motionPrompt: '',
+      preferredModel: brandTokens.visionModels[0],
+      resolution: '1080P',
+      durationMode: '智能',
+      durationSeconds,
+      cropToVoice: true,
+      status: 'success',
+      versions: [
+        makeVersion(`${shotId}-v1`, '版本 1', brandTokens.visionModels[0], 'active'),
+        makeVersion(`${shotId}-v2`, '版本 2', brandTokens.visionModels[1], 'pending_apply'),
+      ],
+      selectedVersionId: `${shotId}-v1`,
+      pendingApplyVersionId: null,
+      materials: [{ id: 'seko-asset-1', label: '当前主素材', source: 'generated', kind: 'image' }],
+      activeMaterialId: 'seko-asset-1',
+    });
+  }
+
+  return makeShot({
+    id: shotId,
+    title,
+    subtitleText: title,
+    narrationText: '',
+    imagePrompt: sekoReplicaPrompt,
+    motionPrompt: '',
+    preferredModel: brandTokens.visionModels[0],
+    resolution: '1080P',
+    durationMode: '智能',
+    durationSeconds,
+    cropToVoice: true,
+    status: 'success',
+    versions: [makeVersion(`${shotId}-v1`, '版本 1', brandTokens.visionModels[0], 'active')],
+  });
+});
+
+const sekoReplicaFixture: StudioFixture = {
+  ...buildCommonFixture(
+    'partial_failed',
+    basePlanner(sekoReplicaPrompt),
+    {
+      ...baseCreation(sekoReplicaShots, 'shot-1', 'default'),
+      points: 108,
+      playback: {
+        ...baseCreation(sekoReplicaShots, 'shot-1', 'default').playback,
+        totalSecond: 37,
+      },
+    },
+    {
+      draft: {
+        title: '第1集：小绿的领地危机',
+        intro: 'Seko creation 真实静态页抽取的 14 分镜 mock。',
+        script: sekoReplicaPrompt,
+        tag: 'Seko Archive',
+        status: 'draft',
+      },
+      successMessage: publishCopy.success,
+    },
+  ),
+  scenarioLabel: sekoReplicaProject.scenarioLabel,
+  project: sekoReplicaProject,
+  episodes: [
+    {
+      id: 'ep-1',
+      title: '第1集：小绿的领地危机',
+      summary: sekoReplicaProject.brief,
+      sequence: 1,
+      status: 'creating',
+    },
+  ],
+};
+
 const publishReadyShots: Shot[] = partialFailedShots.map((shot, index) =>
   makeShot({
     ...shot,
@@ -439,21 +549,40 @@ export const studioFixturesByScenario: Record<MockStudioScenarioId, StudioFixtur
       successMessage: publishCopy.success,
     },
   ),
-  partial_failed: buildCommonFixture(
-    'partial_failed',
-    basePlanner('做一个雨夜街头救助橘猫的三镜头短片。'),
-    baseCreation(partialFailedShots, 'shot-1', 'default'),
-    {
-      draft: {
-        title: '雨夜街头的橘色微光',
-        intro: '一个关于躲雨、暖光与被轻轻接住的短片。',
-        script: '三镜头短片，雨夜街头，流浪橘猫，透明雨伞，热奶碗。',
-        tag: 'AIV Mock Studio',
-        status: 'draft',
+  partial_failed: {
+    ...buildCommonFixture(
+      'partial_failed',
+      basePlanner(sekoReplicaPrompt),
+      {
+        ...baseCreation(sekoReplicaShots, 'shot-1', 'default'),
+        points: 108,
+        playback: {
+          ...baseCreation(sekoReplicaShots, 'shot-1', 'default').playback,
+          totalSecond: 37,
+        },
       },
-      successMessage: publishCopy.success,
-    },
-  ),
+      {
+        draft: {
+          title: '第1集：小绿的领地危机',
+          intro: 'Seko creation 真实静态页抽取的 14 分镜 mock。',
+          script: sekoReplicaPrompt,
+          tag: 'Seko Archive',
+          status: 'draft',
+        },
+        successMessage: publishCopy.success,
+      },
+    ),
+    assistantName: 'Seko',
+    episodes: [
+      {
+        id: 'ep-1',
+        title: '第1集：小绿的领地危机',
+        summary: projectCatalog.partial_failed.brief,
+        sequence: 1,
+        status: 'creating',
+      },
+    ],
+  },
   publish_ready: buildCommonFixture(
     'publish_ready',
     basePlanner('玻璃庭院中，一次安静对视后的情绪升温。'),
@@ -494,7 +623,94 @@ const fixturesByProjectId = Object.values(studioFixturesByScenario).reduce<Recor
   return accumulator;
 }, {});
 
+fixturesByProjectId[sekoReplicaProject.id] = sekoReplicaFixture;
+
+interface RuntimeFixtureGlobal {
+  __AIV_RUNTIME_FIXTURES__?: Map<string, StudioFixture>;
+}
+
+const runtimeFixtureGlobal = globalThis as typeof globalThis & RuntimeFixtureGlobal;
+const runtimeFixturesByProjectId =
+  runtimeFixtureGlobal.__AIV_RUNTIME_FIXTURES__ ?? (runtimeFixtureGlobal.__AIV_RUNTIME_FIXTURES__ = new Map<string, StudioFixture>());
+
+export interface CreateRuntimeStudioFixtureInput {
+  prompt: string;
+  contentMode: ProjectContentMode;
+}
+
+function nextRuntimeProjectId() {
+  return `proj-runtime-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function buildRuntimeEpisodes(contentMode: ProjectContentMode, summary: string): StudioFixture['episodes'] {
+  if (contentMode === 'single') {
+    return [
+      {
+        id: 'ep-1',
+        title: '第 1 集',
+        summary,
+        sequence: 1,
+        status: 'planning',
+      },
+    ];
+  }
+
+  return Array.from({ length: 3 }, (_item, index) => ({
+    id: `ep-${index + 1}`,
+    title: `第 ${index + 1} 集`,
+    summary: index === 0 ? summary : '待补充当前集剧情摘要。',
+    sequence: index + 1,
+    status: 'planning' as const,
+  }));
+}
+
+export function createRuntimeStudioFixture({ prompt, contentMode }: CreateRuntimeStudioFixtureInput): StudioFixture {
+  const normalizedPrompt = prompt.trim();
+  const baseFixture = getStudioFixtureByScenario('empty');
+  const projectId = nextRuntimeProjectId();
+  const title = normalizedPrompt.slice(0, 24) || '新建项目';
+  const summary = normalizedPrompt || '待补充创意描述。';
+
+  const fixture: StudioFixture = {
+    ...baseFixture,
+    scenarioLabel: '新建项目',
+    project: {
+      ...baseFixture.project,
+      id: projectId,
+      title,
+      brief: summary,
+      contentMode,
+      status: 'planning',
+    },
+    episodes: buildRuntimeEpisodes(contentMode, summary),
+    planner: {
+      ...baseFixture.planner,
+      input: normalizedPrompt,
+      submittedRequirement: normalizedPrompt,
+      status: 'idle',
+      docProgressPercent: 0,
+      messages: normalizedPrompt
+        ? [
+            { id: 'runtime-msg-assistant', role: 'assistant', content: '已接收创作需求，先为你整理剧本大纲。' },
+            { id: 'runtime-msg-user', role: 'user', content: normalizedPrompt },
+          ]
+        : [{ id: 'runtime-msg-assistant', role: 'assistant', content: '请输入需求后开始策划。' }],
+      references: [],
+      storyboards: [],
+      steps: baseFixture.planner.steps.map((step) => ({ ...step, status: 'waiting' })),
+    },
+  };
+
+  runtimeFixturesByProjectId.set(projectId, structuredClone(fixture));
+  return structuredClone(fixture);
+}
+
 export function getStudioFixtureByProjectId(projectId: string): StudioFixture | null {
+  const runtimeFixture = runtimeFixturesByProjectId.get(projectId);
+  if (runtimeFixture) {
+    return structuredClone(runtimeFixture);
+  }
+
   return fixturesByProjectId[projectId] ? structuredClone(fixturesByProjectId[projectId]) : null;
 }
 
@@ -503,5 +719,14 @@ export function getStudioFixtureByScenario(scenarioId: MockStudioScenarioId): St
 }
 
 export function listStudioFixtureProjects(): ContinueProjectCard[] {
-  return structuredClone(continueProjects);
+  const runtimeProjects = Array.from(runtimeFixturesByProjectId.values()).map((fixture) => ({
+    id: fixture.project.id,
+    title: fixture.project.title,
+    brief: fixture.project.brief,
+    aspectRatio: fixture.project.aspectRatio,
+    status: fixture.project.status,
+    stageLabel: '策划' as const,
+  }));
+
+  return structuredClone([sekoReplicaContinueProject, ...runtimeProjects, ...continueProjects]);
 }

@@ -1,16 +1,27 @@
 # 前端领域契约规格（v0.2）
 
 版本：v0.2  
-日期：2026-03-08  
-状态：实现基线
+日期：2026-03-09  
+状态：现状基线 + v0.2 演进约束
 
 ## 1. 目标
 
-统一前端页面消费的数据结构，避免 Explore / Planner / Creation / Publish 各自定义不兼容 DTO。
+统一前端页面消费的数据结构，明确：
 
-## 2. 顶层聚合对象
+1. 当前仓库里“已实现”的契约。
+2. Explore/Planner 下一步后端化需要新增的契约。
 
-前端当前以 `StudioFixture` 为唯一聚合对象：
+## 2. 当前事实源（代码）
+
+1. `packages/domain/src/studio.ts`
+2. `packages/domain/src/project.ts`
+3. `packages/domain/src/planner.ts`
+4. `packages/domain/src/creation.ts`
+5. `packages/domain/src/publish.ts`
+
+## 3. 当前已实现契约
+
+前端页面首屏仍以 `StudioFixture` 作为聚合响应：
 
 ```ts
 interface StudioFixture {
@@ -20,7 +31,17 @@ interface StudioFixture {
   scenarioLabel: string;
   project: ProjectSummary;
   episodes: EpisodeSummary[];
-  explore: { ... };
+  explore: {
+    categories: Array<'全部' | '短剧漫剧' | '音乐MV' | '知识分享'>;
+    feeds: ExploreFeedItem[];
+    continueProjects: ContinueProjectCard[];
+    defaults: {
+      prompt: string;
+      model: string;
+      ratio: '9:16' | '16:9' | '1:1';
+      mode: '视频模式' | '漫剧模式';
+    };
+  };
   planner: PlannerWorkspace;
   creation: CreationWorkspace;
   publish: PublishWorkspace;
@@ -28,55 +49,47 @@ interface StudioFixture {
 }
 ```
 
-## 3. 子对象清单（当前真实使用）
+关键子对象（当前已用）：
 
 1. `ProjectSummary`
-- `id`
-- `title`
-- `brief`
-- `contentMode: 'single' | 'series'`
-- `executionMode: 'auto' | 'review_required'`
-- `aspectRatio: '9:16' | '16:9' | '1:1'`
-- `status`
+- `id/title/brief/contentMode/executionMode/aspectRatio/status`
+- `aspectRatio` 当前 domain 仍是 `'9:16' | '16:9' | '1:1'`
 
 2. `PlannerWorkspace`
-- `submittedRequirement`
-- `status`
-- `docProgressPercent`
-- `pointCost`
-- `sections[]`
-- `steps[]`
-- `messages[]`
-- `references[]`
-- `storyboards[]`
+- `input/submittedRequirement/status/docProgressPercent/pointCost`
+- `sections/steps/messages/references/storyboards`
 
 3. `CreationWorkspace`
-- `selectedShotId`
-- `activeTrack`
-- `viewMode`
-- `points`
-- `shots[]`（含版本、素材、画布）
-- `playback`
-- `voice`
-- `music`
-- `lipSync`
+- `selectedShotId/activeTrack/viewMode/points/shots[]`
+- `playback/voice/music/lipSync`
 
 4. `PublishWorkspace`
-- `draft`
-- `successMessage`
+- `draft/successMessage`
 
-## 4. 约束与已知差异
+## 4. 已知差异（必须在文档中明确）
 
-1. `EpisodeSummary.status` 当前沿用了 `ProjectStatus` 类型。
-- 数据库存在独立 `EpisodeStatus`。
-- v0.3 建议改为独立类型，避免语义漂移。
+1. Planner UI 比例与 domain 比例暂不一致。
+- domain: `'9:16' | '16:9' | '1:1'`
+- planner 页底部配置（前端局部状态）: `'16:9' | '9:16' | '4:3' | '3:4'`
 
-2. 首页组件 `ExplorePage` 当前未完全消费 `studio.explore.*`。
-- 角色/画风/模型/预设/瀑布流仍有硬编码。
-- 该部分需要逐步 API 化。
+2. Planner 的“细化版本历史/激活版本/局部 patch”当前是页面本地状态。
+- 实现位置：`apps/web/src/features/planner/hooks/use-planner-refinement.ts`
+- 尚未进入 `@aiv/domain` 的持久化契约。
 
-## 5. 建议演进
+3. Explore 页面仍有较多静态数据源。
+- `explore-page.data.ts` 中的 tab、候选项、预设卡仍是前端常量。
 
-- 保持 `StudioFixture` 作为“页面首屏聚合响应”。
-- 同时提供细粒度命令接口（更新 Planner、生成 Shot、提交 Publish）。
-- 避免前端直接拼装多份松散 DTO。
+## 5. v0.2 方向（后端化要求）
+
+1. 保留 `StudioFixture` 作为跨页面首屏聚合对象（兼容现有页面）。
+2. 为 Planner 新增独立契约：
+- `PlannerRefinementVersion`
+- `PlannerDocSnapshot`
+- `PlannerGenerationConfig`（含 `storyboardModelId` + planner 比例枚举）
+3. 逐步把 Explore 的候选项/预设卡迁移为可配置接口数据。
+
+## 6. 兼容策略
+
+1. `ProjectSummary.aspectRatio` 暂保留 `1:1`，用于历史数据与非 Planner 场景兼容。
+2. Planner 配置使用独立比例枚举（含 `4:3/3:4`），不复用旧字段。
+3. 待后端完成迁移后，再评估统一为单一比例枚举。

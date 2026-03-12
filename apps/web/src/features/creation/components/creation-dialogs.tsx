@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, cx } from '@aiv/ui';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 
 import type { CreationWorkspaceController } from '../lib/use-creation-workspace';
 import { CreationIcon } from './creation-icons';
@@ -37,16 +38,27 @@ const MODEL_OPTIONS = [
   },
 ];
 
+function getVideoTaskShotCount(controller: CreationWorkspaceController, target: 'single' | 'all' | 'missing') {
+  if (target === 'single') {
+    return 1;
+  }
+
+  const missing = controller.creation.shots.filter((shot) => shot.status === 'failed' || !shot.versions.some((version) => version.mediaKind === 'video')).length;
+  return target === 'missing' ? Math.max(1, missing) : controller.creation.shots.length;
+}
+
 export function CreationDialogs({ controller }: CreationDialogsProps) {
   const {
     dialog,
     studio,
+    creation,
     activeShot,
     activeVersion,
     generateDraft,
     canvasDraft,
     storyToolDraft,
     modelPickerDraft,
+    lipsyncNotice,
   } = controller;
 
   if (!activeShot) {
@@ -55,107 +67,141 @@ export function CreationDialogs({ controller }: CreationDialogsProps) {
 
   const sourceVersion = activeShot.versions.find((version) => version.id === storyToolDraft.sourceVersionId) ?? activeVersion;
   const modelOptions = MODEL_OPTIONS.filter((item) => item.category === modelPickerDraft.category);
+  const lipsyncBaseShot = creation.shots.find((shot) => shot.id === creation.lipSync.baseShotId) ?? activeShot;
+  const [historyCategory, setHistoryCategory] = useState<(typeof studio.explore.categories)[number]>('全部');
+  const [selectedHistoryWorkId, setSelectedHistoryWorkId] = useState<string | null>(null);
+  const [cropOpen, setCropOpen] = useState(false);
+  const [uploadedImageName, setUploadedImageName] = useState('');
+  const [uploadedImageUrl, setUploadedImageUrl] = useState('');
+  const [cropRatio, setCropRatio] = useState<'自由' | '9:16' | '16:9' | '3:4' | '4:3'>('自由');
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const filteredHistoryWorks = studio.historyWorks.filter((item) => historyCategory === '全部' || item.category === historyCategory);
+  const selectedHistoryWork = filteredHistoryWorks.find((item) => item.id === selectedHistoryWorkId) ?? studio.historyWorks.find((item) => item.id === selectedHistoryWorkId) ?? null;
+  const batchShotCount = getVideoTaskShotCount(controller, dialog.type === 'batch' ? dialog.target : 'all');
+  const generateShotCount = getVideoTaskShotCount(controller, 'single');
+  const taskShotCount = dialog.type === 'batch' ? batchShotCount : generateShotCount;
+  const taskCost = taskShotCount * 10;
+
+  useEffect(() => {
+    if (dialog.type === 'materials') {
+      setHistoryCategory('全部');
+      setSelectedHistoryWorkId(null);
+    }
+  }, [dialog.type]);
+
+  useEffect(() => {
+    return () => {
+      if (uploadedImageUrl) {
+        URL.revokeObjectURL(uploadedImageUrl);
+      }
+    };
+  }, [uploadedImageUrl]);
+
+  const handleUploadImage = () => {
+    uploadInputRef.current?.click();
+  };
+
+  const handleUploadChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      if (image.naturalWidth < 300 || image.naturalHeight < 300) {
+        controller.setDialog({ type: 'none' });
+        controller.setNotice(`图片最小尺寸为 300*300，当前图片尺寸为 ${image.naturalWidth}*${image.naturalHeight}`);
+        URL.revokeObjectURL(objectUrl);
+        event.target.value = '';
+        return;
+      }
+
+      if (uploadedImageUrl) {
+        URL.revokeObjectURL(uploadedImageUrl);
+      }
+      setUploadedImageName(file.name);
+      setUploadedImageUrl(objectUrl);
+      setCropRatio('自由');
+      controller.setDialog({ type: 'none' });
+      setCropOpen(true);
+      event.target.value = '';
+    };
+    image.onerror = () => {
+      controller.setNotice('图片读取失败，请重试。');
+      URL.revokeObjectURL(objectUrl);
+      event.target.value = '';
+    };
+    image.src = objectUrl;
+  };
+
+  const applyHistoryWork = () => {
+    if (!selectedHistoryWork) {
+      return;
+    }
+    controller.attachHistoryMaterial(selectedHistoryWork.title);
+  };
+
+  const applyUploadedImage = () => {
+    controller.applyUploadedMaterial(uploadedImageName);
+    setCropOpen(false);
+  };
 
   return (
     <>
       <CreationModalShell
         open={dialog.type === 'generate'}
-        eyebrow="Single Shot"
-        title="单分镜转视频"
-        description="保留 Seko 工作台里的“左预览 + 右参数”结构，提交后会追加新候选版本。"
-        size="wide"
+        title="转视频任务明细"
+        size="compact"
         onClose={() => controller.setDialog({ type: 'none' })}
-        footerInfo={<span className={dialogStyles.footerNote}>提交后不会直接覆盖当前成片，会先在版本轨生成一个待替换候选。</span>}
         footerActions={
           <>
-            <Button variant="secondary" onClick={() => controller.setDialog({ type: 'none' })}>
+            <button type="button" className={styles.darkGhostButton} onClick={() => controller.setDialog({ type: 'none' })}>
               取消
-            </Button>
-            <Button onClick={controller.submitGeneration}>提交生成</Button>
+            </button>
+            <button type="button" className={styles.darkPrimaryButton} onClick={controller.submitGeneration}>
+              确认
+            </button>
           </>
         }
       >
-        <div className={dialogStyles.modalSplit}>
-          <div className={dialogStyles.previewCard}>
-            <div className={dialogStyles.previewFrame}>
-              <ShotPoster shot={activeShot} size="sidebar" accent={controller.shotAccent(activeShot.id)} caption={activeShot.title} activeMaterialLabel={controller.activeMaterial?.label ?? null} />
-            </div>
-            <div className={dialogStyles.previewMeta}>
-              <h3>{activeShot.title}</h3>
-              <p>{activeShot.motionPrompt}</p>
-            </div>
-            <div className={dialogStyles.previewStats}>
-              <div className={dialogStyles.previewStatCard}>
-                <small>当前模型</small>
-                <strong>{activeShot.preferredModel}</strong>
-              </div>
-              <div className={dialogStyles.previewStatCard}>
-                <small>当前时长</small>
-                <strong>{controller.formatShotDuration(activeShot.durationSeconds)}</strong>
-              </div>
-              <div className={dialogStyles.previewStatCard}>
-                <small>版本数</small>
-                <strong>{activeShot.versions.length}</strong>
-              </div>
-            </div>
+        <div className={dialogStyles.videoTaskPanel}>
+          <div className={dialogStyles.videoTaskBadge}>
+            <span className={dialogStyles.videoTaskStack} />
+            <strong>{`x ${generateShotCount}`}</strong>
           </div>
-          <div className={dialogStyles.optionStack}>
-            <div className={dialogStyles.optionCard}>
-              <h4>生成参数</h4>
-              <div className={styles.dialogGrid}>
-                <label className={styles.fieldBlock}>
-                  <span>模型</span>
-                  <select className={styles.fieldSelect} value={generateDraft.model} onChange={(event) => controller.setGenerateDraft({ ...generateDraft, model: event.target.value })}>
-                    {MODEL_OPTIONS.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className={styles.fieldRow}>
-                  <label className={styles.fieldBlock}>
-                    <span>清晰度</span>
-                    <select
-                      className={styles.fieldSelect}
-                      value={generateDraft.resolution}
-                      onChange={(event) => controller.setGenerateDraft({ ...generateDraft, resolution: event.target.value as typeof generateDraft.resolution })}
-                    >
-                      {['720P', '1080P'].map((item) => (
-                        <option key={item} value={item}>
-                          {item}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className={styles.fieldBlock}>
-                    <span>时长</span>
-                    <select
-                      className={styles.fieldSelect}
-                      value={generateDraft.durationMode}
-                      onChange={(event) => controller.setGenerateDraft({ ...generateDraft, durationMode: event.target.value as typeof generateDraft.durationMode })}
-                    >
-                      {['智能', '4s', '6s'].map((item) => (
-                        <option key={item} value={item}>
-                          {item}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                <label className={styles.checkboxRow}>
-                  <input
-                    type="checkbox"
-                    checked={generateDraft.cropToVoice}
-                    onChange={(event) => controller.setGenerateDraft({ ...generateDraft, cropToVoice: event.target.checked })}
-                  />
-                  <span>裁剪至配音时长</span>
-                </label>
+          <div className={dialogStyles.videoTaskCard}>
+            <div className={dialogStyles.videoTaskHeader}>转视频任务明细</div>
+            <div className={dialogStyles.videoTaskRow}>
+              <span>分辨率</span>
+              <div className={dialogStyles.videoTaskSeg}>
+                {(['720P', '1080P'] as const).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={cx(dialogStyles.videoTaskSegButton, generateDraft.resolution === item && dialogStyles.videoTaskSegButtonActive)}
+                    onClick={() => controller.setGenerateDraft({ ...generateDraft, resolution: item })}
+                  >
+                    {item}
+                    {item === '1080P' ? <span className={dialogStyles.videoTaskCrown}>♛</span> : null}
+                  </button>
+                ))}
               </div>
             </div>
-            <div className={dialogStyles.optionCard}>
-              <h4>生成结果规则</h4>
-              <p>mock 会把结果追加到版本轨，而不是直接替换当前成片。你可以在右侧先预览，再决定是否应用。</p>
+            <div className={dialogStyles.videoTaskRow}>
+              <div>
+                <span>普通画面模型</span>
+                <small>{`${generateShotCount}个分镜`}</small>
+              </div>
+              <div className={dialogStyles.videoTaskValue}>
+                <strong>智能选择</strong>
+                <small>智能 | 镜切</small>
+              </div>
+            </div>
+            <div className={dialogStyles.videoTaskCostRow}>
+              <span>积分消耗</span>
+              <strong>{taskCost}</strong>
             </div>
           </div>
         </div>
@@ -163,34 +209,68 @@ export function CreationDialogs({ controller }: CreationDialogsProps) {
 
       <CreationModalShell
         open={dialog.type === 'batch'}
-        eyebrow="Batch"
-        title="批量转视频"
-        description="支持全部分镜或仅补缺分镜，便于覆盖批量任务与失败恢复流程。"
+        title="转视频任务明细"
+        size="compact"
         onClose={() => controller.setDialog({ type: 'none' })}
-        footerInfo={<span className={dialogStyles.footerNote}>当前批量规则会故意保留一条失败分镜，用于验证重试和替换闭环。</span>}
         footerActions={
           <>
-            <Button variant="secondary" onClick={() => controller.setDialog({ type: 'none' })}>
+            <button type="button" className={styles.darkGhostButton} onClick={() => controller.setDialog({ type: 'none' })}>
               取消
-            </Button>
-            <Button onClick={() => controller.submitBatch(dialog.type === 'batch' ? dialog.target : 'all')}>提交任务</Button>
+            </button>
+            <button type="button" className={styles.darkPrimaryButton} onClick={() => controller.submitBatch(dialog.type === 'batch' ? dialog.target : 'all')}>
+              确认
+            </button>
           </>
         }
       >
-        <div className={dialogStyles.optionStack}>
-          <div className={dialogStyles.optionCard}>
-            <h4>任务目标</h4>
-            <div className={styles.segmentedGroup}>
+        <div className={dialogStyles.videoTaskPanel}>
+          <div className={dialogStyles.videoTaskBadge}>
+            <span className={dialogStyles.videoTaskStack} />
+            <strong>{`x ${batchShotCount}`}</strong>
+          </div>
+          <div className={dialogStyles.videoTaskCard}>
+            <div className={dialogStyles.videoTaskHeader}>转视频任务明细</div>
+            <div className={dialogStyles.videoTaskRow}>
+              <span>分辨率</span>
+              <div className={dialogStyles.videoTaskSeg}>
+                {(['720P', '1080P'] as const).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={cx(dialogStyles.videoTaskSegButton, generateDraft.resolution === item && dialogStyles.videoTaskSegButtonActive)}
+                    onClick={() => controller.setGenerateDraft({ ...generateDraft, resolution: item })}
+                  >
+                    {item}
+                    {item === '1080P' ? <span className={dialogStyles.videoTaskCrown}>♛</span> : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className={dialogStyles.videoTaskRow}>
+              <div>
+                <span>普通画面模型</span>
+                <small>{`${batchShotCount}个分镜`}</small>
+              </div>
+              <div className={dialogStyles.videoTaskValue}>
+                <strong>{dialog.type === 'batch' && dialog.target === 'missing' ? '补齐缺失' : '智能选择'}</strong>
+                <small>智能 | 镜切</small>
+              </div>
+            </div>
+            <div className={dialogStyles.videoTaskModeRow}>
               {(['all', 'missing'] as const).map((item) => (
                 <button
                   key={item}
                   type="button"
-                  className={item === (dialog.type === 'batch' ? dialog.target : 'all') ? styles.segmentedButtonActive : styles.segmentedButton}
+                  className={cx(dialogStyles.videoTaskModeButton, dialog.type === 'batch' && dialog.target === item && dialogStyles.videoTaskModeButtonActive)}
                   onClick={() => controller.setDialog({ type: 'batch', target: item })}
                 >
                   {item === 'all' ? '全部分镜' : '仅缺失分镜'}
                 </button>
               ))}
+            </div>
+            <div className={dialogStyles.videoTaskCostRow}>
+              <span>积分消耗</span>
+              <strong>{taskCost}</strong>
             </div>
           </div>
         </div>
@@ -198,55 +278,97 @@ export function CreationDialogs({ controller }: CreationDialogsProps) {
 
       <CreationModalShell
         open={dialog.type === 'materials'}
-        eyebrow="Materials"
-        title="提交素材"
-        description="延续工作台内部的“本地上传 / 历史创作”双来源结构。"
+        eyebrow="History"
+        title="从历史创作中选择"
+        description="仅展示已导出成片的视频作品。"
         size="wide"
         onClose={() => controller.setDialog({ type: 'none' })}
-        footerInfo={<span className={dialogStyles.footerNote}>绑定后会直接进入当前分镜的素材栈，可继续设为主素材或移除。</span>}
+        footerInfo={<span className={dialogStyles.historyPickerHint}>仅展示已导出成片的视频作品</span>}
         footerActions={
           <>
-            <Button variant="secondary" onClick={() => controller.setDialog({ type: 'none' })}>
-              取消
+            <input ref={uploadInputRef} className={dialogStyles.hiddenUploadInput} type="file" accept="image/*" onChange={handleUploadChange} />
+            <Button variant="secondary" onClick={handleUploadImage}>
+              上传图片
             </Button>
-            <Button onClick={controller.attachLocalMaterial}>绑定本地素材</Button>
+            <Button onClick={applyHistoryWork} disabled={!selectedHistoryWork}>
+              选择作品
+            </Button>
           </>
         }
       >
-        <div className={dialogStyles.optionStack}>
-          <div className={styles.segmentedGroup}>
-            {(['local', 'history'] as const).map((item) => (
+        <div className={dialogStyles.historyPickerLayout}>
+          <div className={dialogStyles.historyCategoryTabs}>
+            {studio.explore.categories.map((item) => (
               <button
                 key={item}
                 type="button"
-                className={item === controller.materialTab ? styles.segmentedButtonActive : styles.segmentedButton}
-                onClick={() => controller.setMaterialTab(item)}
+                className={cx(dialogStyles.historyCategoryTab, historyCategory === item && dialogStyles.historyCategoryTabActive)}
+                onClick={() => setHistoryCategory(item)}
               >
-                {item === 'local' ? '本地上传' : '历史创作'}
+                {item}
               </button>
             ))}
           </div>
-          {controller.materialTab === 'local' ? (
-            <div className={dialogStyles.uploadCard}>
-              <strong>上传本地文件</strong>
-              <p>图片和视频都允许进入当前分镜的素材栈，后续可作为生成参考继续使用。</p>
-              <input
-                className={styles.fieldInput}
-                type="file"
-                accept="image/*,video/*"
-                onChange={(event) => controller.setUploadedMaterialName(event.target.files?.[0]?.name ?? '')}
-              />
-            </div>
-          ) : (
-            <div className={styles.historyGrid}>
-              {studio.historyWorks.map((item) => (
-                <button key={item.id} type="button" className={styles.historyPickCard} onClick={() => controller.attachHistoryMaterial(item.title)}>
+          <div className={dialogStyles.historyWorksGrid}>
+            {filteredHistoryWorks.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={cx(dialogStyles.historyWorkCard, selectedHistoryWorkId === item.id && dialogStyles.historyWorkCardActive)}
+                onClick={() => setSelectedHistoryWorkId(item.id)}
+              >
+                <div className={dialogStyles.historyWorkPoster}>
+                  <span className={dialogStyles.historyWorkPosterLabel}>{item.coverLabel}</span>
+                </div>
+                <div className={dialogStyles.historyWorkMeta}>
                   <strong>{item.title}</strong>
-                  <small>{item.intro}</small>
-                </button>
-              ))}
+                  <small>{item.durationLabel}</small>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </CreationModalShell>
+
+      <CreationModalShell
+        open={cropOpen}
+        title="裁剪图片"
+        description="上传后先确认裁剪比例，再应用到当前分镜。"
+        size="wide"
+        onClose={() => setCropOpen(false)}
+        footerActions={
+          <>
+            <Button variant="secondary" onClick={() => setCropOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={applyUploadedImage}>应用</Button>
+          </>
+        }
+      >
+        <div className={dialogStyles.cropLayout}>
+          <div className={dialogStyles.cropPreviewSurface}>
+            <div className={dialogStyles.cropPreviewFrame}>
+              <div className={dialogStyles.cropPreviewInner}>
+                {uploadedImageUrl ? (
+                  <img className={dialogStyles.cropPreviewImage} src={uploadedImageUrl} alt={uploadedImageName || '上传图片预览'} />
+                ) : (
+                  <ShotPoster shot={activeShot} size="stage" accent={controller.shotAccent(activeShot.id)} className={dialogStyles.cropPreviewPoster} showCaption={false} showTag={false} />
+                )}
+              </div>
             </div>
-          )}
+          </div>
+          <div className={dialogStyles.cropRatioRow}>
+            {(['自由', '9:16', '16:9', '3:4', '4:3'] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={cx(dialogStyles.cropRatioChip, cropRatio === item && dialogStyles.cropRatioChipActive)}
+                onClick={() => setCropRatio(item)}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
         </div>
       </CreationModalShell>
 
@@ -254,10 +376,10 @@ export function CreationDialogs({ controller }: CreationDialogsProps) {
         open={dialog.type === 'canvas'}
         eyebrow="Canvas"
         title="画布编辑"
-        description="通过缩放、偏移和比例模拟画面裁切。"
-        size="xl"
+        description="在不生成新版本的前提下，精调当前分镜的取景比例、缩放和偏移。"
+        size="wide"
         onClose={() => controller.setDialog({ type: 'none' })}
-        footerInfo={<span className={dialogStyles.footerNote}>这一步只改当前分镜的取景方式，不会直接生成新版本。</span>}
+        footerInfo={<span className={dialogStyles.lightFooterNote}>修改只会作用到当前分镜的裁切参数，不会覆盖素材内容。</span>}
         footerActions={
           <>
             <Button variant="secondary" onClick={controller.resetCanvasDraft}>
@@ -267,39 +389,242 @@ export function CreationDialogs({ controller }: CreationDialogsProps) {
           </>
         }
       >
-        <div className={styles.canvasEditorDialog}>
-          <div className={styles.canvasPreviewCard}>
-            <div
-              className={styles.canvasPreviewFrame}
-              style={{ transform: `translate(${canvasDraft.offsetX}px, ${canvasDraft.offsetY}px) scale(${canvasDraft.zoom / 100})` }}
-            >
-              <strong>{activeShot.title}</strong>
-              <span>{canvasDraft.ratio}</span>
+        <div className={dialogStyles.lightToolLayout}>
+          <div className={dialogStyles.lightToolPreviewCard}>
+            <div className={dialogStyles.canvasPreviewViewport} style={{ aspectRatio: canvasDraft.ratio.replace(':', ' / ') }}>
+              <div className={dialogStyles.canvasPreviewInner} style={{ transform: `translate(${canvasDraft.offsetX}px, ${canvasDraft.offsetY}px) scale(${canvasDraft.zoom / 100})` }}>
+                <ShotPoster
+                  shot={activeShot}
+                  size="stage"
+                  accent={controller.shotAccent(activeShot.id)}
+                  className={dialogStyles.canvasShotPoster}
+                  showCaption={false}
+                  showTag={false}
+                />
+              </div>
+            </div>
+            <div className={dialogStyles.lightToolPreviewMeta}>
+              <h3>{activeShot.title}</h3>
+              <p>预览画布比例、镜头缩放和主体偏移，所见即应用结果。</p>
+            </div>
+            <div className={dialogStyles.lightToolStats}>
+              <div className={dialogStyles.lightToolStatCard}>
+                <small>当前比例</small>
+                <strong>{canvasDraft.ratio}</strong>
+              </div>
+              <div className={dialogStyles.lightToolStatCard}>
+                <small>缩放</small>
+                <strong>{canvasDraft.zoom}%</strong>
+              </div>
+              <div className={dialogStyles.lightToolStatCard}>
+                <small>偏移</small>
+                <strong>{`${canvasDraft.offsetX}/${canvasDraft.offsetY}`}</strong>
+              </div>
             </div>
           </div>
-          <div className={styles.dialogGrid}>
+
+          <div className={dialogStyles.lightToolOptionCard}>
+            <h4>构图控制</h4>
+            <p>用更接近工作台的方式直接调构图，按钮、滑杆和预览实时联动。</p>
             <label className={styles.fieldBlock}>
               <span>目标比例</span>
-              <select className={styles.fieldSelect} value={canvasDraft.ratio} onChange={(event) => controller.setCanvasField('ratio', event.target.value as typeof canvasDraft.ratio)}>
-                {['9:16', '16:9', '1:1'].map((item) => (
-                  <option key={item} value={item}>
+              <div className={dialogStyles.lightSegmentRow}>
+                {(['9:16', '16:9', '1:1'] as const).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={cx(styles.segmentedButton, canvasDraft.ratio === item && styles.segmentedButtonActive)}
+                    onClick={() => controller.setCanvasField('ratio', item)}
+                  >
                     {item}
-                  </option>
+                  </button>
                 ))}
-              </select>
+              </div>
             </label>
-            <label className={styles.fieldBlock}>
-              <span>{`缩放 ${canvasDraft.zoom}%`}</span>
-              <input type="range" min="60" max="180" value={canvasDraft.zoom} onChange={(event) => controller.setCanvasField('zoom', Number(event.target.value))} />
-            </label>
-            <label className={styles.fieldBlock}>
-              <span>{`水平偏移 ${canvasDraft.offsetX}px`}</span>
-              <input type="range" min="-120" max="120" value={canvasDraft.offsetX} onChange={(event) => controller.setCanvasField('offsetX', Number(event.target.value))} />
-            </label>
-            <label className={styles.fieldBlock}>
+            <div className={dialogStyles.lightToolSliderGrid}>
+              <label className={styles.sliderBlock}>
+                <span>{`缩放 ${canvasDraft.zoom}%`}</span>
+                <input type="range" min="60" max="180" value={canvasDraft.zoom} onChange={(event) => controller.setCanvasField('zoom', Number(event.target.value))} />
+              </label>
+              <label className={styles.sliderBlock}>
+                <span>{`水平偏移 ${canvasDraft.offsetX}px`}</span>
+                <input type="range" min="-120" max="120" value={canvasDraft.offsetX} onChange={(event) => controller.setCanvasField('offsetX', Number(event.target.value))} />
+              </label>
+            </div>
+            <label className={styles.sliderBlock}>
               <span>{`垂直偏移 ${canvasDraft.offsetY}px`}</span>
               <input type="range" min="-120" max="120" value={canvasDraft.offsetY} onChange={(event) => controller.setCanvasField('offsetY', Number(event.target.value))} />
             </label>
+          </div>
+        </div>
+      </CreationModalShell>
+
+      <CreationModalShell
+        open={dialog.type === 'lipsync'}
+        eyebrow="Lip Sync"
+        title="对口型"
+        description="把原先切侧栏的交互收束成独立工具面板，直接在当前创作流里配置对白、音频和口型参数。"
+        size="xl"
+        onClose={() => controller.setDialog({ type: 'none' })}
+        footerInfo={<span className={dialogStyles.lightFooterNote}>生成结果仍为 mock 流程，但配置结构已对齐为工具区弹层。</span>}
+        footerActions={
+          <>
+            <Button variant="secondary" onClick={() => controller.setDialog({ type: 'none' })}>
+              取消
+            </Button>
+            <Button onClick={controller.submitLipsync}>生成对口型</Button>
+          </>
+        }
+      >
+        <div className={dialogStyles.lightToolLayout}>
+          <div className={dialogStyles.lightToolPreviewCard}>
+            <div className={dialogStyles.lightToolPreviewFrame}>
+              <ShotPoster
+                shot={lipsyncBaseShot}
+                size="sidebar"
+                accent={controller.shotAccent(lipsyncBaseShot.id)}
+                className={dialogStyles.lipsyncPreviewShot}
+                showCaption={false}
+                showTag={false}
+              />
+            </div>
+            <div className={dialogStyles.lightToolPreviewMeta}>
+              <h3>{lipsyncBaseShot.title}</h3>
+              <p>当前底图、对白输入方式和音色模型会共同决定口型生成结果。</p>
+            </div>
+            <div className={dialogStyles.lightToolStats}>
+              <div className={dialogStyles.lightToolStatCard}>
+                <small>底图时长</small>
+                <strong>{controller.formatShotDuration(lipsyncBaseShot.durationSeconds)}</strong>
+              </div>
+              <div className={dialogStyles.lightToolStatCard}>
+                <small>输入模式</small>
+                <strong>{creation.lipSync.inputMode === 'text' ? '文本朗读' : '上传配音'}</strong>
+              </div>
+              <div className={dialogStyles.lightToolStatCard}>
+                <small>音色模型</small>
+                <strong>{creation.lipSync.voiceModel}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div className={dialogStyles.lightToolOptionCard}>
+            <h4>口型配置</h4>
+            <p>模式、输入源和语音参数全部集中在一个弹层中，避免切换页面工作区。</p>
+
+            <label className={styles.fieldBlock}>
+              <span>模式</span>
+              <div className={dialogStyles.lightSegmentRow}>
+                {(['single', 'multi'] as const).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={cx(styles.segmentedButton, creation.lipSync.mode === item && styles.segmentedButtonActive)}
+                    onClick={() => controller.setLipsyncField('mode', item)}
+                  >
+                    {item === 'single' ? '单人模式' : '多人模式'}
+                  </button>
+                ))}
+              </div>
+            </label>
+
+            <div className={dialogStyles.lightToolFieldGrid}>
+              <label className={styles.fieldBlock}>
+                <span>输入方式</span>
+                <div className={dialogStyles.lightSegmentRow}>
+                  {(['text', 'audio'] as const).map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      className={cx(styles.segmentedButton, creation.lipSync.inputMode === item && styles.segmentedButtonActive)}
+                      onClick={() => controller.setLipsyncField('inputMode', item)}
+                    >
+                      {item === 'text' ? '文本朗读' : '上传配音'}
+                    </button>
+                  ))}
+                </div>
+              </label>
+
+              <label className={styles.fieldBlock}>
+                <span>底图</span>
+                <select className={styles.fieldSelect} value={creation.lipSync.baseShotId} onChange={(event) => controller.setLipsyncField('baseShotId', event.target.value)}>
+                  {creation.shots.map((shot) => (
+                    <option key={shot.id} value={shot.id}>
+                      {shot.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {creation.lipSync.inputMode === 'text' ? (
+              <div className={dialogStyles.lightToolDialogueStack}>
+                {creation.lipSync.dialogues.map((item, index) => (
+                  <div key={item.id} className={dialogStyles.lightToolDialogueCard}>
+                    <div className={dialogStyles.lipsyncDialogueHead}>
+                      <strong>{`对白 ${index + 1}`}</strong>
+                      {creation.lipSync.mode === 'multi' ? (
+                        <button type="button" className={styles.darkGhostButton} onClick={() => controller.removeLipsyncDialogue(item.id)}>
+                          删除
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className={dialogStyles.lightToolFieldGrid}>
+                      <input className={styles.fieldInput} value={item.speaker} onChange={(event) => controller.updateLipsyncDialogue(item.id, 'speaker', event.target.value)} />
+                      <textarea className={styles.fieldTextarea} value={item.text} onChange={(event) => controller.updateLipsyncDialogue(item.id, 'text', event.target.value)} placeholder="输入对白内容" />
+                    </div>
+                  </div>
+                ))}
+                {creation.lipSync.mode === 'multi' ? (
+                  <div className={dialogStyles.lightActionRow}>
+                    <span className={dialogStyles.lightFooterNote}>多人模式下可继续追加对白。</span>
+                    <Button variant="secondary" onClick={controller.addLipsyncDialogue}>新增对白</Button>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <label className={dialogStyles.lightToolUploadCard}>
+                <strong>上传配音</strong>
+                <small>选择一段音频作为口型驱动源。</small>
+                <input className={styles.fieldInput} type="file" accept="audio/*" onChange={(event) => controller.setLipsyncField('audioName', event.target.files?.[0]?.name ?? '')} />
+              </label>
+            )}
+
+            <div className={dialogStyles.lightToolFieldGrid}>
+              <label className={styles.fieldBlock}>
+                <span>音色模型</span>
+                <select className={styles.fieldSelect} value={creation.lipSync.voiceModel} onChange={(event) => controller.setLipsyncField('voiceModel', event.target.value)}>
+                  {['Sync Voice', 'Sync Voice Pro', 'Sync Voice Max'].map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={styles.fieldBlock}>
+                <span>情绪</span>
+                <select className={styles.fieldSelect} value={creation.lipSync.emotion} onChange={(event) => controller.setLipsyncField('emotion', event.target.value as typeof creation.lipSync.emotion)}>
+                  {['默认', '温暖', '急促'].map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className={dialogStyles.lightToolSliderGrid}>
+              <label className={styles.sliderBlock}>
+                <span>音量 {creation.lipSync.volume}</span>
+                <input type="range" min="0" max="100" value={creation.lipSync.volume} onChange={(event) => controller.setLipsyncField('volume', Number(event.target.value))} />
+              </label>
+              <label className={styles.sliderBlock}>
+                <span>语速 {Number(creation.lipSync.speed).toFixed(1)}x</span>
+                <input type="range" min="50" max="150" value={creation.lipSync.speed * 100} onChange={(event) => controller.setLipsyncField('speed', Number(event.target.value) / 100)} />
+              </label>
+            </div>
+
+            {lipsyncNotice ? <div className={styles.noticeInline}>{lipsyncNotice}</div> : null}
           </div>
         </div>
       </CreationModalShell>
@@ -545,23 +870,24 @@ export function CreationDialogs({ controller }: CreationDialogsProps) {
 
       <CreationModalShell
         open={dialog.type === 'confirm-model-reset'}
-        eyebrow="Confirm"
-        title="确认切换模型"
-        description="已有版本存在时，切换模型会把当前分镜重置回待生成状态，再从新的模型重新开始。"
+        title="模型发生变更"
+        description="模型发生变更，将为你重新生成主体图和场景图"
+        size="compact"
         onClose={() => controller.setDialog({ type: 'none' })}
-        footerInfo={<span className={dialogStyles.footerNote}>{`${activeShot.preferredModel} -> ${dialog.type === 'confirm-model-reset' ? dialog.nextModel : ''}`}</span>}
         footerActions={
           <>
-            <Button variant="secondary" onClick={() => controller.setDialog({ type: 'none' })}>
+            <button type="button" className={styles.darkGhostButton} onClick={() => controller.setDialog({ type: 'none' })}>
               取消
-            </Button>
-            <Button onClick={() => dialog.type === 'confirm-model-reset' && controller.confirmModelChange(dialog.nextModel)}>确认重置</Button>
+            </button>
+            <button type="button" className={styles.darkPrimaryButton} onClick={() => dialog.type === 'confirm-model-reset' && controller.confirmModelChange(dialog.nextModel)}>
+              确定
+            </button>
           </>
         }
       >
         <div className={dialogStyles.warningCard}>
-          <strong>版本与候选结果会被清空</strong>
-          <p>当前分镜会回到“待生成”状态，后续生成结果将按新的模型重新进入版本轨。</p>
+          <strong>{`${activeShot.preferredModel} -> ${dialog.type === 'confirm-model-reset' ? dialog.nextModel : ''}`}</strong>
+          <p>确认后会将主体图和场景图回退到待生成状态，并按新模型重新生成。</p>
         </div>
       </CreationModalShell>
     </>

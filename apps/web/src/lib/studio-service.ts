@@ -1,5 +1,5 @@
-import type { ContinueProjectCard, MockStudioScenarioId, StudioFixture } from '@aiv/domain';
-import { getMockStudioProject, getMockStudioScenario, listMockStudioProjects } from '@aiv/mock-data';
+import type { ContinueProjectCard, MockStudioScenarioId, ProjectContentMode, StudioFixture } from '@aiv/domain';
+import { createRuntimeStudioFixture, getMockStudioProject, getMockStudioScenario, listMockStudioProjects } from '@aiv/mock-data';
 
 interface ApiErrorPayload {
   code?: string;
@@ -70,6 +70,22 @@ interface RequestWithFallbackOptions<T> {
   path: string;
   fallback: () => T;
   allowNotFound?: boolean;
+}
+
+export interface CreateStudioProjectInput {
+  prompt: string;
+  contentMode: ProjectContentMode;
+}
+
+export interface CreateStudioProjectResult {
+  projectId: string;
+  redirectUrl: string;
+  project: {
+    id: string;
+    title: string;
+    contentMode: ProjectContentMode;
+    status: string;
+  };
 }
 
 function logMockFallback(path: string, reason: string) {
@@ -209,4 +225,57 @@ export async function fetchContinueProjects(): Promise<ContinueProjectCard[]> {
     path: '/api/studio/projects',
     fallback: () => listMockStudioProjects(),
   });
+}
+
+async function createStudioProjectViaLocalRoute(input: CreateStudioProjectInput): Promise<CreateStudioProjectResult> {
+  const response = await fetch('/api/studio/projects', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  });
+
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) {
+    throw new StudioServiceError(resolveErrorMessage(payload, '创建项目失败。'), 'STUDIO_CREATE_PROJECT_FAILED', response.status);
+  }
+
+  if (isApiEnvelope<CreateStudioProjectResult>(payload)) {
+    if (!payload.ok) {
+      throw new StudioServiceError(payload.error.message || '创建项目失败。', payload.error.code || 'STUDIO_CREATE_PROJECT_FAILED', response.status);
+    }
+    return payload.data;
+  }
+
+  return payload as CreateStudioProjectResult;
+}
+
+export async function createStudioProject(input: CreateStudioProjectInput): Promise<CreateStudioProjectResult> {
+  const normalizedPrompt = input.prompt.trim();
+  if (!normalizedPrompt) {
+    throw new StudioServiceError('Prompt is required.', 'PROMPT_REQUIRED', 400);
+  }
+
+  const payload: CreateStudioProjectInput = {
+    prompt: normalizedPrompt,
+    contentMode: input.contentMode === 'series' ? 'series' : 'single',
+  };
+
+  if (typeof window !== 'undefined') {
+    return createStudioProjectViaLocalRoute(payload);
+  }
+
+  const studio = createRuntimeStudioFixture(payload);
+  return {
+    projectId: studio.project.id,
+    redirectUrl: `/projects/${studio.project.id}/planner`,
+    project: {
+      id: studio.project.id,
+      title: studio.project.title,
+      contentMode: studio.project.contentMode,
+      status: studio.project.status,
+    },
+  };
 }

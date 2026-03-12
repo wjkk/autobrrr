@@ -37,9 +37,8 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Local reference and research materials
-prototype/
-research/
-
 # Deployment artifacts
 .vercel/
+
+archive/
+

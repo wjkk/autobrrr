@@ -22,6 +22,10 @@
   box-shadow: 0 40px 100px rgba(0, 0, 0, 0.42);
 }
 
+.panelCompact {
+  width: min(100%, 360px);
+}
+
 .panelWide {
   width: min(100%, 960px);
 }
@@ -130,6 +134,7 @@
   }
 
   .panel,
+  .panelCompact,
   .panelWide,
   .panelXl {
     width: 100%;
@@ -140,4 +145,47 @@
   .footer {
     align-items: flex-start;
   }
+}
+
+
+.backdropLight {
+  background: rgba(239, 235, 229, 0.58);
+  backdrop-filter: blur(14px) saturate(112%);
+}
+
+.panelLight {
+  border-color: rgba(17, 24, 39, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 244, 240, 0.98));
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.14);
+}
+
+.panelLight .header,
+.panelLight .footer {
+  border-color: rgba(17, 24, 39, 0.08);
+}
+
+.panelLight .eyebrow {
+  border-color: rgba(17, 24, 39, 0.08);
+  background: rgba(255, 255, 255, 0.88);
+  color: #6b7280;
+}
+
+.panelLight .title {
+  color: #111827;
+}
+
+.panelLight .description,
+.panelLight .footerInfo {
+  color: #6b7280;
+}
+
+.panelLight .closeButton {
+  border-color: rgba(17, 24, 39, 0.08);
+  background: rgba(255, 255, 255, 0.94);
+  color: #1f2937;
+}
+
+.panelLight .closeButton:hover {
+  border-color: rgba(17, 24, 39, 0.12);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
 }

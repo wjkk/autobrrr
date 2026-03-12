@@ -1,14 +1,17 @@
 # 数据库设计规格（v0.2）
 
 版本：v0.2  
-日期：2026-03-08  
-状态：Prisma 对齐版
+日期：2026-03-09  
+状态：Prisma 基线 + Explore/Planner 增量要求
 
 ## 1. 范围
 
-本文件以 `prisma/schema.prisma` 为唯一真相源，定义当前数据库设计。
+本文件描述两部分：
 
-## 2. 核心模型分层
+1. 当前已落库模型（以 `prisma/schema.prisma` 为准）
+2. 为匹配最新首页/策划页行为必须补充的增量建模
+
+## 2. 当前核心模型（已存在）
 
 ### 2.1 项目层
 
@@ -16,7 +19,7 @@
 - `Episode`
 - `StyleTemplate`
 
-### 2.2 策划层（Planner）
+### 2.2 策划层
 
 - `PlannerSession`
 - `PlannerStep`
@@ -24,7 +27,7 @@
 - `PlannerReference`
 - `StoryboardDraft`
 
-### 2.3 生产层（Creation）
+### 2.3 生产层
 
 - `Shot`
 - `ShotVersion`
@@ -37,75 +40,141 @@
 - `Run`
 - `EventLog`
 
-### 2.5 发布与审核层
+### 2.5 发布层
 
 - `ReviewRecord`
 - `PublishDraft`
 - `PublishRecord`
 
-## 3. 当前关键关系
+## 3. 当前关系与索引（摘要）
+
+关系：
 
 1. `Project 1:N Episode`
 2. `Episode 1:N PlannerSession`
 3. `PlannerSession 1:N PlannerStep/Message/Reference/StoryboardDraft`
 4. `Episode 1:N Shot`
 5. `Shot 1:N ShotVersion`
-6. `Shot 1:N ShotMaterialBinding`
-7. `PublishDraft 1:N PublishRecord`
-8. `Project/Episode/Shot/Run` 共同关联 `EventLog`
 
-## 4. 枚举（已落库）
+已定义高频索引（摘要）：
 
-包括但不限于：
+1. `Project(status, updatedAt)`
+2. `Episode(projectId, status)`
+3. `PlannerSession(projectId, episodeId, isActive)`
+4. `Run(projectId, runType, status)`
+5. `Shot(projectId, status)`
+6. `ShotVersion(projectId, episodeId, status)`
+7. `EventLog(projectId, createdAt)`
 
-- `ProjectContentMode`
-- `ExecutionMode`
-- `ProjectStatus`
-- `EpisodeStatus`
-- `PlannerStatus`
-- `ShotStatus`
-- `ShotVersionStatus`
-- `RunType`
-- `RunStatus`
-- `PublishDraftStatus`
-- `PublishStatus`
+## 4. 必需增量模型（Explore -> Planner v2）
 
-## 5. 索引现状（已存在）
+### 4.1 `PlannerOutlineVersion`
 
-已在 schema 中定义的高频索引：
+用途：记录大纲版本与确认状态。
 
-- `Project(status, updatedAt)`
-- `Episode(projectId, status)`
-- `PlannerSession(projectId, episodeId, isActive)`
-- `Run(projectId, runType, status)`
-- `Run(shotId, createdAt)`
-- `Shot(projectId, status)`
-- `ShotVersion(projectId, episodeId, status)`
-- `PublishDraft(projectId, status, updatedAt)`
-- `PublishRecord(projectId, status, createdAt)`
-- `EventLog(projectId, createdAt)`、`EventLog(shotId, createdAt)`
+建议字段：
 
-## 6. 仍需补充的数据库级约束
+1. `id`
+2. `projectId`
+3. `episodeId`
+4. `plannerSessionId`
+5. `versionNumber`
+6. `requirement`
+7. `outlineSnapshot` (`Json`)
+8. `status` (`GENERATING | READY | CONFIRMED | FAILED`)
+9. `createdAt/updatedAt/confirmedAt`
 
-Prisma 里暂未表达（建议手写 SQL migration）：
+### 4.2 `PlannerRefinementVersion`
 
-1. 每个 `Shot` 仅允许一个 `ACTIVE` 版本
-- partial unique: `(shot_id) where status = 'ACTIVE'`
+用途：记录细化版本历史（不可变）。
 
-2. 每个 `Shot` 仅允许一个 `is_active = true` 素材绑定
-- partial unique: `(shot_id) where is_active = true`
+建议字段：
 
-3. 每个 `(project, episode)` 仅允许一个 active `PlannerSession`
-- partial unique: `(project_id, episode_id) where is_active = true`
+1. `id`
+2. `projectId`
+3. `episodeId`
+4. `plannerSessionId`
+5. `outlineVersionId`
+6. `versionNumber`
+7. `triggerType` (`CONFIRM_OUTLINE | RERUN`)
+8. `instruction`
+9. `status` (`RUNNING | READY | FAILED | CANCELED`)
+10. `progressPercent`
+11. `docSnapshot` (`Json`)
+12. `isActive`
+13. `createdAt/updatedAt/finishedAt`
 
-## 7. 首页与工作区查询建议
+### 4.3 `PlannerRefinementStep`
 
-为满足 `/explore` + 三工作区首屏：
+用途：步骤级进度（summary/style/subjects/scenes/script）。
 
-- 使用“聚合查询 + 读模型”策略，避免页面多次 join。
-- 保留 `StudioFixture` 级响应结构作为 BFF 输出。
+建议字段：
 
-## 8. 一致性要求
+1. `id`
+2. `refinementVersionId`
+3. `stepCode`
+4. `stepTitle`
+5. `stepOrder`
+6. `status` (`WAITING | RUNNING | DONE | FAILED`)
+7. `startedAt/finishedAt`
 
-- `packages/domain` 类型变更，必须同步评估 Prisma。
-- Prisma 枚举变更，必须同步更新状态机文档与 API 文档。
+### 4.4 `PlannerGenerationConfig`
+
+用途：持久化策划页底部配置（分镜图模型、画面比例）。
+
+建议字段：
+
+1. `id`
+2. `projectId`
+3. `episodeId`
+4. `storyboardModelId`
+5. `aspectRatio` (`16:9 | 9:16 | 4:3 | 3:4`)
+6. `updatedBy`
+7. `createdAt/updatedAt`
+
+### 4.5 `PlannerVersionOperationLog`（建议）
+
+用途：记录主体/场景/分镜微调操作。
+
+建议字段：
+
+1. `id`
+2. `refinementVersionId`
+3. `operatorId`
+4. `operationType`
+5. `operationPayload` (`Json`)
+6. `createdAt`
+
+## 5. 必需约束
+
+1. `Project.contentMode` 创建后不可更新（服务层 + DB 双保险）。
+2. `(planner_session_id, version_number)` 在 outline/refinement 版本表唯一。
+3. 同一 `planner_session_id` 仅允许一个 `refinement_version.is_active = true`。
+4. `progress_percent` 必须 `0..100`。
+5. `(project_id, episode_id)` 在 `planner_generation_config` 上唯一。
+
+## 6. 索引建议（新增）
+
+1. `planner_outline_versions(project_id, episode_id, created_at desc)`
+2. `planner_refinement_versions(project_id, episode_id, created_at desc)`
+3. `planner_refinement_versions(planner_session_id, is_active)`
+4. `planner_refinement_steps(refinement_version_id, step_order)`
+5. `planner_generation_configs(project_id, episode_id)`
+6. `planner_version_operation_logs(refinement_version_id, created_at)`
+
+## 7. 枚举一致性要求
+
+当前策划页前端比例已采用：`16:9 | 9:16 | 4:3 | 3:4`，默认 `16:9`。
+
+现有 domain/DB 仍有 `1:1` 历史字段，建议策略：
+
+1. Planner 新配置枚举使用新集合（不含 `1:1`）。
+2. Creation 历史字段可临时保留 `1:1` 兼容。
+3. 中长期统一到单一比例枚举，避免跨页配置漂移。
+
+## 8. 与接口规格对齐
+
+- 外部接口：`docs/specs/backend-data-api-spec-v0.2.md`
+- 业务落地指导：`docs/specs/explore-planner-backend-guidance-v0.2.md`
+
+任何 `packages/domain` 变更，必须同步评估 Prisma 与上述两份文档。

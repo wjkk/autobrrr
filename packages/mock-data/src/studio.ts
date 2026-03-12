@@ -3,6 +3,7 @@ import type { MockStudioScenarioId } from '@aiv/domain';
 import { brandTokens } from './brand';
 import { creationCopy, exploreCopy, plannerCopy, publishCopy } from './copy';
 import {
+  createRuntimeStudioFixture,
   getStudioFixtureByProjectId,
   getStudioFixtureByScenario,
   listStudioFixtureProjects,
@@ -22,6 +23,8 @@ export function getMockStudioScenario(scenarioId: MockStudioScenarioId) {
 export function listMockStudioProjects() {
   return listStudioFixtureProjects();
 }
+
+export { createRuntimeStudioFixture };
 
 export const mockStudioScenarios = Object.keys(studioFixturesByScenario) as MockStudioScenarioId[];
 

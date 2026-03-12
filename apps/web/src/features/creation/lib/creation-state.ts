@@ -1,6 +1,6 @@
 import type { CreationTrack, CreationViewMode, CreationWorkspace, MaterialAsset, Shot, StudioFixture } from '@aiv/domain';
 
-import { buildVersion, cloneShot, getShotAtSecond, getShotOffset, nextLocalId, syncVersionStatuses } from './creation-utils';
+import { buildVersion, cloneShot, getShotOffset, nextLocalId, syncVersionStatuses } from './creation-utils';
 import type { CanvasDraft, GenerationDraft, StoryToolDraft } from './ui-state';
 import { normalizeViewMode } from './ui-state';
 
@@ -27,7 +27,7 @@ function syncCreationWithShots(current: CreationWorkspace, shots: Shot[], select
   const safeSelectedShotId = shots.some((shot) => shot.id === selectedShotId)
     ? selectedShotId
     : shots[0]?.id ?? current.selectedShotId;
-  const totalSecond = shots.reduce((sum, shot) => sum + shot.durationSeconds, 0);
+  const totalSecond = Math.max(current.playback.totalSecond || 0, shots.reduce((sum, shot) => sum + shot.durationSeconds, 0));
 
   return {
     ...current,
@@ -107,10 +107,13 @@ export function toggleInlineCropState(current: CreationWorkspace, shotId: string
 }
 
 export function togglePlaybackState(current: CreationWorkspace): CreationWorkspace {
+  const shouldRestart = !current.playback.playing && current.playback.currentSecond >= current.playback.totalSecond;
+
   return {
     ...current,
     playback: {
       ...current.playback,
+      currentSecond: shouldRestart ? 0 : current.playback.currentSecond,
       playing: !current.playback.playing,
     },
   };
@@ -128,11 +131,8 @@ export function advancePlaybackState(current: CreationWorkspace, deltaSeconds: n
       },
     };
   }
-
-  const targetShot = getShotAtSecond(current.shots, nextSecond);
   return {
     ...current,
-    selectedShotId: targetShot?.id ?? current.selectedShotId,
     playback: {
       ...current.playback,
       currentSecond: nextSecond,
@@ -141,13 +141,13 @@ export function advancePlaybackState(current: CreationWorkspace, deltaSeconds: n
 }
 
 export function seekPlaybackState(current: CreationWorkspace, nextSecond: number): CreationWorkspace {
-  const targetShot = getShotAtSecond(current.shots, nextSecond);
+  const clampedSecond = Math.min(Math.max(nextSecond, 0), current.playback.totalSecond);
+
   return {
     ...current,
-    selectedShotId: targetShot?.id ?? current.selectedShotId,
     playback: {
       ...current.playback,
-      currentSecond: nextSecond,
+      currentSecond: clampedSecond,
       playing: false,
     },
   };
@@ -191,6 +191,16 @@ export function finishShotGenerationState(current: CreationWorkspace, shotId: st
         pendingApplyVersionId: newVersion.id,
       };
     }),
+  };
+}
+
+export function cancelShotGenerationState(current: CreationWorkspace, shotId: string): CreationWorkspace {
+  return {
+    ...current,
+    shots: updateShotList(current.shots, shotId, (shot) => ({
+      ...shot,
+      status: shot.versions.length ? 'success' : 'pending',
+    })),
   };
 }
 

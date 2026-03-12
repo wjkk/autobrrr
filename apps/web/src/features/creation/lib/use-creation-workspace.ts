@@ -13,6 +13,7 @@ import {
   applySelectedVersionState,
   attachMaterialState,
   cloneCreationFixture,
+  cancelShotGenerationState,
   confirmModelChangeState,
   deriveStoryboardFromFramesState,
   finishBatchGenerationState,
@@ -50,6 +51,7 @@ interface UseCreationWorkspaceOptions {
 export function useCreationWorkspace({ studio, initialShotId, initialView }: UseCreationWorkspaceOptions) {
   const initialCreation = cloneCreationFixture(studio, initialShotId, initialView);
   const timersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const generationTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [creation, setCreation] = useState(initialCreation);
@@ -66,6 +68,7 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
   useEffect(() => {
     return () => {
       timersRef.current.forEach((timer) => clearTimeout(timer));
+      generationTimersRef.current.forEach((timer) => clearTimeout(timer));
       if (playbackIntervalRef.current) {
         clearInterval(playbackIntervalRef.current);
       }
@@ -135,7 +138,7 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
 
   const setViewMode = (viewMode: CreationViewMode) => {
     setCreation((current) => setCreationViewMode(current, viewMode));
-    setNotice(viewMode === 'lipsync' ? '已切换到对口型副工作区。' : `已切换到${viewMode === 'default' ? '默认视图' : '故事版视图'}。`);
+    setNotice(null);
   };
 
   const setActiveTrack = (activeTrack: CreationTrack) => {
@@ -175,7 +178,7 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
 
   const toggleSubtitle = () => {
     setCreation((current) => toggleSubtitleState(current));
-    setNotice(creation.playback.subtitleVisible ? '已关闭字幕显示。' : '已开启字幕显示。');
+    setNotice(null);
   };
 
   const openGenerateDialog = () => {
@@ -199,9 +202,46 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
     const timer = setTimeout(() => {
       setCreation((current) => finishShotGenerationState(current, targetShotId, generateDraft.model));
       setNotice(wasFailed ? creationCopy.retrySubmitted : '已提交当前分镜生成任务。');
+      generationTimersRef.current.delete(targetShotId);
     }, 960);
 
     timersRef.current.push(timer);
+    generationTimersRef.current.set(targetShotId, timer);
+  };
+
+  const submitInlineGeneration = () => {
+    if (!activeShot) {
+      return;
+    }
+    const targetShotId = activeShot.id;
+    setDialog({ type: 'none' });
+    setNotice(null);
+    setCreation((current) => startShotGenerationState(current, targetShotId, generateDraft));
+
+    const timer = setTimeout(() => {
+      setCreation((current) => finishShotGenerationState(current, targetShotId, generateDraft.model));
+      setNotice(null);
+      generationTimersRef.current.delete(targetShotId);
+    }, 4800);
+
+    timersRef.current.push(timer);
+    generationTimersRef.current.set(targetShotId, timer);
+  };
+
+  const cancelGeneration = (shotId?: string) => {
+    const targetShot = creation.shots.find((shot) => shot.id === (shotId ?? activeShot?.id));
+    if (!targetShot || targetShot.status !== 'generating') {
+      return;
+    }
+
+    const timer = generationTimersRef.current.get(targetShot.id);
+    if (timer) {
+      clearTimeout(timer);
+      generationTimersRef.current.delete(targetShot.id);
+    }
+
+    setCreation((current) => cancelShotGenerationState(current, targetShot.id));
+    setNotice('已取消生成');
   };
 
   const openBatchDialog = (target: 'all' | 'missing') => {
@@ -226,7 +266,7 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
       return;
     }
     setCreation((current) => selectVersionState(current, activeShot.id, versionId));
-    setNotice(versionId === activeShot.activeVersionId ? '已恢复查看当前生效版本。' : '已选择版本，点击替换即可生效。');
+    setNotice(null);
   };
 
   const applySelectedVersion = (shotId?: string, versionId?: string) => {
@@ -244,7 +284,7 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
       const withSelection = targetVersionId === targetShot.selectedVersionId ? current : selectVersionState(current, targetShot.id, targetVersionId);
       return applySelectedVersionState(withSelection, targetShot.id, targetVersionId);
     });
-    setNotice(`${targetShot.title} 已切换到 ${targetShot.versions.find((version) => version.id === targetVersionId)?.label ?? '目标版本'}。`);
+    setNotice(null);
   };
 
   const downloadVersion = (shotId?: string, versionId?: string) => {
@@ -258,7 +298,7 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
       return;
     }
 
-    setNotice(`已模拟下载 ${targetShot.title} · ${targetVersion.label}。`);
+    setNotice(null);
   };
 
   const retryShot = (shotId?: string) => {
@@ -385,7 +425,16 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
     setCreation((current) => attachMaterialState(current, activeShot.id, uploadedMaterialName.trim(), 'local'));
     setUploadedMaterialName('');
     setDialog({ type: 'none' });
-    setNotice('素材已绑定到当前分镜。');
+    setNotice('已应用至当前分镜');
+  };
+
+  const applyUploadedMaterial = (name: string) => {
+    if (!activeShot || !name.trim()) {
+      setNotice('请先选择本地素材。');
+      return;
+    }
+    setCreation((current) => attachMaterialState(current, activeShot.id, name.trim(), 'local'));
+    setNotice('已应用至当前分镜');
   };
 
   const attachHistoryMaterial = (label: string) => {
@@ -394,7 +443,7 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
     }
     setCreation((current) => attachMaterialState(current, activeShot.id, label, 'history'));
     setDialog({ type: 'none' });
-    setNotice('历史作品素材已绑定到当前分镜。');
+    setNotice('已应用至当前分镜');
   };
 
   const setActiveMaterial = (materialId: string) => {
@@ -479,7 +528,11 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
   };
 
   const openMaterialsDialog = () => setDialog({ type: 'materials' });
-  const openCanvasDialog = () => setDialog({ type: 'canvas' });
+  const openCanvasDialog = () => setDialog((current) => (current.type === 'canvas' ? { type: 'none' } : { type: 'canvas' }));
+  const openLipsyncDialog = () => {
+    setLipsyncNotice(null);
+    setDialog((current) => (current.type === 'lipsync' ? { type: 'none' } : { type: 'lipsync' }));
+  };
 
   return {
     studio,
@@ -526,6 +579,7 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
     openGenerateDialog,
     openBatchDialog,
     submitGeneration,
+    submitInlineGeneration,
     submitBatch,
     openStoryboardTool,
     submitStoryboardTool,
@@ -535,15 +589,18 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
     applySelectedVersion,
     downloadVersion,
     retryShot,
+    cancelGeneration,
     requestModelChange,
     confirmModelChange,
     resetShot,
     openMaterialsDialog,
     attachLocalMaterial,
+    applyUploadedMaterial,
     attachHistoryMaterial,
     setActiveMaterial,
     removeMaterial,
     openCanvasDialog,
+    openLipsyncDialog,
     applyCanvasDraft,
     resetCanvasDraft,
     setVoiceField,

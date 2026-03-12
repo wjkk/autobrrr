@@ -12,7 +12,8 @@ interface CreationModalShellProps {
   title: string;
   eyebrow?: string;
   description?: string;
-  size?: 'default' | 'wide' | 'xl';
+  size?: 'default' | 'compact' | 'wide' | 'xl';
+  tone?: 'dark' | 'light';
   footerInfo?: ReactNode;
   footerActions?: ReactNode;
   onClose: () => void;
@@ -25,6 +26,7 @@ export function CreationModalShell({
   eyebrow,
   description,
   size = 'default',
+  tone = 'dark',
   footerInfo,
   footerActions,
   onClose,
@@ -39,9 +41,15 @@ export function CreationModalShell({
   };
 
   return (
-    <div className={styles.backdrop} role="presentation" onClick={onClose}>
+    <div className={cx(styles.backdrop, tone === 'light' && styles.backdropLight)} role="presentation" onClick={onClose}>
       <div
-        className={cx(styles.panel, size === 'wide' && styles.panelWide, size === 'xl' && styles.panelXl)}
+        className={cx(
+          styles.panel,
+          size === 'compact' && styles.panelCompact,
+          size === 'wide' && styles.panelWide,
+          size === 'xl' && styles.panelXl,
+          tone === 'light' && styles.panelLight,
+        )}
         role="dialog"
         aria-modal="true"
         aria-label={title}

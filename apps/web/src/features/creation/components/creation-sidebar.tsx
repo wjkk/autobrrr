@@ -4,6 +4,7 @@ import { Button, cx } from '@aiv/ui';
 
 import type { CreationWorkspaceController } from '../lib/use-creation-workspace';
 import { CreationIcon } from './creation-icons';
+import { CreationVisualSidebar } from './creation-visual-sidebar';
 import { ShotPoster } from './shot-poster';
 import styles from './creation-page.module.css';
 
@@ -12,10 +13,14 @@ interface CreationSidebarProps {
 }
 
 export function CreationSidebar({ controller }: CreationSidebarProps) {
-  const { creation, activeShot, activeMaterial, studio } = controller;
+  const { creation, activeShot, activeMaterial } = controller;
 
   if (!activeShot) {
     return null;
+  }
+
+  if (creation.activeTrack === 'visual') {
+    return <CreationVisualSidebar controller={controller} />;
   }
 
   const accent = controller.shotAccent(activeShot.id);
@@ -226,133 +231,5 @@ export function CreationSidebar({ controller }: CreationSidebarProps) {
     );
   }
 
-  return (
-    <aside className={styles.sidebar}>
-      <div className={styles.sidebarCard}>
-        <div className={styles.sidebarTitleRow}>
-          <span className={styles.sidebarDot} />
-          <strong>{activeShot.title}</strong>
-        </div>
-        <div className={styles.visualCard}>
-          <ShotPoster shot={activeShot} size="sidebar" caption={activeShot.subtitleText} accent={accent} activeMaterialLabel={activeMaterial?.label ?? null} />
-          <div className={styles.visualCardActions}>
-            <button type="button" className={styles.darkChipButton} onClick={controller.openMaterialsDialog}>
-              <CreationIcon name="image" className={styles.buttonGlyph} />
-              <span>引用图片</span>
-            </button>
-            <button type="button" className={styles.darkChipButton} onClick={controller.openGenerateDialog}>
-              <CreationIcon name="video" className={styles.buttonGlyph} />
-              <span>转视频</span>
-            </button>
-          </div>
-          <button type="button" className={styles.darkPrimaryButton} onClick={controller.openGenerateDialog}>
-            <CreationIcon name="magic" className={styles.buttonGlyph} />
-            <span>图片生成视频</span>
-          </button>
-        </div>
-
-        <div className={styles.sidebarSectionTitle}>Studio Assistant</div>
-        <div className={styles.promptCard}>
-          <small>视频提示词</small>
-          <p>{activeShot.motionPrompt}</p>
-        </div>
-
-        <div className={styles.modelPreviewCard}>
-          <button type="button" className={styles.modelChip} onClick={controller.openModelPicker}>
-            <CreationIcon name="model" className={styles.buttonGlyph} />
-            <span>{activeShot.preferredModel}</span>
-          </button>
-          <ShotPoster shot={activeShot} size="thumb" caption={activeShot.subtitleText} accent={accent} />
-        </div>
-
-        <div className={styles.settingsList}>
-          <div className={styles.settingRow}>
-            <span>分辨率</span>
-            <div className={styles.settingSegment}>
-              {(['720P', '1080P'] as const).map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={cx(styles.settingPill, activeShot.resolution === item && styles.settingPillActive)}
-                  onClick={() => controller.setInlineShotField('resolution', item)}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className={styles.settingRowLabel}>
-            <span>选用模型</span>
-            <button type="button" className={styles.modelSelectorButton} onClick={controller.openModelPicker}>
-              <span className={styles.modelSelectorMeta}>
-                <strong>{activeShot.preferredModel}</strong>
-                <small>打开模型选择器并决定是否重置当前版本</small>
-              </span>
-              <CreationIcon name="chevron" className={styles.buttonGlyph} />
-            </button>
-          </div>
-          <label className={styles.settingRowLabel}>
-            <span>视频时长</span>
-            <select className={styles.fieldSelect} value={activeShot.durationMode} onChange={(event) => controller.setInlineShotField('durationMode', event.target.value as typeof activeShot.durationMode)}>
-              {(['智能', '4s', '6s'] as const).map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="button" className={styles.settingRowToggle} onClick={controller.toggleInlineCrop}>
-            <span>裁剪至配音时长</span>
-            <span className={cx(styles.inlineSwitch, activeShot.cropToVoice && styles.inlineSwitchActive)}>
-              <i />
-            </span>
-          </button>
-        </div>
-
-        {activeShot.materials.length ? (
-          <div className={styles.materialStack}>
-            {activeShot.materials.map((material) => (
-              <div key={material.id} className={cx(styles.materialItem, material.id === activeShot.activeMaterialId && styles.materialItemActive)}>
-                <div>
-                  <strong>{material.label}</strong>
-                  <small>{material.id === activeShot.activeMaterialId ? '当前主素材' : material.source}</small>
-                </div>
-                <div className={styles.materialItemActions}>
-                  <button type="button" className={styles.darkGhostButton} onClick={() => controller.setActiveMaterial(material.id)}>
-                    {material.id === activeShot.activeMaterialId ? '主素材' : '设为主素材'}
-                  </button>
-                  <button type="button" className={styles.darkGhostButtonDanger} onClick={() => controller.removeMaterial(material.id)}>
-                    移除
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        <label className={styles.fieldBlock}>
-          <span>结合图片，描述你想生成的角色动作和画面动态</span>
-          <textarea className={styles.fieldTextarea} value={activeShot.imagePrompt} readOnly />
-        </label>
-
-        <div className={styles.composerFooter}>
-          <div className={styles.composerMeta}>
-            <span className={styles.modeBadge}>视频生成</span>
-            <em>+10</em>
-          </div>
-          <div className={styles.composerActions}>
-            <button type="button" className={styles.darkGhostButton} onClick={controller.openMaterialsDialog}>
-              引用图片
-            </button>
-            <button type="button" className={styles.darkGhostButtonDanger} onClick={controller.resetShot}>
-              重置
-            </button>
-            <button type="button" className={styles.sendButton} onClick={controller.openGenerateDialog}>
-              ↑
-            </button>
-          </div>
-        </div>
-      </div>
-    </aside>
-  );
+  return null;
 }

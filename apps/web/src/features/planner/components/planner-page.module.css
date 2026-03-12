@@ -58,6 +58,18 @@
   flex-wrap: wrap;
 }
 
+.modePill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d2ddef;
+  border-radius: 999px;
+  background: #eef3ff;
+  color: #1e40af;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+}
+
 .modeSwitch {
   display: inline-flex;
   align-items: center;
@@ -495,6 +507,19 @@
   line-height: 1.5;
 }
 
+.confirmOutlineButton {
+  justify-self: start;
+  margin-top: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: #111827;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
 .messageBubble {
   margin: 0;
   max-width: min(100%, 680px);
@@ -533,7 +558,7 @@
 
 .composerTextarea {
   width: 100%;
-  min-height: 96px;
+  min-height: 84px;
   max-height: 240px;
   border: 0;
   resize: vertical;
@@ -560,18 +585,24 @@
   font-size: 11px;
 }
 
-.composerBottom button {
+.composerSubmitButton {
   border: 0;
   border-radius: 999px;
   background: #111827;
   color: #ffffff;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 7px 14px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
   cursor: pointer;
 }
 
-.composerBottom button:disabled {
+.composerSubmitButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.composerSubmitButton:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -645,6 +676,73 @@
   height: 16px;
 }
 
+.historyMenuWrap {
+  position: relative;
+}
+
+.historyPopover {
+  position: absolute;
+  right: 0;
+  top: 36px;
+  width: 220px;
+  max-height: 280px;
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid #dbe4f4;
+  background: #ffffff;
+  box-shadow: 0 14px 26px rgba(15, 23, 42, 0.16);
+  padding: 6px;
+  z-index: 8;
+  display: grid;
+  gap: 4px;
+}
+
+.historyItem {
+  width: 100%;
+  border: 0;
+  border-radius: 9px;
+  background: #ffffff;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  padding: 8px 9px;
+  cursor: pointer;
+}
+
+.historyItem:hover {
+  background: #f6f9ff;
+}
+
+.historyItemActive {
+  background: #edf4ff;
+}
+
+.historyItem > div {
+  display: grid;
+  gap: 2px;
+}
+
+.historyItem strong {
+  color: #0f172a;
+  font-size: 12px;
+}
+
+.historyItem span,
+.historyItem small {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.historyEmpty {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  padding: 10px 8px;
+}
+
 .resultContent {
   flex: 1;
   min-height: 0;
@@ -665,6 +763,38 @@
 .docSection {
   display: grid;
   gap: 10px;
+}
+
+.emptyDocCard {
+  border: 1px dashed #c9d7f2;
+  border-radius: 14px;
+  background: #f8fbff;
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.emptyDocCard strong {
+  color: #1f2937;
+  font-size: 14px;
+}
+
+.emptyDocCard p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.inlineProgressNotice {
+  margin: 0;
+  border: 1px solid #d7e3fb;
+  border-radius: 10px;
+  background: #eef4ff;
+  color: #1e40af;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 7px 10px;
 }
 
 .sectionTitle {
@@ -758,15 +888,16 @@
 .subjectStrip,
 .sceneStrip {
   display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
   gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 2px;
 }
 
 .subjectCard,
 .sceneThumbCard {
   position: relative;
   flex-shrink: 0;
+  width: var(--planner-media-card-width, 190px);
   border: 1px solid #dfe7f5;
   border-radius: 12px;
   background: #ffffff;
@@ -774,28 +905,13 @@
   cursor: pointer;
 }
 
-.subjectCard {
-  width: 168px;
-}
-
-.sceneThumbCard {
-  width: 190px;
-}
-
 .subjectCard img,
 .sceneThumbCard img {
   width: 100%;
   display: block;
   object-fit: cover;
+  aspect-ratio: var(--planner-media-aspect-ratio, 16 / 9);
   background: #e2e8f0;
-}
-
-.subjectCard img {
-  aspect-ratio: 4 / 3;
-}
-
-.sceneThumbCard img {
-  aspect-ratio: 16 / 9;
 }
 
 .cardHoverIconButton {
@@ -1579,7 +1695,7 @@
 
   .subjectCard,
   .sceneThumbCard {
-    width: 78%;
+    width: min(78%, var(--planner-media-card-width, 190px));
   }
 
   .assetModal {

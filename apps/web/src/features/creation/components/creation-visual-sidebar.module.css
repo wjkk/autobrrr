@@ -1,0 +1,755 @@
+.root {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top left, rgba(22, 25, 32, 0.18), transparent 28%),
+    linear-gradient(180deg, rgba(14, 16, 22, 0.98), rgba(10, 12, 18, 0.98));
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.panelHeaderLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.44);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+}
+
+.panelHeaderDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.panelHeaderIcon,
+.cardIcon,
+.smallIcon {
+  width: 14px;
+  height: 14px;
+}
+
+.thread {
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.thread::-webkit-scrollbar,
+.messageList::-webkit-scrollbar {
+  display: none;
+}
+
+.messageList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: max-content;
+  padding: 12px 12px 36px;
+}
+
+.summarySection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-inline: 8px;
+}
+
+.shotSummaryCard,
+.promptCard,
+.resultCard,
+.composerForm {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(28, 31, 39, 0.96), rgba(19, 22, 29, 0.98));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.shotSummaryCard {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 18px;
+}
+
+.shotSummaryTitleRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.46);
+}
+
+.shotSummaryTitle {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+}
+
+.shotSummaryStrip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 156px;
+  height: 160px;
+  overflow: hidden;
+  border-radius: 16px;
+  background:
+    linear-gradient(90deg, rgba(7, 9, 14, 0.96) 0%, rgba(18, 20, 28, 0.56) 22%, rgba(18, 20, 28, 0.56) 78%, rgba(7, 9, 14, 0.96) 100%),
+    #11141b;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.shotSummaryStripTrack {
+  display: none;
+}
+
+.shotSummaryStripImage {
+  width: auto;
+  max-width: 42%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  background: transparent;
+}
+
+.shotSummaryActions {
+  display: flex;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.summaryActionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  line-height: 17px;
+  font-weight: 400;
+}
+
+.summaryActionButton:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.userMessageRow {
+  display: flex;
+  justify-content: flex-end;
+  padding-right: 10px;
+}
+
+.userMessageBubble {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100px;
+  height: 40px;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.userMessageBubbleInner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100px;
+  height: 40px;
+  min-width: 100px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 17px 17px 0 17px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: linear-gradient(180deg, rgba(70, 72, 78, 0.74), rgba(58, 60, 67, 0.88));
+  font-size: 14px;
+  line-height: 21px;
+  font-weight: 400;
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.assistantSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-inline: 8px;
+  margin-top: 12px;
+}
+
+.assistantBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 2px;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+}
+
+.assistantBadgeIcon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.assistantBrandIcon {
+  width: 14px;
+  height: 14px;
+}
+
+.promptCard,
+.resultCard {
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+.promptCard {
+  min-height: 104px;
+  padding: 12px 16px 12px;
+}
+
+.promptCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.promptCardTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.98);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.promptText {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  line-height: 24.5px;
+}
+
+.resultCard {
+  padding: 0;
+}
+
+.resultCanvas {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 156px;
+  height: 160px;
+  overflow: hidden;
+  border-radius: 16px;
+  background:
+    linear-gradient(90deg, rgba(7, 9, 14, 0.96) 0%, rgba(18, 20, 28, 0.56) 22%, rgba(18, 20, 28, 0.56) 78%, rgba(7, 9, 14, 0.96) 100%),
+    #11141b;
+}
+
+.resultImage {
+  width: auto;
+  max-width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.resultCanvas[data-video='true'] .resultImage {
+  max-width: 42%;
+}
+
+.emptyState {
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 13px;
+}
+
+.smartChip {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(14, 17, 23, 0.86);
+  backdrop-filter: blur(14px);
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.resultCanvas button.playButton {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.98);
+  color: #0d1016;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32);
+}
+
+.playIcon {
+  width: 12px;
+  height: 12px;
+  margin-left: 1px;
+}
+
+.resultHoverToolbar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(25, 27, 34, 0.9);
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 120ms ease, visibility 120ms ease;
+}
+
+.resultCard:hover .resultHoverToolbar {
+  visibility: visible;
+  opacity: 1;
+}
+
+.resultHoverAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.resultHoverAction:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.composerForm {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 12px 12px;
+  min-height: 158px;
+  height: 162px;
+  padding: 48px 12px 12px;
+  border-radius: 16px;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: linear-gradient(180deg, rgba(35, 37, 43, 0.96), rgba(25, 27, 33, 0.98));
+  box-shadow:
+    0 16px 36px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.composerDeck {
+  position: absolute;
+  top: -45px;
+  left: 13px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  height: 80px;
+}
+
+.frameCardShell {
+  position: relative;
+  width: 64px;
+  height: 80px;
+}
+
+.frameThumbStatic,
+.tailFrameCard {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  width: 64px;
+  height: 80px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(43, 46, 53, 0.72);
+  backdrop-filter: blur(16px);
+}
+
+.frameThumbStatic {
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  transform: rotate(-6deg);
+  transform-origin: center;
+}
+
+.tailFrameCard {
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transform: rotate(6deg);
+  transform-origin: center;
+}
+
+.sourceThumbImage,
+.tailFramePreview {
+  width: 100%;
+  height: 100%;
+  border-radius: 9px;
+}
+
+.sourceThumbImage {
+  object-fit: contain;
+  background: rgba(10, 12, 17, 0.9);
+}
+
+.tailFramePreview {
+  object-fit: cover;
+}
+
+.sourceThumbPlaceholder {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: rgba(255, 255, 255, 0.54);
+  font-size: 11px;
+}
+
+.tailFrameCard {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(43, 46, 53, 0.72);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.tailFramePlus {
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.tailFrameLabel {
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+.textarea {
+  width: auto;
+  min-height: 60px;
+  max-height: 60px;
+  margin: 0 6px 2px;
+  padding: 0;
+  resize: none;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.98);
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+}
+
+.textarea:focus {
+  outline: none;
+}
+
+.textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.composerFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  min-height: 32px;
+}
+
+.footerLeft,
+.footerRight {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.modeButton,
+.utilityButton,
+.submitButton,
+.modeMenuItem,
+.segmentedButton,
+.settingRow,
+.tailFrameMenuItem {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 999px;
+}
+
+.modeButton {
+  height: 32px;
+  width: 112px;
+  min-width: 112px;
+  padding: 0 8px 0 12px;
+  justify-content: flex-start;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.utilityButton {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.costBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 12px;
+  line-height: 17px;
+  font-weight: 400;
+}
+
+.submitButton {
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #0f1217;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.submitButton:disabled {
+  opacity: 0.4;
+}
+
+.submitArrow {
+  display: inline-block;
+  transform: translateY(-1px);
+}
+
+.modeMenu,
+.settingsPanel,
+.tailFrameMenu {
+  position: absolute;
+  z-index: 6;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(22, 24, 30, 0.98);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(20px);
+}
+
+.modeMenu {
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 156px;
+  padding: 8px;
+  border-radius: 14px;
+}
+
+.modeMenuItem {
+  justify-content: flex-start;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+}
+
+.modeMenuItemActive,
+.modeMenuItem:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.menuCheck {
+  margin-left: auto;
+}
+
+.settingsPanel {
+  right: 0;
+  bottom: calc(100% + 10px);
+  width: 266px;
+  padding: 10px;
+  border-radius: 16px;
+}
+
+.settingRow {
+  justify-content: space-between;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 8px;
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+}
+
+.settingRow + .settingRow {
+  margin-top: 6px;
+}
+
+.settingValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.segmentedGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.segmentedButton {
+  height: 26px;
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 12px;
+}
+
+.segmentedButtonActive {
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.crown {
+  color: #f6c04e;
+  font-size: 11px;
+}
+
+.switch {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #fff;
+  transition: transform 180ms ease;
+}
+
+.switchActive {
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.switchActive::after {
+  transform: translateX(14px);
+}
+
+.tailFrameMenu {
+  bottom: calc(100% + 12px);
+  min-width: 166px;
+  padding: 8px;
+  border-radius: 14px;
+}
+
+.tailFrameMenu {
+  left: 72px;
+}
+
+.tailFrameMenuItem {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+}
+
+.tailFrameMenuItem:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tailFrameMenuItem:disabled {
+  color: rgba(255, 255, 255, 0.34);
+}
+
+.notice {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 8;
+  max-width: calc(100% - 48px);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(16, 20, 26, 0.92);
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  transform: translateX(-50%);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3);
+}

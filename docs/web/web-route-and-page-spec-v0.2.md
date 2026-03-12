@@ -1,85 +1,108 @@
 # Web 路由与页面规格（v0.2）
 
 版本：v0.2  
-日期：2026-03-08  
-状态：实现基线
+日期：2026-03-09  
+状态：实现基线（与当前 Explore/Planner 代码对齐）
 
-## 1. 路由总览（与代码一致）
+## 1. 路由总览（已实现）
 
-| 路由 | 当前行为 | 备注 |
+| 路由 | 当前行为 | 代码位置 |
 | --- | --- | --- |
-| `/` | 301/302 应用内重定向到 `/explore` | `apps/web/src/app/page.tsx` |
-| `/explore` | 首页（灵感创作台） | 当前默认加载 `partial_failed` 场景 |
-| `/projects/:projectId` | 根据项目状态重定向 | 见“阶段映射” |
-| `/projects/:projectId/planner` | 策划页 | 支持 query 注入 prompt/title/storyMode |
-| `/projects/:projectId/creation` | 分片生成页 | 支持 `shotId`、`view` |
-| `/projects/:projectId/publish` | 发布页 | 草稿编辑 + 历史作品绑定 |
+| `/` | 重定向到 `/explore` | `apps/web/src/app/page.tsx` |
+| `/explore` | 首页（灵感创作台） | `apps/web/src/app/explore/page.tsx` |
+| `/projects/:projectId` | 按项目状态重定向阶段页 | `apps/web/src/app/projects/[projectId]/page.tsx` |
+| `/projects/:projectId/planner` | 策划页 | `apps/web/src/app/projects/[projectId]/planner/page.tsx` |
+| `/projects/:projectId/creation` | 分片生成页 | `apps/web/src/app/projects/[projectId]/creation/page.tsx` |
+| `/projects/:projectId/publish` | 发布页 | `apps/web/src/app/projects/[projectId]/publish/page.tsx` |
 
-## 2. 项目阶段映射（必须一致）
+## 2. 项目阶段映射（已实现）
 
-`/projects/:projectId` 的跳转规则：
+`/projects/:projectId` 跳转规则：
 
-- `published` -> `publish`
-- `creating | export_ready | exported` -> `creation`
-- 其他状态 -> `planner`
+1. `published` -> `publish`
+2. `creating | export_ready | exported` -> `creation`
+3. 其他状态 -> `planner`
 
-该规则来自 `apps/web/src/features/shared/lib/project-stage.ts`。
+规则来源：`apps/web/src/features/shared/lib/project-stage.ts`。
 
-## 3. 首页（/explore）产品行为
+## 3. 首页（/explore）当前行为
 
-### 3.1 结构
+### 3.1 提交链路
 
-首页由三块组成：
+1. 用户输入 prompt 并点击发送。
+2. 前端调用 `createStudioProject({ prompt, contentMode })`。
+3. 成功后跳转 `/projects/:projectId/planner`。
 
-1. 左侧全局侧边栏
-2. 顶部工作区栏
-3. Hero 创作输入区 + 灵感瀑布流
+### 3.2 模式来源
 
-### 3.2 Hero 输入交互
+`contentMode` 在首页提交时固化：
 
-- 默认折叠态，点击后展开。
-- 展开态支持三个模式：`短剧漫剧`、`音乐MV`、`知识分享`。
-- `音乐MV` 模式显示“音乐上传槽位”，并隐藏“上传剧本”按钮。
-- 工具浮层有且仅有一个可同时打开（主体图模型 / 主体角色 / 画风列表）。
-- 输入为空时发送按钮禁用。
-- 输入非空后发送：跳转到  
-  `/projects/:projectId/planner?prompt=...`
+1. `短剧漫剧 + 多剧集开关=true` -> `series`
+2. 其他 -> `single`
 
-### 3.3 页面内已触发但未实现的路由
+策划页不提供模式切换。
 
-当前首页有按钮会跳到以下占位路由：
+### 3.3 当前静态数据范围
 
-- `/vip`
-- `/profile`
-- `/notifications`
-- `/feedback`
-- `/projects/new-character`
+以下仍主要来自前端常量：
 
-这些路由当前不属于主流程，若上线需补路由页或改为禁用态。
+1. tab 文案与占位文案
+2. preset library
+3. 主体/画风候选项
+4. 灵感广场卡片
 
-## 4. 页面查询参数规范
+## 4. 策划页（/projects/:projectId/planner）当前行为
 
-### 4.1 Planner
+### 4.1 初始化
 
-- `prompt`: 来自首页输入框
-- `title`: 可选，预填项目标题
-- `storyMode`: `single | series`
+1. 通过 `projectId` 拉取项目数据。
+2. `plannerMode` 由 `project.contentMode` 决定。
+3. 右侧结果区初始为空（等待细化版本）。
 
-### 4.2 Creation
+### 4.2 输入区提交语义
 
-- `shotId`: 默认选中的镜头 ID
-- `view`: `storyboard | default | lipsync`
+1. 输入区是统一“提交”动作。
+2. 未确认大纲时提交：触发“确认并开始细化”。
+3. 已确认后提交：触发“重新细化并创建新版本”。
 
-## 5. 首页对后端数据的要求
+### 4.3 结果区语义
 
-当前实现大部分首页选项仍为前端硬编码；后端版本至少要支持：
+1. 历史按钮语义是“版本历史”（不是刷新）。
+2. 主体/场景/分镜编辑作用于当前激活版本。
+3. 主体/场景卡片为换行布局，不依赖横向滚动。
 
-1. 当前承接项目（`project.id`）
-2. 模式与占位文案配置
-3. 主体图模型列表
-4. 角色列表
-5. 画风列表
-6. 预设卡模板列表
-7. 灵感瀑布流卡片
+### 4.4 底部配置
 
-最小可用版本可先只返回 `project.id`（保证跳转），再逐步把硬编码项替换为接口返回。
+1. 分镜图模型：独立下拉（非画风）。
+2. 画面比例：默认 `16:9`，可选 `16:9 | 9:16 | 4:3 | 3:4`。
+
+## 5. 查询参数规范（已实现）
+
+### 5.1 Planner
+
+不依赖 query 参数（不再使用 `prompt/title/storyMode` 注入）。
+
+### 5.2 Creation
+
+1. `shotId`: 默认选中的镜头 ID
+2. `view`: `storyboard | default | lipsync`
+
+## 6. API 对接现状与目标
+
+### 6.1 当前仓库本地已实现
+
+1. `GET /api/studio/projects`
+2. `POST /api/studio/projects`
+
+### 6.2 Explore/Planner 后端目标接口
+
+1. `GET /api/projects/:projectId/planner/workspace`
+2. `POST /api/projects/:projectId/planner/submit`
+3. `GET /api/projects/:projectId/planner/refinement/versions*`
+4. `PATCH /api/projects/:projectId/planner/refinement/versions/:versionId`
+5. `PATCH /api/projects/:projectId/planner/config`
+
+详细定义见：
+
+1. `docs/specs/backend-data-api-spec-v0.2.md`
+2. `docs/specs/explore-planner-backend-guidance-v0.2.md`

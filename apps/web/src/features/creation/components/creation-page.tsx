@@ -2,14 +2,16 @@
 
 import type { CreationViewMode, StudioFixture } from '@aiv/domain';
 import Link from 'next/link';
-import { Badge, Button, cx } from '@aiv/ui';
+import { cx } from '@aiv/ui';
+import { useEffect, useRef, useState } from 'react';
 
 import { useCreationWorkspace } from '../lib/use-creation-workspace';
 import { CreationDialogs } from './creation-dialogs';
+import { CreationIcon } from './creation-icons';
 import { CreationSidebar } from './creation-sidebar';
 import { CreationStage } from './creation-stage';
+import { CreationStoryboardView } from './creation-storyboard-view';
 import { CreationTimeline } from './creation-timeline';
-import { CreationVersionRail } from './creation-version-rail';
 import styles from './creation-page.module.css';
 
 interface CreationPageProps {
@@ -20,58 +22,92 @@ interface CreationPageProps {
 
 export function CreationPage({ studio, initialShotId, initialView }: CreationPageProps) {
   const controller = useCreationWorkspace({ studio, initialShotId, initialView });
+  const episodeTitle = studio.episodes[0]?.title ?? '第1集';
+  const hasGeneratingShot = controller.creation.shots.some((shot) => shot.status === 'generating');
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exportWatermark, setExportWatermark] = useState(true);
+  const exportMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target as Node;
+      if (exportMenuRef.current && !exportMenuRef.current.contains(target)) {
+        setExportMenuOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, []);
+
+  const triggerExport = (target: 'full' | 'frames') => {
+    setExportMenuOpen(false);
+    controller.setNotice(target === 'full' ? `已开始导出${exportWatermark ? '完整视频（带水印）' : '完整视频'}。` : '已开始导出全部分镜。');
+  };
 
   return (
     <>
       <div className={styles.creationShell}>
         <header className={styles.creationHeader}>
           <div className={styles.creationHeaderLeft}>
+            <span className={styles.headerBrand} aria-hidden="true">
+              <CreationIcon name="brand" className={styles.brandMark} />
+            </span>
             <Link href={`/projects/${studio.project.id}/planner`} className={styles.backButton}>
-              ← 返回策划
+              <CreationIcon name="back" className={styles.buttonGlyph} />
+              <span>返回策划</span>
             </Link>
-            <div className={styles.projectTitleGroup}>
-              <small>{studio.brandName}</small>
-              <h1>{studio.project.title}</h1>
-            </div>
+            <h1 className={styles.title}>{episodeTitle}</h1>
           </div>
           <div className={styles.creationHeaderActions}>
-            <Badge>{studio.scenarioLabel}</Badge>
-            <span className={styles.pointBadge}>{`✦ ${controller.creation.points}`}</span>
-            <Button variant="secondary" onClick={() => controller.openBatchDialog('missing')}>
-              批量补缺
-            </Button>
-            <Button onClick={() => controller.openBatchDialog('all')}>一键转视频</Button>
-            <Button variant="secondary">导出</Button>
+            <div className={styles.membershipPill}>
+              <span className={styles.pointBadge}>{`✦ ${controller.creation.points}`}</span>
+              <span className={styles.membershipDivider} aria-hidden="true" />
+              <button type="button" className={styles.membershipButton}>
+                开通会员
+              </button>
+            </div>
+            <button type="button" className={styles.darkPrimaryButton} onClick={() => controller.openBatchDialog('all')} disabled={hasGeneratingShot}>
+              一键转视频
+            </button>
+            <div className={styles.exportMenuWrap} ref={exportMenuRef}>
+              <button type="button" className={styles.darkGhostButton} onClick={() => setExportMenuOpen((current) => !current)}>
+                导出
+              </button>
+              {exportMenuOpen ? (
+                <div className={styles.exportMenu}>
+                  <div className={styles.exportWatermarkRow}>
+                    <span>视频水印</span>
+                    <button
+                      type="button"
+                      className={cx(styles.exportSwitch, exportWatermark && styles.exportSwitchActive)}
+                      aria-pressed={exportWatermark}
+                      onClick={() => setExportWatermark((current) => !current)}
+                    >
+                      <span className={styles.exportSwitchThumb} />
+                    </button>
+                  </div>
+                  <button type="button" className={styles.exportMenuButtonPrimary} onClick={() => triggerExport('full')}>
+                    导出完整视频
+                  </button>
+                  <button type="button" className={styles.exportMenuButton} onClick={() => triggerExport('frames')}>
+                    导出全部分镜
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </header>
 
-        <div className={styles.stageHeaderBar}>
-          <div className={styles.stageHeaderMeta}>
-            <Badge>{studio.episodes[0]?.title ?? '单集项目'}</Badge>
-            <Badge>{`当前分镜 ${controller.activeShot?.title ?? '-'}`}</Badge>
-            <Badge tone={controller.activeShot?.status === 'failed' ? 'danger' : controller.activeShot?.status === 'generating' ? 'warning' : 'success'}>
-              {controller.activeShot ? controller.statusLabel(controller.activeShot.status) : '待选择'}
-            </Badge>
-          </div>
-          <div className={styles.stageHeaderNav}>
-            {[
-              { id: 'planner', label: '策划', href: `/projects/${studio.project.id}/planner` },
-              { id: 'creation', label: '分片生成', href: `/projects/${studio.project.id}/creation` },
-              { id: 'publish', label: '发布', href: `/projects/${studio.project.id}/publish` },
-            ].map((item) => (
-              <Link key={item.id} href={item.href} className={cx(styles.headerNavChip, item.id === 'creation' && styles.headerNavChipActive)}>
-                {item.label}
-              </Link>
-            ))}
-          </div>
-        </div>
-
         <div className={styles.workspaceFrame}>
           <nav className={styles.trackRail} aria-label="分轨工作区">
+            <span className={styles.railBrand} aria-hidden="true">
+              <CreationIcon name="brand" className={styles.brandMark} />
+            </span>
             {([
-              { id: 'visual', label: '画面' },
-              { id: 'voice', label: '配音' },
-              { id: 'music', label: '音乐' },
+              { id: 'visual', label: '画面', icon: 'image' },
+              { id: 'voice', label: '配音', icon: 'voice' },
+              { id: 'music', label: '音乐', icon: 'music' },
             ] as const).map((item) => (
               <button
                 key={item.id}
@@ -79,14 +115,17 @@ export function CreationPage({ studio, initialShotId, initialView }: CreationPag
                 className={cx(styles.trackButton, controller.creation.activeTrack === item.id && styles.trackButtonActive)}
                 onClick={() => controller.setActiveTrack(item.id)}
               >
-                <span>{item.label}</span>
+                <span className={styles.trackButtonIcon} aria-hidden="true">
+                  <CreationIcon name={item.icon} className={cx(styles.buttonGlyph, styles.trackButtonGlyph)} />
+                </span>
+                <span className={styles.trackButtonLabel}>{item.label}</span>
               </button>
             ))}
           </nav>
 
           <CreationSidebar controller={controller} />
 
-          <div className={styles.centerColumn}>
+          <div className={styles.centerColumn} data-view-mode={controller.creation.viewMode}>
             <div className={styles.viewModeRow}>
               {(['storyboard', 'default', 'lipsync'] as const).map((item) => (
                 <button
@@ -99,11 +138,9 @@ export function CreationPage({ studio, initialShotId, initialView }: CreationPag
                 </button>
               ))}
             </div>
-            <CreationStage controller={controller} />
+            {controller.creation.viewMode === 'storyboard' ? <CreationStoryboardView controller={controller} /> : <CreationStage controller={controller} />}
             <CreationTimeline controller={controller} />
           </div>
-
-          <CreationVersionRail controller={controller} />
         </div>
       </div>
 

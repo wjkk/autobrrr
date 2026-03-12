@@ -1,111 +1,112 @@
 # 外部接口规格（v0.2）
 
 版本：v0.2  
-日期：2026-03-08  
-状态：新接口基线（替代 mock service）
+日期：2026-03-09  
+状态：现状基线 + 目标接口清单
 
 ## 1. 范围
 
-本文件定义外部接口：Web/客户端 <-> 后端。
+定义 Web/客户端 <-> 后端接口，重点覆盖首页创建项目与策划页版本化流程。
 
-## 2. 查询接口（Query）
+## 2. 现状实现状态（仓库内）
 
-### 2.1 首页聚合
+当前仓库本地 `Next.js Route Handler` 仅实现：
 
-`GET /api/studio/explore`
+1. `GET /api/studio/projects`
+2. `POST /api/studio/projects`
 
-返回：`StudioFixture`（或 `StudioFixture` 的 Explore 裁剪版 + `project.id`）。
+实现文件：`apps/web/src/app/api/studio/projects/route.ts`。
 
-用途：替代 `fetchExploreStudio()`。
+其余接口当前由 `studio-service` 走“外部 API + mock fallback”模式：
 
-### 2.2 项目工作区聚合
+1. `AIV_STUDIO_DATA_SOURCE=api`：只走外部 API
+2. `AIV_STUDIO_DATA_SOURCE=hybrid`：外部 API 失败时回退 mock
+3. `AIV_STUDIO_DATA_SOURCE=mock`：只走 mock
 
-`GET /api/studio/projects/:projectId`
+## 3. 已实现接口（当前可直接联调）
 
-返回：`StudioFixture`。
-
-用途：替代 `fetchStudioProject(projectId)`，供 Planner/Creation/Publish 首屏渲染。
-
-### 2.3 继续创作列表
+### 3.1 获取继续创作列表
 
 `GET /api/studio/projects`
 
 返回：`ContinueProjectCard[]`。
 
-用途：替代 `fetchContinueProjects()`。
+### 3.2 首页提交并创建项目
 
-### 2.4 场景切换（调试/联调）
-
-`GET /api/studio/scenarios/:scenarioId`
-
-返回：`StudioFixture`。
-
-用途：替代 `fetchStudioScenario(scenarioId)`。
-
-## 3. 首页提交接口（Command）
-
-### 3.1 提交首页灵感
-
-`POST /api/explore/submit`
+`POST /api/studio/projects`
 
 请求：
 
 ```ts
-interface ExploreSubmitRequest {
+interface CreateStudioProjectRequest {
   prompt: string;
-  tab: '短剧漫剧' | '音乐MV' | '知识分享';
-  multiEpisode?: boolean;
-  selectedModel?: string;
-  selectedImageModel?: string;
-  selectedCharacter?: string;
-  attachmentAssetId?: string;
+  contentMode: 'single' | 'series';
 }
 ```
 
 响应：
 
 ```ts
-interface ExploreSubmitResponse {
+interface CreateStudioProjectResponse {
   projectId: string;
-  redirectUrl: string; // /projects/:projectId/planner?prompt=...
+  redirectUrl: string; // /projects/:projectId/planner
+  project: {
+    id: string;
+    title: string;
+    contentMode: 'single' | 'series';
+    status: 'draft' | 'planning';
+  };
 }
 ```
 
-## 4. Planner/Creation/Publish 命令接口（最小集）
+## 4. 目标接口（v0.2 后端落地）
 
-### 4.1 Planner
+以下接口是 Explore/Planner 后端化的目标，不是当前仓库内已实现本地路由：
 
-- `POST /api/projects/:projectId/planner/submit-requirement`
-- `POST /api/projects/:projectId/planner/generate-storyboards`
-- `PATCH /api/projects/:projectId/planner/references/:referenceId`
-- `PATCH /api/projects/:projectId/planner/storyboards/:storyboardId`
+### 4.1 查询接口（Query）
 
-### 4.2 Creation
+1. `GET /api/studio/explore`
+2. `GET /api/studio/projects/:projectId`
+3. `GET /api/projects/:projectId/planner/workspace?episodeId=:episodeId`
+4. `GET /api/projects/:projectId/planner/refinement/versions?episodeId=:episodeId`
+5. `GET /api/projects/:projectId/planner/refinement/versions/:versionId`
 
-- `POST /api/projects/:projectId/creation/shots/:shotId/generate`
-- `POST /api/projects/:projectId/creation/shots/batch-generate`
-- `POST /api/projects/:projectId/creation/shots/:shotId/apply-version`
-- `POST /api/projects/:projectId/creation/shots/:shotId/reset`
-- `POST /api/projects/:projectId/creation/shots/:shotId/materials`
+### 4.2 命令接口（Command）
 
-### 4.3 Publish
+1. `POST /api/projects/:projectId/planner/submit`
+- 统一提交语义：
+  - 未确认大纲：`confirm_outline_and_start`
+  - 已确认大纲：`rerun_refinement`
 
-- `PATCH /api/projects/:projectId/publish/draft`
-- `POST /api/projects/:projectId/publish/bind-history`
-- `POST /api/projects/:projectId/publish/submit`
+2. `POST /api/projects/:projectId/planner/refinement/versions/:versionId/activate`
 
-## 5. 响应规范
+3. `PATCH /api/projects/:projectId/planner/refinement/versions/:versionId`
+- `replace_subject | replace_scene | replace_shot | delete_shot`
 
-- 成功：`{ ok: true, data: ... }`
-- 失败：`{ ok: false, error: { code, message, details? } }`
-- 所有错误码使用 `docs/specs/state-machine-and-error-code-spec-v0.2.md`。
+4. `PATCH /api/projects/:projectId/planner/config`
 
-## 6. 迁移策略
+```ts
+interface PatchPlannerConfigRequest {
+  episodeId: string;
+  storyboardModelId?: string;
+  aspectRatio?: '16:9' | '9:16' | '4:3' | '3:4';
+}
+```
 
-第一阶段：保持前端页面不变，仅把服务层实现替换为同结构 HTTP 客户端。  
-第二阶段：逐步去除首页硬编码选项，改由 `/api/studio/explore` 返回。
+## 5. 响应与错误规范
 
-## 7. 联调环境变量（Web）
+1. 成功：`{ ok: true, data }`
+2. 失败：`{ ok: false, error: { code, message, details? } }`
 
-- `AIV_API_BASE_URL`：后端基础地址，默认 `http://localhost:8787`
-- `AIV_API_TIMEOUT_MS`：请求超时（毫秒），默认 `10000`
+错误码详见：`docs/specs/state-machine-and-error-code-spec-v0.2.md`。
+
+## 6. 联调环境变量（Web）
+
+1. `AIV_API_BASE_URL`：后端基础地址，默认 `http://localhost:8787`
+2. `AIV_API_TIMEOUT_MS`：请求超时（毫秒），默认 `10000`
+3. `AIV_STUDIO_DATA_SOURCE`：`api | hybrid | mock`（默认 `hybrid`）
+
+## 7. 关联文档
+
+1. `docs/specs/explore-planner-backend-guidance-v0.2.md`
+2. `docs/specs/database-schema-spec-v0.2.md`

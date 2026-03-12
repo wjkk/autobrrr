@@ -7,38 +7,23 @@ import { cx, Tooltip, TooltipProvider } from '@aiv/ui';
 import styles from './explore-page.module.css';
 
 import type { StudioFixture } from '@aiv/domain';
+import { createStudioProject } from '@/lib/studio-service';
+import {
+  CHARACTER_OPTIONS,
+  CONTENT_TABS,
+  IMAGE_MODEL_OPTIONS,
+  PRESET_LIBRARY,
+  STYLE_OPTIONS,
+  TAB_PLACEHOLDERS,
+  TAB_PREFIX_CLASS_SUFFIX,
+} from './explore-page.data';
+import type { ContentTab, ExplorePopover, ExploreSidebarNav } from './explore-page.types';
 
 interface ExplorePageProps {
   studio: StudioFixture;
 }
 
-type ContentTab = '短剧漫剧' | '音乐MV' | '知识分享';
-
-const CHARACTER_OPTIONS = [
-  { name: 'Seko', img: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100' },
-  { name: '老顽童', img: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=100' },
-  { name: '小狐狸', img: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100' },
-  { name: '青年', img: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=100' },
-  { name: '少女', img: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=100' },
-  { name: '大叔', img: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=100' },
-  { name: '精灵', img: 'https://images.unsplash.com/photo-1518599411933-28f9f8f4a7c1?auto=format&fit=crop&q=80&w=100' },
-  { name: '战士', img: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&q=80&w=100' }
-];
-
-const STYLE_OPTIONS = [
-  { name: '影视质感', img: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&q=80&w=100' },
-  { name: '高饱和写实', img: 'https://images.unsplash.com/photo-1621415053503-455b80a1532f?auto=format&fit=crop&q=80&w=100' },
-  { name: '日漫二次元', img: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&q=80&w=100' },
-  { name: '3D卡通', img: 'https://images.unsplash.com/photo-1627856013091-fed6e4e070c4?auto=format&fit=crop&q=80&w=100' },
-  { name: '水墨国风', img: 'https://plus.unsplash.com/premium_photo-1673306778968-5aab577a7365?auto=format&fit=crop&q=80&w=100' },
-  { name: '赛博朋克', img: 'https://images.unsplash.com/photo-1605806616949-1e87b487cb2a?auto=format&fit=crop&q=80&w=100' },
-  { name: '复古胶片', img: 'https://images.unsplash.com/photo-1493606371202-6275828f90f3?auto=format&fit=crop&q=80&w=100' },
-  { name: '极简白描', img: 'https://images.unsplash.com/photo-1515405295579-ba7b45403062?auto=format&fit=crop&q=80&w=100' },
-  { name: '油画质感', img: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b3e9?auto=format&fit=crop&q=80&w=100' },
-  { name: '美漫风格', img: 'https://images.unsplash.com/photo-1534008272517-74296417b189?auto=format&fit=crop&q=80&w=100' }
-];
-
-const IMAGE_MODEL_OPTIONS = ['智能选择', 'Seko Image', 'Z-Image', '即梦 5.0', '即梦 4.5', '即梦 4.0', 'Stable Diffusion XL', 'Midjourney V6', 'DALL-E 3'];
+const PRESET_IMAGE_CLASSES = [styles.presetImg1, styles.presetImg2, styles.presetImg3];
 
 export function ExplorePage({ studio }: ExplorePageProps) {
   const router = useRouter();
@@ -49,13 +34,14 @@ export function ExplorePage({ studio }: ExplorePageProps) {
   const [activeTab, setActiveTab] = useState<ContentTab>('短剧漫剧');
   const [promptText, setPromptText] = useState('');
   const [toastMsg, setToastMsg] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   // Prototype UI States
-  const [activeSidebarNav, setActiveSidebarNav] = useState('home');
+  const [activeSidebarNav, setActiveSidebarNav] = useState<ExploreSidebarNav>('home');
   const [isMultiEpisode, setIsMultiEpisode] = useState(false);
 
   // Popover state for toolbar
-  const [activePopover, setActivePopover] = useState<'character' | 'model' | 'imageModel' | null>(null);
+  const [activePopover, setActivePopover] = useState<ExplorePopover>(null);
 
   // Selected parameters
   const [selectedModel, setSelectedModel] = useState(''); // 画风
@@ -109,10 +95,29 @@ export function ExplorePage({ studio }: ExplorePageProps) {
     }
   };
 
-  const handleSubmit = () => {
-    if (!promptText.trim()) return;
-    router.push(`/projects/${studio.project.id}/planner?prompt=${encodeURIComponent(promptText)}`);
+  const handleSubmit = async () => {
+    const normalizedPrompt = promptText.trim();
+    if (!normalizedPrompt || submitting) {
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const contentMode = activeTab === '短剧漫剧' && isMultiEpisode ? 'series' : 'single';
+      const created = await createStudioProject({
+        prompt: normalizedPrompt,
+        contentMode,
+      });
+      router.push(`/projects/${created.projectId}/planner`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '创建项目失败，请重试。';
+      triggerToast(message);
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  const activePresetCards = PRESET_LIBRARY[activeTab];
 
   return (
     <TooltipProvider>
@@ -197,7 +202,8 @@ export function ExplorePage({ studio }: ExplorePageProps) {
                   // Collapsed Pill Content
                   <div className={styles.collapsedContent}>
                     <span className={styles.placeholderText}>
-                      <span className={styles.prefixTag_drama}>短剧漫剧 / </span> 输入你的灵感，AI 会为你自动策划内容生成视频
+                      <span className={cx(styles.prefixTag, styles[`prefixTag_${TAB_PREFIX_CLASS_SUFFIX[activeTab]}`])}>{activeTab} / </span>
+                      {TAB_PLACEHOLDERS[activeTab]}
                     </span>
                     <div className={styles.collapsedRightIcon}>
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
@@ -217,18 +223,14 @@ export function ExplorePage({ studio }: ExplorePageProps) {
                       )}
 
                       <div className={styles.textInputWrapper}>
-                        <span className={cx(styles.prefixTag, styles[`prefixTag_${activeTab === '短剧漫剧' ? 'drama' : activeTab === '音乐MV' ? 'mv' : 'edu'}`])}>
+                        <span className={cx(styles.prefixTag, styles[`prefixTag_${TAB_PREFIX_CLASS_SUFFIX[activeTab]}`])}>
                           {activeTab} /
                         </span>
                         <textarea
                           ref={textareaRef}
                           value={promptText}
                           onChange={(e) => setPromptText(e.target.value)}
-                          placeholder={
-                            activeTab === '音乐MV' ? '上传音乐, AI会帮你自动生成MV剧本' :
-                              activeTab === '知识分享' ? '输入你的主题, AI 会为你自动策划内容生成视频' :
-                                '输入你的灵感，AI 会为你自动策划内容生成视频'
-                          }
+                          placeholder={TAB_PLACEHOLDERS[activeTab]}
                           className={styles.textarea}
                           rows={3}
                         />
@@ -270,7 +272,7 @@ export function ExplorePage({ studio }: ExplorePageProps) {
                         <div className={styles.popoverContainer}>
                           {selectedCharacter ? (
                             <div className={cx(styles.selectedTokenPill, activePopover === 'character' && styles.selectedTokenPillActive)} onClick={() => setActivePopover(activePopover === 'character' ? null : 'character')}>
-                              <img src={CHARACTER_OPTIONS.find(c => c.name === selectedCharacter)?.img} alt={selectedCharacter} className={styles.tokenPillAvatar} />
+                              <img src={CHARACTER_OPTIONS.find((c) => c.name === selectedCharacter)?.imageUrl} alt={selectedCharacter} className={styles.tokenPillAvatar} />
                               <span className={styles.tokenPillText}>{selectedCharacter}</span>
                               <button className={styles.tokenPillClear} onClick={(e) => { e.stopPropagation(); setSelectedCharacter(''); }}>
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -291,7 +293,7 @@ export function ExplorePage({ studio }: ExplorePageProps) {
                         <div className={styles.popoverContainer}>
                           {selectedModel ? (
                             <div className={cx(styles.selectedTokenPill, activePopover === 'model' && styles.selectedTokenPillActive)} onClick={() => setActivePopover(activePopover === 'model' ? null : 'model')}>
-                              <img src={STYLE_OPTIONS.find(s => s.name === selectedModel)?.img} alt={selectedModel} className={styles.tokenPillAvatar} />
+                              <img src={STYLE_OPTIONS.find((s) => s.name === selectedModel)?.imageUrl} alt={selectedModel} className={styles.tokenPillAvatar} />
                               <span className={styles.tokenPillText}>{selectedModel}</span>
                               <button className={styles.tokenPillClear} onClick={(e) => { e.stopPropagation(); setSelectedModel(''); }}>
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -323,7 +325,7 @@ export function ExplorePage({ studio }: ExplorePageProps) {
                         <button
                           className={cx(styles.submitButton, promptText.trim().length > 0 && styles.submitButtonActive)}
                           onClick={handleSubmit}
-                          disabled={promptText.trim().length === 0}
+                          disabled={promptText.trim().length === 0 || submitting}
                           aria-label="Send"
                         >
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
@@ -389,7 +391,7 @@ export function ExplorePage({ studio }: ExplorePageProps) {
                       </div>
 
                       <div className={cx(styles.popoverGridCols4, styles.popoverGridScrollable)}>
-                        {CHARACTER_OPTIONS.map(char => (
+                        {CHARACTER_OPTIONS.map((char) => (
                           <button
                             key={char.name}
                             className={cx(styles.characterAvatarBtn, selectedCharacter === char.name && styles.characterAvatarBtnActive)}
@@ -398,7 +400,7 @@ export function ExplorePage({ studio }: ExplorePageProps) {
                               setActivePopover(null);
                             }}
                           >
-                            <img src={char.img} alt={char.name} className={styles.characterAvatarImg} />
+                            <img src={char.imageUrl} alt={char.name} className={styles.characterAvatarImg} />
                             <span className={styles.characterName}>{char.name}</span>
                           </button>
                         ))}
@@ -410,7 +412,7 @@ export function ExplorePage({ studio }: ExplorePageProps) {
                     <div className={styles.popoverMenu}>
                       <div className={styles.popoverHeader}>画风列表</div>
                       <div className={cx(styles.popoverGridCols5, styles.popoverGridScrollable)}>
-                        {STYLE_OPTIONS.map(style => (
+                        {STYLE_OPTIONS.map((style) => (
                           <button
                             key={style.name}
                             className={cx(styles.styleCardBtn, selectedModel === style.name && styles.styleCardBtnActive)}
@@ -420,7 +422,7 @@ export function ExplorePage({ studio }: ExplorePageProps) {
                             }}
                           >
                             <div className={styles.styleCardImgWrapper}>
-                              <img src={style.img} alt={style.name} />
+                              <img src={style.imageUrl} alt={style.name} />
                             </div>
                             <span>{style.name}</span>
                           </button>
@@ -437,112 +439,49 @@ export function ExplorePage({ studio }: ExplorePageProps) {
 
                   {/* Mode Tabs */}
                   <div className={styles.modeTabs}>
-                    {(['短剧漫剧', '音乐MV', '知识分享'] as ContentTab[]).map(tab => (
+                    {CONTENT_TABS.map((tabItem) => (
                       <button
-                        key={tab}
-                        className={cx(styles.tabChip, activeTab === tab && styles.tabChipActive)}
-                        onClick={(e) => { e.stopPropagation(); setActiveTab(tab); }}
+                        key={tabItem.id}
+                        className={cx(styles.tabChip, activeTab === tabItem.id && styles.tabChipActive)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveTab(tabItem.id);
+                        }}
                       >
                         {/* Icons within tabs */}
-                        {tab === '短剧漫剧' && (
+                        {tabItem.id === '短剧漫剧' && (
                           <div className={cx(styles.tabIconWrapper, styles.bgPink)}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>
                           </div>
                         )}
-                        {tab === '音乐MV' && (
+                        {tabItem.id === '音乐MV' && (
                           <div className={cx(styles.tabIconWrapper, styles.bgPurple)}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
                           </div>
                         )}
-                        {tab === '知识分享' && (
+                        {tabItem.id === '知识分享' && (
                           <div className={cx(styles.tabIconWrapper, styles.bgBlue)}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="8" y1="12" x2="16" y2="12"></line><line x1="8" y1="16" x2="16" y2="16"></line><line x1="8" y1="8" x2="10" y2="8"></line></svg>
                           </div>
                         )}
-                        <span>{tab}</span>
-                        {tab === '音乐MV' && <span className={styles.betaTag}>Beta</span>}
+                        <span>{tabItem.id}</span>
+                        {tabItem.beta ? <span className={styles.betaTag}>Beta</span> : null}
                       </button>
                     ))}
                   </div>
 
                   {/* Preset Gallery */}
                   <div className={styles.presetGallery}>
-                    {activeTab === '短剧漫剧' && (
-                      <>
-                        <button className={styles.presetCard} onClick={() => setPromptText('对话剧情：')}>
-                          <span className={styles.presetTitle}>对话剧情</span>
-                          <div className={styles.presetImages}>
-                            <img src="https://images.unsplash.com/photo-1542204165-65bf26472b9b?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg1} />
-                            <img src="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg2} />
-                            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg3} />
-                          </div>
-                        </button>
-                        <button className={styles.presetCard} onClick={() => setPromptText('旁白解说：')}>
-                          <span className={styles.presetTitle}>旁白解说</span>
-                          <div className={styles.presetImages}>
-                            <img src="https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg1} />
-                            <img src="https://images.unsplash.com/photo-1563387852576-964bc31b7d4e?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg2} />
-                            <img src="https://images.unsplash.com/photo-1517511620798-cec17d428bc0?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg3} />
-                          </div>
-                        </button>
-                      </>
-                    )}
-                    {activeTab === '音乐MV' && (
-                      <>
-                        <button className={styles.presetCard} onClick={() => setPromptText('剧情MV：')}>
-                          <span className={styles.presetTitle}>剧情MV</span>
-                          <div className={styles.presetImages}>
-                            <img src="https://images.unsplash.com/photo-1516280440502-a2f011ba228b?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg1} />
-                            <img src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg2} />
-                            <img src="https://images.unsplash.com/photo-1506157786151-b8491531f063?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg3} />
-                          </div>
-                        </button>
-                        <button className={styles.presetCard} onClick={() => setPromptText('表演MV：')}>
-                          <span className={styles.presetTitle}>表演MV</span>
-                          <div className={styles.presetImages}>
-                            <img src="https://images.unsplash.com/photo-1493225457124-b1f4862dc96f?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg1} />
-                            <img src="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg2} />
-                            <img src="https://images.unsplash.com/photo-1459749411175-04bf5292ceea?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg3} />
-                          </div>
-                        </button>
-                      </>
-                    )}
-                    {activeTab === '知识分享' && (
-                      <>
-                        <button className={styles.presetCard} onClick={() => setPromptText('知识科普：')}>
-                          <span className={styles.presetTitle}>知识科普</span>
-                          <div className={styles.presetImages}>
-                            <img src="https://images.unsplash.com/photo-1518364538176-bfddf9dafeaf?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg1} />
-                            <img src="https://images.unsplash.com/photo-1473091534298-04dcbce3278c?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg2} />
-                            <img src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg3} />
-                          </div>
-                        </button>
-                        <button className={styles.presetCard} onClick={() => setPromptText('情感哲言：')}>
-                          <span className={styles.presetTitle}>情感哲言</span>
-                          <div className={styles.presetImages}>
-                            <img src="https://images.unsplash.com/photo-1499209974431-9dddcece7f88?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg1} />
-                            <img src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg2} />
-                            <img src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg3} />
-                          </div>
-                        </button>
-                        <button className={styles.presetCard} onClick={() => setPromptText('旅游宣传：')}>
-                          <span className={styles.presetTitle}>旅游宣传</span>
-                          <div className={styles.presetImages}>
-                            <img src="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg1} />
-                            <img src="https://images.unsplash.com/photo-1504280650505-89f929388f6c?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg2} />
-                            <img src="https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg3} />
-                          </div>
-                        </button>
-                        <button className={styles.presetCard} onClick={() => setPromptText('历史文化：')}>
-                          <span className={styles.presetTitle}>历史文化</span>
-                          <div className={styles.presetImages}>
-                            <img src="https://images.unsplash.com/photo-1590856029826-c7a73142bbf1?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg1} />
-                            <img src="https://images.unsplash.com/photo-1518998053401-b20fbfbc76a4?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg2} />
-                            <img src="https://images.unsplash.com/photo-1520037130009-ebcc652a92c3?auto=format&fit=crop&q=80&w=200" alt="mock" className={styles.presetImg3} />
-                          </div>
-                        </button>
-                      </>
-                    )}
+                    {activePresetCards.map((preset) => (
+                      <button key={preset.title} className={styles.presetCard} onClick={() => setPromptText(preset.seedPrompt)}>
+                        <span className={styles.presetTitle}>{preset.title}</span>
+                        <div className={styles.presetImages}>
+                          {preset.previewUrls.map((imageUrl, index) => (
+                            <img key={`${preset.title}-${index}`} src={imageUrl} alt={preset.title} className={PRESET_IMAGE_CLASSES[index]} />
+                          ))}
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}

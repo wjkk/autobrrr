@@ -110,6 +110,11 @@ async function main() {
     model: 'nano-banana-2',
     aspectRatios: ['1:1', '9:16', '16:9'],
   });
+  const platouGeminiImage = await upsertFamily('platou-gemini-image', 'Platou Gemini Image', 'IMAGE', {
+    provider: 'platou',
+    model: 'gemini-3.1-flash-image-preview',
+    aspectRatios: ['1:1', '9:16', '16:9'],
+  });
   const platouVeo = await upsertFamily('platou-veo-video', 'Platou Veo Video', 'VIDEO', {
     provider: 'platou',
     model: 'veo3.1',
@@ -185,13 +190,26 @@ async function main() {
   });
 
   await upsertEndpoint({
+    slug: 'platou-gemini-3-1-flash-image-preview',
+    familyId: platouGeminiImage.id,
+    providerId: platou.id,
+    remoteModelKey: 'gemini-3.1-flash-image-preview',
+    label: 'Gemini 3.1 Flash Image Preview',
+    priority: 5,
+    isDefault: true,
+    defaultParamsJson: {
+      aspectRatio: '9:16',
+    },
+  });
+
+  await upsertEndpoint({
     slug: 'platou-nano-banana',
     familyId: platouImage.id,
     providerId: platou.id,
     remoteModelKey: 'nano-banana-2',
     label: 'Nano Banana 2',
-    priority: 10,
-    isDefault: true,
+    priority: 15,
+    isDefault: false,
     defaultParamsJson: {
       aspectRatio: '9:16',
     },

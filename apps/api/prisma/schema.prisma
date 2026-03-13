@@ -338,6 +338,10 @@ model UserProviderConfig {
   baseUrlOverride String?       @map("base_url_override") @db.VarChar(2048)
   enabled         Boolean       @default(true)
   optionsJson     Json?         @map("options_json")
+  lastTestStatus  String?       @map("last_test_status") @db.VarChar(32)
+  lastTestMessage String?       @map("last_test_message") @db.Text
+  lastTestAt      DateTime?     @map("last_test_at")
+  lastTestEndpointSlug String?  @map("last_test_endpoint_slug") @db.VarChar(120)
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
   user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)

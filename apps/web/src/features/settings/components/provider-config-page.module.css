@@ -331,6 +331,11 @@
   line-height: 1.6;
 }
 
+.asideCard p + p {
+  margin-top: 8px;
+  color: #0f172a;
+}
+
 .form {
   display: grid;
   gap: 14px;

@@ -46,6 +46,10 @@ function mapProviderConfig(args: {
     apiKey: string | null;
     baseUrlOverride: string | null;
     optionsJson: unknown;
+    lastTestStatus?: string | null;
+    lastTestMessage?: string | null;
+    lastTestAt?: Date | null;
+    lastTestEndpointSlug?: string | null;
     updatedAt: Date;
   } | null;
 }) {
@@ -79,6 +83,12 @@ function mapProviderConfig(args: {
             imageEndpointSlug: typeof options.imageEndpointSlug === 'string' ? options.imageEndpointSlug : null,
             videoEndpointSlug: typeof options.videoEndpointSlug === 'string' ? options.videoEndpointSlug : null,
           },
+          lastTest: {
+            status: args.config.lastTestStatus ?? null,
+            message: args.config.lastTestMessage ?? null,
+            endpointSlug: args.config.lastTestEndpointSlug ?? null,
+            testedAt: args.config.lastTestAt?.toISOString() ?? null,
+          },
           updatedAt: args.config.updatedAt.toISOString(),
         }
       : {
@@ -91,6 +101,12 @@ function mapProviderConfig(args: {
             textEndpointSlug: null,
             imageEndpointSlug: null,
             videoEndpointSlug: null,
+          },
+          lastTest: {
+            status: null,
+            message: null,
+            endpointSlug: null,
+            testedAt: null,
           },
           updatedAt: null,
         },
@@ -170,6 +186,18 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
         userConfigs: {
           where: { userId: user.id },
           take: 1,
+          select: {
+            id: true,
+            enabled: true,
+            apiKey: true,
+            baseUrlOverride: true,
+            optionsJson: true,
+            lastTestStatus: true,
+            lastTestMessage: true,
+            lastTestAt: true,
+            lastTestEndpointSlug: true,
+            updatedAt: true,
+          },
         },
       },
     });
@@ -214,13 +242,37 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
 
     const provider = await prisma.modelProvider.findUnique({
       where: { code: params.data.providerCode },
-      select: {
-        id: true,
-        code: true,
-        name: true,
-        providerType: true,
-        baseUrl: true,
-        enabled: true,
+      include: {
+        endpoints: {
+          where: {
+            status: 'ACTIVE',
+          },
+          include: {
+            family: {
+              select: {
+                slug: true,
+                modelKind: true,
+              },
+            },
+          },
+          orderBy: [{ family: { modelKind: 'asc' } }, { priority: 'asc' }, { createdAt: 'asc' }],
+        },
+        userConfigs: {
+          where: { userId: user.id },
+          take: 1,
+          select: {
+            id: true,
+            enabled: true,
+            apiKey: true,
+            baseUrlOverride: true,
+            optionsJson: true,
+            lastTestStatus: true,
+            lastTestMessage: true,
+            lastTestAt: true,
+            lastTestEndpointSlug: true,
+            updatedAt: true,
+          },
+        },
       },
     });
 
@@ -298,6 +350,10 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
         apiKey: true,
         baseUrlOverride: true,
         optionsJson: true,
+        lastTestStatus: true,
+        lastTestMessage: true,
+        lastTestAt: true,
+        lastTestEndpointSlug: true,
         updatedAt: true,
       },
     });
@@ -386,6 +442,18 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
 
     const config = provider.userConfigs[0] ?? null;
     if (!config?.enabled || !config.apiKey) {
+      await prisma.userProviderConfig.updateMany({
+        where: {
+          userId: user.id,
+          providerId: provider.id,
+        },
+        data: {
+          lastTestStatus: 'failed',
+          lastTestMessage: 'This provider is not configured for the current user.',
+          lastTestAt: new Date(),
+          lastTestEndpointSlug: null,
+        },
+      });
       return reply.code(400).send({
         ok: false,
         error: {
@@ -435,6 +503,18 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
 
     const baseUrl = config.baseUrlOverride ?? provider.baseUrl;
     if (!baseUrl) {
+      await prisma.userProviderConfig.updateMany({
+        where: {
+          userId: user.id,
+          providerId: provider.id,
+        },
+        data: {
+          lastTestStatus: 'failed',
+          lastTestMessage: 'This provider requires a base URL to be configured.',
+          lastTestAt: new Date(),
+          lastTestEndpointSlug: testEndpoint.slug,
+        },
+      });
       return reply.code(400).send({
         ok: false,
         error: {
@@ -469,6 +549,18 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
         });
       }
     } catch (error) {
+      await prisma.userProviderConfig.updateMany({
+        where: {
+          userId: user.id,
+          providerId: provider.id,
+        },
+        data: {
+          lastTestStatus: 'failed',
+          lastTestMessage: error instanceof Error ? error.message : 'Provider test failed.',
+          lastTestAt: new Date(),
+          lastTestEndpointSlug: testEndpoint.slug,
+        },
+      });
       return reply.code(400).send({
         ok: false,
         error: {
@@ -477,6 +569,19 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
         },
       });
     }
+
+    await prisma.userProviderConfig.updateMany({
+      where: {
+        userId: user.id,
+        providerId: provider.id,
+      },
+      data: {
+        lastTestStatus: 'passed',
+        lastTestMessage: 'Provider connectivity test succeeded.',
+        lastTestAt: new Date(),
+        lastTestEndpointSlug: testEndpoint.slug,
+      },
+    });
 
     return reply.send({
       ok: true,

@@ -423,6 +423,22 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                       <strong>{item.userConfig.configured ? '已写入密钥' : '尚未配置'}</strong>
                       <p>{item.userConfig.updatedAt ? `最近更新：${new Date(item.userConfig.updatedAt).toLocaleString('zh-CN')}` : '首次保存后立即生效。'}</p>
                     </div>
+                    <div className={styles.asideCard}>
+                      <small>最近一次测试</small>
+                      <strong>
+                        {item.userConfig.lastTest.status === 'passed'
+                          ? '连接成功'
+                          : item.userConfig.lastTest.status === 'failed'
+                            ? '连接失败'
+                            : '尚未测试'}
+                      </strong>
+                      <p>
+                        {item.userConfig.lastTest.testedAt
+                          ? `${new Date(item.userConfig.lastTest.testedAt).toLocaleString('zh-CN')} · ${item.userConfig.lastTest.endpointSlug ?? '未记录模型'}`
+                          : '保存后会自动跑一次测试，也可以手动点击“测试连接”。'}
+                      </p>
+                      {item.userConfig.lastTest.message ? <p>{item.userConfig.lastTest.message}</p> : null}
+                    </div>
                   </aside>
 
                   <div className={styles.form}>

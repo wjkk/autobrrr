@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 
 import { resolveProjectStage } from '@/features/shared/lib/project-stage';
-import { fetchStudioProject } from '@/lib/studio-service';
+import { requestAivApiFromServer } from '@/lib/aiv-api';
 
 interface ProjectEntryPageProps {
   params: Promise<{ projectId: string }>;
@@ -9,12 +9,15 @@ interface ProjectEntryPageProps {
 
 export default async function ProjectEntryPage({ params }: ProjectEntryPageProps) {
   const { projectId } = await params;
-  const studio = await fetchStudioProject(projectId);
+  const project = await requestAivApiFromServer<{
+    id: string;
+    status: string;
+  }>(`/api/studio/projects/${encodeURIComponent(projectId)}`, { allowNotFound: true });
 
-  if (!studio) {
+  if (!project) {
     notFound();
   }
 
-  const stage = resolveProjectStage(studio.project.status);
+  const stage = resolveProjectStage(project.status as Parameters<typeof resolveProjectStage>[0]);
   redirect(`/projects/${projectId}/${stage}`);
 }

@@ -1,5 +1,4 @@
-import type { ContinueProjectCard, MockStudioScenarioId, ProjectContentMode, StudioFixture } from '@aiv/domain';
-import { createRuntimeStudioFixture, getMockStudioProject, getMockStudioScenario, listMockStudioProjects } from '@aiv/mock-data';
+import type { ContinueProjectCard, ProjectContentMode, StudioFixture } from '@aiv/domain';
 
 interface ApiErrorPayload {
   code?: string;
@@ -13,9 +12,6 @@ type ApiEnvelope<T> =
 
 const DEFAULT_STUDIO_API_BASE_URL = 'http://localhost:8787';
 const DEFAULT_TIMEOUT_MS = 10_000;
-const DEFAULT_DATA_SOURCE_MODE = 'hybrid' as const;
-type StudioDataSourceMode = 'api' | 'hybrid' | 'mock';
-
 class StudioServiceError extends Error {
   code: string;
   status?: number;
@@ -38,15 +34,6 @@ function resolveTimeoutMs() {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
 }
 
-function resolveDataSourceMode(): StudioDataSourceMode {
-  const raw = process.env.AIV_STUDIO_DATA_SOURCE?.trim().toLowerCase();
-  if (raw === 'api' || raw === 'hybrid' || raw === 'mock') {
-    return raw;
-  }
-
-  return DEFAULT_DATA_SOURCE_MODE;
-}
-
 function isApiEnvelope<T>(value: unknown): value is ApiEnvelope<T> {
   if (!value || typeof value !== 'object') {
     return false;
@@ -66,12 +53,6 @@ function resolveErrorMessage(payload: unknown, fallback: string) {
   return fallback;
 }
 
-interface RequestWithFallbackOptions<T> {
-  path: string;
-  fallback: () => T;
-  allowNotFound?: boolean;
-}
-
 export interface CreateStudioProjectInput {
   prompt: string;
   contentMode: ProjectContentMode;
@@ -86,40 +67,6 @@ export interface CreateStudioProjectResult {
     contentMode: ProjectContentMode;
     status: string;
   };
-}
-
-function logMockFallback(path: string, reason: string) {
-  console.warn(`[studio-service] falling back to mock data for ${path}: ${reason}`);
-}
-
-async function requestStudioWithFallback<T>({ path, fallback, allowNotFound }: RequestWithFallbackOptions<T>): Promise<T> {
-  const dataSourceMode = resolveDataSourceMode();
-  if (dataSourceMode === 'mock') {
-    return fallback();
-  }
-
-  try {
-    const result = await requestStudio<T>(path, { allowNotFound });
-    if (result === null && dataSourceMode === 'hybrid') {
-      const mockResult = fallback();
-      logMockFallback(path, 'api returned null');
-      return mockResult;
-    }
-
-    if (result === null) {
-      return result as T;
-    }
-
-    return result;
-  } catch (error) {
-    if (dataSourceMode === 'hybrid') {
-      const reason = error instanceof Error ? error.message : 'unknown API failure';
-      logMockFallback(path, reason);
-      return fallback();
-    }
-
-    throw error;
-  }
 }
 
 async function requestStudio<T>(path: string, options?: { allowNotFound?: boolean }): Promise<T | null> {
@@ -198,33 +145,14 @@ async function requestStudio<T>(path: string, options?: { allowNotFound?: boolea
   }
 }
 
-export async function fetchExploreStudio(): Promise<StudioFixture> {
-  return requestStudioWithFallback<StudioFixture>({
-    path: '/api/studio/explore',
-    fallback: () => getMockStudioScenario('partial_failed'),
-  });
-}
-
 export async function fetchStudioProject(projectId: string): Promise<StudioFixture | null> {
-  return requestStudioWithFallback<StudioFixture | null>({
-    path: `/api/studio/projects/${encodeURIComponent(projectId)}`,
+  return requestStudio<StudioFixture | null>(`/api/studio/projects/${encodeURIComponent(projectId)}`, {
     allowNotFound: true,
-    fallback: () => getMockStudioProject(projectId),
-  });
-}
-
-export async function fetchStudioScenario(scenarioId: MockStudioScenarioId): Promise<StudioFixture> {
-  return requestStudioWithFallback<StudioFixture>({
-    path: `/api/studio/scenarios/${encodeURIComponent(scenarioId)}`,
-    fallback: () => getMockStudioScenario(scenarioId),
   });
 }
 
 export async function fetchContinueProjects(): Promise<ContinueProjectCard[]> {
-  return requestStudioWithFallback<ContinueProjectCard[]>({
-    path: '/api/studio/projects',
-    fallback: () => listMockStudioProjects(),
-  });
+  return (await requestStudio<ContinueProjectCard[]>('/api/studio/projects')) ?? [];
 }
 
 async function createStudioProjectViaLocalRoute(input: CreateStudioProjectInput): Promise<CreateStudioProjectResult> {
@@ -267,15 +195,5 @@ export async function createStudioProject(input: CreateStudioProjectInput): Prom
     return createStudioProjectViaLocalRoute(payload);
   }
 
-  const studio = createRuntimeStudioFixture(payload);
-  return {
-    projectId: studio.project.id,
-    redirectUrl: `/projects/${studio.project.id}/planner`,
-    project: {
-      id: studio.project.id,
-      title: studio.project.title,
-      contentMode: studio.project.contentMode,
-      status: studio.project.status,
-    },
-  };
+  throw new StudioServiceError('createStudioProject should be called from the client.', 'STUDIO_CREATE_PROJECT_CLIENT_ONLY');
 }

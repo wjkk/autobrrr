@@ -112,7 +112,7 @@ async function main() {
   });
   const platouVeo = await upsertFamily('platou-veo-video', 'Platou Veo Video', 'VIDEO', {
     provider: 'platou',
-    model: 'veo3.1-fast',
+    model: 'veo3.1',
     durations: [4, 6, 8],
     aspectRatios: ['9:16', '16:9', '1:1'],
   });
@@ -267,13 +267,28 @@ async function main() {
   });
 
   await upsertEndpoint({
+    slug: 'platou-veo-3-1',
+    familyId: platouVeo.id,
+    providerId: platou.id,
+    remoteModelKey: 'veo3.1',
+    label: 'Veo 3.1',
+    priority: 10,
+    isDefault: true,
+    defaultParamsJson: {
+      durationSeconds: 4,
+      aspectRatio: '9:16',
+      resolution: '1080p',
+    },
+  });
+
+  await upsertEndpoint({
     slug: 'platou-veo-fast',
     familyId: platouVeo.id,
     providerId: platou.id,
     remoteModelKey: 'veo3.1-fast',
     label: 'Veo 3.1 Fast',
-    priority: 10,
-    isDefault: true,
+    priority: 20,
+    isDefault: false,
     defaultParamsJson: {
       durationSeconds: 4,
       aspectRatio: '9:16',
@@ -287,7 +302,7 @@ async function main() {
     providerId: platou.id,
     remoteModelKey: 'veo3.1-pro-4k',
     label: 'Veo 3.1 Pro 4K',
-    priority: 20,
+    priority: 30,
     isDefault: false,
     defaultParamsJson: {
       durationSeconds: 4,
@@ -302,7 +317,7 @@ async function main() {
     providerId: platou.id,
     remoteModelKey: 'veo3.1-fast-components',
     label: 'Veo 3.1 Fast Components',
-    priority: 30,
+    priority: 40,
     isDefault: false,
     defaultParamsJson: {
       durationSeconds: 4,

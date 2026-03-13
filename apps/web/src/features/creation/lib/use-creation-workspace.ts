@@ -79,6 +79,11 @@ async function requestCreationApi<T>(path: string, init?: RequestInit) {
   return payload.data;
 }
 
+interface VideoFrameOptions {
+  firstFrameUrl?: string;
+  lastFrameUrl?: string;
+}
+
 interface UseCreationWorkspaceOptions {
   studio: StudioFixture;
   runtimeApi?: CreationRuntimeApiContext;
@@ -192,13 +197,15 @@ export function useCreationWorkspace({ studio, runtimeApi, initialShotId, initia
     generationTimersRef.current.delete(targetShotId);
   };
 
-  const toApiVideoPayload = () => ({
+  const toApiVideoPayload = (frameOptions?: VideoFrameOptions) => ({
     durationSeconds: generateDraft.durationMode === '6s' ? 6 : 4,
     aspectRatio: activeShot?.canvasTransform.ratio ?? '9:16',
     resolution: generateDraft.resolution === '1080P' ? '1080p' : '720p',
+    ...(frameOptions?.firstFrameUrl ? { firstFrameUrl: frameOptions.firstFrameUrl } : {}),
+    ...(frameOptions?.lastFrameUrl ? { lastFrameUrl: frameOptions.lastFrameUrl } : {}),
   });
 
-  const submitRunViaApi = async (targetShotId: string, mediaKind: 'image' | 'video') => {
+  const submitRunViaApi = async (targetShotId: string, mediaKind: 'image' | 'video', frameOptions?: VideoFrameOptions) => {
     if (!runtimeApi) {
       return false;
     }
@@ -209,7 +216,7 @@ export function useCreationWorkspace({ studio, runtimeApi, initialShotId, initia
 
     const payload = mediaKind === 'image'
       ? { options: { aspectRatio: activeShot?.canvasTransform.ratio ?? '9:16' } }
-      : toApiVideoPayload();
+      : toApiVideoPayload(frameOptions);
 
     const result = await requestCreationApi<{ run: { id: string } }>(path, {
       method: 'POST',
@@ -346,7 +353,7 @@ export function useCreationWorkspace({ studio, runtimeApi, initialShotId, initia
     generationTimersRef.current.set(targetShotId, timer);
   };
 
-  const submitInlineGeneration = (mediaKind: 'image' | 'video' = 'video') => {
+  const submitInlineGeneration = (mediaKind: 'image' | 'video' = 'video', frameOptions?: VideoFrameOptions) => {
     if (!activeShot) {
       return;
     }
@@ -356,7 +363,7 @@ export function useCreationWorkspace({ studio, runtimeApi, initialShotId, initia
     setCreation((current) => startShotGenerationState(current, targetShotId, generateDraft));
 
     if (runtimeApi) {
-      submitRunViaApi(targetShotId, mediaKind).catch(() => {
+      submitRunViaApi(targetShotId, mediaKind, frameOptions).catch(() => {
         const timer = setTimeout(() => {
           setCreation((current) => finishShotGenerationState(current, targetShotId, generateDraft.model, mediaKind));
           setNotice(null);

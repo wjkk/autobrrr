@@ -309,7 +309,15 @@ export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps
       setVideoThreadVisible(true);
     }
 
-    controller.submitInlineGeneration(composerMode === 'video' ? 'video' : 'image');
+    controller.submitInlineGeneration(
+      composerMode === 'video' ? 'video' : 'image',
+      composerMode === 'video'
+        ? {
+            ...(sourceImageUrl ? { firstFrameUrl: sourceImageUrl } : {}),
+            ...(tailFramePreviewUrl ? { lastFrameUrl: tailFramePreviewUrl } : {}),
+          }
+        : undefined,
+    );
   };
 
   const applyPromptAssist = (suffix: string) => {
@@ -427,7 +435,22 @@ export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps
                     <button type="button" className={styles.resultHoverAction} aria-label="打开素材" onClick={controller.openMaterialsDialog}>
                       <CreationIcon name="image" className={styles.smallIcon} />
                     </button>
-                    <button type="button" className={styles.resultHoverAction} aria-label="重新生成" onClick={() => controller.submitInlineGeneration(videoThreadVisible ? 'video' : 'image')}>
+                    <button
+                      type="button"
+                      className={styles.resultHoverAction}
+                      aria-label="重新生成"
+                      onClick={() =>
+                        controller.submitInlineGeneration(
+                          videoThreadVisible ? 'video' : 'image',
+                          videoThreadVisible
+                            ? {
+                                ...(sourceImageUrl ? { firstFrameUrl: sourceImageUrl } : {}),
+                                ...(tailFramePreviewUrl ? { lastFrameUrl: tailFramePreviewUrl } : {}),
+                              }
+                            : undefined,
+                        )
+                      }
+                    >
                       <CreationIcon name="retry" className={styles.smallIcon} />
                     </button>
                   </div>

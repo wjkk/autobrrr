@@ -75,6 +75,7 @@ enum AssetSourceKind {
 enum ModelKind {
   IMAGE
   VIDEO
+  TEXT
   AUDIO
   LIPSYNC
 }

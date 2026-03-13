@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
@@ -19,6 +20,21 @@ const callbackPayloadSchema = z.object({
 });
 
 const terminalStatuses = new Set(['COMPLETED', 'FAILED', 'CANCELED', 'TIMED_OUT']);
+
+function mergeProviderOutput(run: { outputJson: unknown }, providerOutput?: Record<string, unknown>) {
+  if (!providerOutput) {
+    return undefined;
+  }
+
+  const currentOutput = run.outputJson && typeof run.outputJson === 'object' && !Array.isArray(run.outputJson)
+    ? (run.outputJson as Record<string, unknown>)
+    : {};
+
+  return {
+    ...currentOutput,
+    providerData: providerOutput,
+  } as Prisma.InputJsonValue;
+}
 
 export async function registerProviderCallbackRoutes(app: FastifyInstance) {
   app.post('/api/internal/provider-callbacks/:callbackToken', async (request, reply) => {
@@ -100,6 +116,7 @@ export async function registerProviderCallbackRoutes(app: FastifyInstance) {
           providerStatus: update.providerStatus,
           nextPollAt: update.nextPollAt,
           startedAt: run.startedAt ?? new Date(),
+          outputJson: mergeProviderOutput(run, update.providerOutput ?? payload.data.output),
         },
       });
 
@@ -117,6 +134,7 @@ export async function registerProviderCallbackRoutes(app: FastifyInstance) {
         providerStatus: update.providerStatus,
         nextPollAt: null,
         startedAt: run.startedAt ?? new Date(),
+        outputJson: mergeProviderOutput(run, update.providerOutput ?? payload.data.output),
       },
     });
 

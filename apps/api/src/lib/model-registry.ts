@@ -9,7 +9,7 @@ export interface ResolvedModelSelection {
 }
 
 export interface ResolveModelSelectionInput {
-  modelKind: 'IMAGE' | 'VIDEO' | 'AUDIO' | 'LIPSYNC';
+  modelKind: 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO' | 'LIPSYNC';
   familySlug?: string;
   endpointSlug?: string;
   strategy?: 'preferOfficial' | 'preferLowestCost' | 'preferFastest' | 'default';

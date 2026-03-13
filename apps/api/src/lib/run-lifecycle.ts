@@ -39,6 +39,39 @@ function readObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
+function findStringDeep(value: unknown, keys: string[]): string | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  for (const key of keys) {
+    const direct = typeof record[key] === 'string' && record[key] ? (record[key] as string) : null;
+    if (direct) {
+      return direct;
+    }
+  }
+
+  for (const nested of Object.values(record)) {
+    const found = findStringDeep(nested, keys);
+    if (found) {
+      return found;
+    }
+  }
+
+  return null;
+}
+
+function resolveProviderSourceUrl(run: Run, mediaKind: SupportedMediaKind) {
+  const providerData = readObject(run.outputJson).providerData;
+  const providerUrl = findStringDeep(providerData, ['uri', 'url', 'downloadUrl']);
+  if (providerUrl) {
+    return providerUrl;
+  }
+
+  return buildGeneratedAssetUrl(run.id, mediaKind);
+}
+
 function parseVideoOptions(run: Run) {
   const input = readObject(run.inputJson);
   const options = readObject(input.options);
@@ -150,7 +183,7 @@ export async function finalizeGeneratedRun(run: Run, mediaKind: SupportedMediaKi
         width: dimensions.width,
         height: dimensions.height,
         durationMs: dimensions.durationMs,
-        sourceUrl: buildGeneratedAssetUrl(run.id, mediaKind),
+        sourceUrl: resolveProviderSourceUrl(run, mediaKind),
         metadataJson: {
           runId: run.id,
           prompt,
@@ -196,6 +229,7 @@ export async function finalizeGeneratedRun(run: Run, mediaKind: SupportedMediaKi
         status: 'COMPLETED',
         providerStatus: run.providerStatus ?? (run.providerJobId ? 'succeeded' : null),
         outputJson: {
+          ...readObject(run.outputJson),
           assetId: asset.id,
           shotVersionId: version.id,
           activeVersionId: version.id,

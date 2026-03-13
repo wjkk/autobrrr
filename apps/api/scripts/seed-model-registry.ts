@@ -1,6 +1,6 @@
 import { prisma } from '../src/lib/prisma.js';
 
-async function upsertFamily(slug: string, name: string, modelKind: 'IMAGE' | 'VIDEO', capabilityJson: Record<string, unknown>) {
+async function upsertFamily(slug: string, name: string, modelKind: 'IMAGE' | 'VIDEO' | 'TEXT', capabilityJson: Record<string, unknown>) {
   return prisma.modelFamily.upsert({
     where: { slug },
     update: {
@@ -79,9 +79,26 @@ async function main() {
   const sekoVideo = await upsertFamily('seko-video', 'Seko Video', 'VIDEO', {
     durations: [4, 6, 8],
   });
+  const geminiImage = await upsertFamily('gemini-image', 'Gemini Image', 'IMAGE', {
+    provider: 'aicso',
+    model: 'gemini-3.1-flash-image-preview',
+    aspectRatios: ['1:1', '9:16', '16:9'],
+  });
+  const geminiText = await upsertFamily('gemini-text', 'Gemini Text', 'TEXT', {
+    provider: 'aicso',
+    model: 'gemini-3.1-flash-lite-preview',
+    modalities: ['text'],
+  });
+  const veoVideo = await upsertFamily('veo-video', 'Veo Video', 'VIDEO', {
+    provider: 'aicso',
+    model: 'veo_3_1-fast-4K',
+    durations: [4, 6, 8],
+    aspectRatios: ['9:16', '16:9', '1:1'],
+  });
 
   const officialSeko = await upsertProvider('official-seko', 'Seko Official', 'OFFICIAL', 'https://api.seko.local');
   const proxyA = await upsertProvider('proxy-hub-a', 'Proxy Hub A', 'PROXY', 'https://proxy-hub-a.local');
+  const aicso = await upsertProvider('aicso', 'AICSO', 'PROXY', 'https://api.aicso.top');
 
   await upsertEndpoint({
     slug: 'official-seko-image-v1',
@@ -89,8 +106,8 @@ async function main() {
     providerId: officialSeko.id,
     remoteModelKey: 'seko-image-v1',
     label: 'Seko Image V1',
-    priority: 10,
-    isDefault: true,
+    priority: 20,
+    isDefault: false,
     defaultParamsJson: {
       aspectRatio: '2:3',
     },
@@ -102,11 +119,35 @@ async function main() {
     providerId: proxyA.id,
     remoteModelKey: 'proxy/seko-image-v1',
     label: 'Seko Image V1 Proxy',
-    priority: 20,
+    priority: 30,
     isDefault: false,
     defaultParamsJson: {
       aspectRatio: '2:3',
     },
+  });
+
+  await upsertEndpoint({
+    slug: 'aicso-gemini-image-preview',
+    familyId: geminiImage.id,
+    providerId: aicso.id,
+    remoteModelKey: 'gemini-3.1-flash-image-preview',
+    label: 'Gemini 3.1 Flash Image Preview',
+    priority: 5,
+    isDefault: true,
+    defaultParamsJson: {
+      aspectRatio: '9:16',
+    },
+  });
+
+  await upsertEndpoint({
+    slug: 'aicso-gemini-text-lite-preview',
+    familyId: geminiText.id,
+    providerId: aicso.id,
+    remoteModelKey: 'gemini-3.1-flash-lite-preview',
+    label: 'Gemini 3.1 Flash Lite Preview',
+    priority: 5,
+    isDefault: true,
+    defaultParamsJson: {},
   });
 
   await upsertEndpoint({
@@ -115,8 +156,8 @@ async function main() {
     providerId: officialSeko.id,
     remoteModelKey: 'seko-video-v1',
     label: 'Seko Video V1',
-    priority: 10,
-    isDefault: true,
+    priority: 20,
+    isDefault: false,
     defaultParamsJson: {
       durationSeconds: 4,
       aspectRatio: '9:16',
@@ -129,11 +170,26 @@ async function main() {
     providerId: proxyA.id,
     remoteModelKey: 'proxy/seko-video-v1',
     label: 'Seko Video V1 Proxy',
-    priority: 20,
+    priority: 30,
     isDefault: false,
     defaultParamsJson: {
       durationSeconds: 4,
       aspectRatio: '9:16',
+    },
+  });
+
+  await upsertEndpoint({
+    slug: 'aicso-veo-fast-4k',
+    familyId: veoVideo.id,
+    providerId: aicso.id,
+    remoteModelKey: 'veo_3_1-fast-4K',
+    label: 'Veo 3.1 Fast 4K',
+    priority: 5,
+    isDefault: true,
+    defaultParamsJson: {
+      durationSeconds: 4,
+      aspectRatio: '9:16',
+      resolution: '1080p',
     },
   });
 

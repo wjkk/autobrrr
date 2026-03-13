@@ -6,16 +6,16 @@ import { resolveModelSelection } from '../lib/model-registry.js';
 import { prisma } from '../lib/prisma.js';
 
 const listFamiliesQuerySchema = z.object({
-  modelKind: z.enum(['image', 'video', 'audio', 'lipsync']).optional(),
+  modelKind: z.enum(['image', 'video', 'text', 'audio', 'lipsync']).optional(),
 });
 
 const listEndpointsQuerySchema = z.object({
   familySlug: z.string().trim().min(1).optional(),
-  modelKind: z.enum(['image', 'video', 'audio', 'lipsync']).optional(),
+  modelKind: z.enum(['image', 'video', 'text', 'audio', 'lipsync']).optional(),
 });
 
 const resolveSchema = z.object({
-  modelKind: z.enum(['image', 'video', 'audio', 'lipsync']),
+  modelKind: z.enum(['image', 'video', 'text', 'audio', 'lipsync']),
   familySlug: z.string().trim().min(1).optional(),
   endpointSlug: z.string().trim().min(1).optional(),
   strategy: z.enum(['preferOfficial', 'preferLowestCost', 'preferFastest', 'default']).optional().default('default'),
@@ -40,7 +40,7 @@ export async function registerModelRegistryRoutes(app: FastifyInstance) {
     }
 
     const families = await prisma.modelFamily.findMany({
-      where: query.data.modelKind ? { modelKind: query.data.modelKind.toUpperCase() as 'IMAGE' | 'VIDEO' | 'AUDIO' | 'LIPSYNC' } : undefined,
+      where: query.data.modelKind ? { modelKind: query.data.modelKind.toUpperCase() as 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO' | 'LIPSYNC' } : undefined,
       orderBy: [{ modelKind: 'asc' }, { slug: 'asc' }],
     });
 
@@ -76,7 +76,7 @@ export async function registerModelRegistryRoutes(app: FastifyInstance) {
     const endpoints = await prisma.modelEndpoint.findMany({
       where: {
         ...(query.data.familySlug ? { family: { slug: query.data.familySlug } } : {}),
-        ...(query.data.modelKind ? { family: { ...(query.data.familySlug ? { slug: query.data.familySlug } : {}), modelKind: query.data.modelKind.toUpperCase() as 'IMAGE' | 'VIDEO' | 'AUDIO' | 'LIPSYNC' } } : {}),
+        ...(query.data.modelKind ? { family: { ...(query.data.familySlug ? { slug: query.data.familySlug } : {}), modelKind: query.data.modelKind.toUpperCase() as 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO' | 'LIPSYNC' } } : {}),
       },
       include: {
         family: true,
@@ -132,7 +132,7 @@ export async function registerModelRegistryRoutes(app: FastifyInstance) {
     }
 
     const resolved = await resolveModelSelection({
-      modelKind: payload.data.modelKind.toUpperCase() as 'IMAGE' | 'VIDEO' | 'AUDIO' | 'LIPSYNC',
+      modelKind: payload.data.modelKind.toUpperCase() as 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO' | 'LIPSYNC',
       familySlug: payload.data.familySlug,
       endpointSlug: payload.data.endpointSlug,
       strategy: payload.data.strategy,

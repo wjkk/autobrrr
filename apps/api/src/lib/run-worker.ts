@@ -1,8 +1,24 @@
+import { Prisma } from '@prisma/client';
 import type { Run } from '@prisma/client';
 
-import { resolveProviderAdapter } from './provider-adapters.js';
+import { resolveProviderAdapter, type ProviderAdapterUpdate } from './provider-adapters.js';
 import { prisma } from './prisma.js';
 import { failRun, finalizeGeneratedRun, inferMediaKindFromRunType } from './run-lifecycle.js';
+
+function buildProviderOutputJson(run: Run, update: ProviderAdapterUpdate) {
+  if (!('providerOutput' in update) || !update.providerOutput) {
+    return undefined;
+  }
+
+  const currentOutput = run.outputJson && typeof run.outputJson === 'object' && !Array.isArray(run.outputJson)
+    ? (run.outputJson as Record<string, unknown>)
+    : {};
+
+  return {
+    ...currentOutput,
+    providerData: update.providerOutput,
+  } as Prisma.InputJsonValue;
+}
 
 export type WorkerAction =
   | { runId: string; status: string; action: 'submitted'; providerJobId: string }
@@ -24,6 +40,7 @@ async function handleProviderSubmission(run: Run): Promise<WorkerAction> {
       data: {
         providerStatus: update.providerStatus,
         nextPollAt: null,
+        outputJson: buildProviderOutputJson(run, update),
       },
     });
 
@@ -46,6 +63,7 @@ async function handleProviderSubmission(run: Run): Promise<WorkerAction> {
       providerCallbackToken: update.providerCallbackToken ?? run.providerCallbackToken,
       providerStatus: update.providerStatus,
       nextPollAt: update.nextPollAt,
+      outputJson: buildProviderOutputJson(run, update),
     },
   });
 
@@ -73,6 +91,7 @@ async function handleProviderPoll(run: Run): Promise<WorkerAction> {
         pollAttemptCount: run.pollAttemptCount + 1,
         lastPolledAt: new Date(),
         nextPollAt: update.nextPollAt,
+        outputJson: buildProviderOutputJson(run, update),
       },
     });
 
@@ -95,6 +114,7 @@ async function handleProviderPoll(run: Run): Promise<WorkerAction> {
       pollAttemptCount: run.pollAttemptCount + 1,
       lastPolledAt: new Date(),
       nextPollAt: null,
+      outputJson: buildProviderOutputJson(run, update),
     },
   });
 

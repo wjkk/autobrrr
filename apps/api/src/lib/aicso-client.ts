@@ -6,6 +6,24 @@ interface AicsoRequestOptions {
   method?: 'GET' | 'POST';
 }
 
+export class AicsoApiError extends Error {
+  status: number;
+  payload?: unknown;
+
+  constructor(message: string, status: number, payload?: unknown) {
+    super(message);
+    this.name = 'AicsoApiError';
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
+export interface AicsoTextSubmissionResult {
+  modelUsed: string;
+  attemptedModels: string[];
+  response: Record<string, unknown>;
+}
+
 function resolveToken() {
   const token = env.AICSO_API_TOKEN?.trim();
   return token ? token : null;
@@ -33,14 +51,37 @@ async function requestAicso<T>({ path, body, method = 'POST' }: AicsoRequestOpti
 
   const payload = (await response.json()) as T & { error?: { message?: string } };
   if (!response.ok) {
-    throw new Error(payload.error?.message ?? `AICSO request failed: ${path}`);
+    throw new AicsoApiError(payload.error?.message ?? `AICSO request failed: ${path}`, response.status, payload);
   }
 
   return payload;
 }
 
+function isGeminiModel(model: string) {
+  return model.startsWith('gemini-');
+}
+
+function shouldRetryWithFallback(error: unknown) {
+  if (!(error instanceof AicsoApiError)) {
+    return false;
+  }
+
+  if (error.status === 503) {
+    return true;
+  }
+
+  return /no available channels?/i.test(error.message);
+}
+
 export function isAicsoConfigured() {
   return !!resolveToken();
+}
+
+export function resolveAicsoTextFallbackModels() {
+  return (env.AICSO_TEXT_FALLBACK_MODELS ?? '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 export async function submitAicsoImageGeneration(args: { model: string; prompt: string }) {
@@ -63,7 +104,7 @@ export async function submitAicsoImageGeneration(args: { model: string; prompt: 
   });
 }
 
-export async function submitAicsoTextGeneration(args: { model: string; prompt: string }) {
+export async function submitAicsoGeminiTextGeneration(args: { model: string; prompt: string }) {
   return requestAicso<Record<string, unknown>>({
     path: `/v1beta/models/${encodeURIComponent(args.model)}:generateContent`,
     body: {
@@ -78,6 +119,50 @@ export async function submitAicsoTextGeneration(args: { model: string; prompt: s
       ],
     },
   });
+}
+
+export async function submitAicsoChatTextGeneration(args: { model: string; prompt: string }) {
+  return requestAicso<Record<string, unknown>>({
+    path: '/v1/chat/completions',
+    body: {
+      model: args.model,
+      messages: [
+        {
+          role: 'user',
+          content: args.prompt,
+        },
+      ],
+    },
+  });
+}
+
+export async function submitAicsoTextGenerationWithFallback(args: { primaryModel: string; fallbackModels: string[]; prompt: string }): Promise<AicsoTextSubmissionResult> {
+  const attemptedModels: string[] = [];
+  const models = [args.primaryModel, ...args.fallbackModels.filter((item) => item !== args.primaryModel)];
+  let lastError: unknown;
+
+  for (const model of models) {
+    attemptedModels.push(model);
+
+    try {
+      const response = isGeminiModel(model)
+        ? await submitAicsoGeminiTextGeneration({ model, prompt: args.prompt })
+        : await submitAicsoChatTextGeneration({ model, prompt: args.prompt });
+
+      return {
+        modelUsed: model,
+        attemptedModels,
+        response,
+      };
+    } catch (error) {
+      lastError = error;
+      if (!shouldRetryWithFallback(error) || attemptedModels.length === models.length) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('AICSO text fallback failed.');
 }
 
 export async function submitAicsoVideoGeneration(args: { model: string; prompt: string }) {

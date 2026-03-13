@@ -5,8 +5,9 @@ import type { Run } from '@prisma/client';
 import {
   isAicsoConfigured,
   queryAicsoVideoGeneration,
+  resolveAicsoTextFallbackModels,
   submitAicsoImageGeneration,
-  submitAicsoTextGeneration,
+  submitAicsoTextGenerationWithFallback,
   submitAicsoVideoGeneration,
 } from './aicso-client.js';
 import { env } from './env.js';
@@ -262,11 +263,19 @@ const aicsoAdapter: ProviderAdapter = {
     }
 
     if (getModelKind(run) === 'text') {
-      const response = await submitAicsoTextGeneration({ model, prompt });
+      const response = await submitAicsoTextGenerationWithFallback({
+        primaryModel: model,
+        fallbackModels: resolveAicsoTextFallbackModels(),
+        prompt,
+      });
       return {
         type: 'completed',
         providerStatus: 'succeeded',
-        providerOutput: response,
+        providerOutput: {
+          ...response.response,
+          modelUsed: response.modelUsed,
+          attemptedModels: response.attemptedModels,
+        },
       };
     }
 

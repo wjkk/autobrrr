@@ -84,9 +84,9 @@ async function main() {
     model: 'gemini-3.1-flash-image-preview',
     aspectRatios: ['1:1', '9:16', '16:9'],
   });
-  const geminiText = await upsertFamily('gemini-text', 'Gemini Text', 'TEXT', {
+  const deepseekText = await upsertFamily('deepseek-text', 'DeepSeek Text', 'TEXT', {
     provider: 'aicso',
-    model: 'gemini-3.1-flash-lite-preview',
+    model: 'deepseek-v3',
     modalities: ['text'],
   });
   const veoVideo = await upsertFamily('veo-video', 'Veo Video', 'VIDEO', {
@@ -140,11 +140,11 @@ async function main() {
   });
 
   await upsertEndpoint({
-    slug: 'aicso-gemini-text-lite-preview',
-    familyId: geminiText.id,
+    slug: 'aicso-deepseek-v3',
+    familyId: deepseekText.id,
     providerId: aicso.id,
-    remoteModelKey: 'gemini-3.1-flash-lite-preview',
-    label: 'Gemini 3.1 Flash Lite Preview',
+    remoteModelKey: 'deepseek-v3',
+    label: 'DeepSeek V3',
     priority: 5,
     isDefault: true,
     defaultParamsJson: {},

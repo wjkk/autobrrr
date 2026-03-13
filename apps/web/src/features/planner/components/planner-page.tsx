@@ -328,8 +328,8 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
         body: JSON.stringify({
           episodeId: runtimeApi.episodeId,
           prompt: instruction,
-          modelFamily: 'gemini-text',
-          modelEndpoint: 'aicso-gemini-text-lite-preview',
+          modelFamily: 'deepseek-text',
+          modelEndpoint: 'aicso-deepseek-v3',
         }),
       },
     );

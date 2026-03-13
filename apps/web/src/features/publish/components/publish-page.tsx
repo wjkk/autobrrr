@@ -9,10 +9,13 @@ import { Dialog } from '@/features/shared/components/dialog';
 import { StageLinks } from '@/features/shared/components/stage-links';
 import { publishCopy } from '@/lib/copy';
 
+import type { ApiPublishWorkspace, PublishRuntimeApiContext } from '../lib/publish-api';
 import styles from './publish-page.module.css';
 
 interface PublishPageProps {
   studio: StudioFixture;
+  runtimeApi?: PublishRuntimeApiContext;
+  initialPublishWorkspace?: ApiPublishWorkspace | null;
 }
 
 const HISTORY_CATEGORIES = ['全部', '短剧漫剧', '音乐MV', '知识分享'] as const;
@@ -21,7 +24,7 @@ function resolveInitialHistoryId(studio: StudioFixture) {
   return studio.historyWorks.find((item) => item.title === studio.publish.draft.title)?.id ?? studio.historyWorks[0]?.id ?? null;
 }
 
-export function PublishPage({ studio }: PublishPageProps) {
+export function PublishPage({ studio, runtimeApi, initialPublishWorkspace }: PublishPageProps) {
   const router = useRouter();
   const initialHistoryId = resolveInitialHistoryId(studio);
   const [draft, setDraft] = useState<PublishDraft>(studio.publish.draft);
@@ -42,15 +45,20 @@ export function PublishPage({ studio }: PublishPageProps) {
 
   const selectedHistory = studio.historyWorks.find((item) => item.id === selectedHistoryId) ?? null;
   const pickerSelection = studio.historyWorks.find((item) => item.id === pickerSelectionId) ?? null;
+  const publishSummary = initialPublishWorkspace?.summary ?? null;
 
   const metricSummary = useMemo(
     () => [
-      { label: '当前项目', value: studio.project.title, meta: `${studio.project.aspectRatio} · 待发布` },
+      { label: '当前项目', value: studio.project.title, meta: `${studio.project.aspectRatio} · ${publishSummary?.readyToPublish ? '可发布' : '待发布'}` },
       { label: '历史作品', value: String(studio.historyWorks.length), meta: selectedHistory?.category ?? '未绑定' },
       { label: '当前来源', value: selectedHistory?.title ?? '未选择', meta: selectedHistory?.durationLabel ?? '--:--' },
-      { label: '发布状态', value: draft.status === 'submitted' ? 'Submitted' : 'Draft', meta: '提交后进入审核队列' },
+      {
+        label: '可发布分镜',
+        value: publishSummary ? `${publishSummary.publishableShotCount}/${publishSummary.totalShots}` : '--',
+        meta: draft.status === 'submitted' ? '提交后进入审核队列' : '提交前请确认素材完整',
+      },
     ],
-    [draft.status, selectedHistory, studio.historyWorks.length, studio.project.aspectRatio, studio.project.title],
+    [draft.status, publishSummary, selectedHistory, studio.historyWorks.length, studio.project.aspectRatio, studio.project.title],
   );
 
   const applyHistoryBinding = (historyId: string) => {
@@ -252,6 +260,9 @@ export function PublishPage({ studio }: PublishPageProps) {
                   </div>
                   <strong>{selectedHistory?.title ?? '未选择历史作品'}</strong>
                   <small>{selectedHistory?.intro ?? '点击“从历史创作中选择”后，会把标题、简介和剧本描述回填到发布表单。'}</small>
+                  {runtimeApi && publishSummary ? (
+                    <small>{`后端发布摘要：${publishSummary.publishableShotCount}/${publishSummary.totalShots} 分镜可发布`}</small>
+                  ) : null}
                   <Button variant="secondary" onClick={openHistoryPicker}>
                     切换来源
                   </Button>

@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { creationCopy } from '@/lib/copy';
 
+import { mergeCreationWorkspaceFromApi, type ApiCreationWorkspace, type ApiRun, type CreationRuntimeApiContext } from './creation-api';
+
 import {
   addLipsyncDialogueState,
   advancePlaybackState,
@@ -42,13 +44,49 @@ import { formatClock, formatShotDuration, shotAccent, statusLabel } from './crea
 import type { CanvasDraft, CreationDialogState, GenerationDraft, MaterialTab, ModelPickerDraft, StoryToolDraft, StoryToolMode } from './ui-state';
 import { makeCanvasDraft, makeGenerationDraft, makeModelPickerDraft, makeStoryToolDraft } from './ui-state';
 
+interface ApiEnvelopeSuccess<T> {
+  ok: true;
+  data: T;
+}
+
+interface ApiEnvelopeFailure {
+  ok: false;
+  error: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+}
+
+type ApiEnvelope<T> = ApiEnvelopeSuccess<T> | ApiEnvelopeFailure;
+
+async function requestCreationApi<T>(path: string, init?: RequestInit) {
+  const response = await fetch(path, {
+    ...init,
+    headers: {
+      Accept: 'application/json',
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.headers ?? {}),
+    },
+  });
+
+  const payload = (await response.json()) as ApiEnvelope<T>;
+  if (!response.ok || !payload.ok) {
+    const errorPayload = payload as ApiEnvelopeFailure;
+    throw new Error(errorPayload.error?.message ?? `Request failed: ${path}`);
+  }
+
+  return payload.data;
+}
+
 interface UseCreationWorkspaceOptions {
   studio: StudioFixture;
+  runtimeApi?: CreationRuntimeApiContext;
   initialShotId?: string;
   initialView?: CreationViewMode;
 }
 
-export function useCreationWorkspace({ studio, initialShotId, initialView }: UseCreationWorkspaceOptions) {
+export function useCreationWorkspace({ studio, runtimeApi, initialShotId, initialView }: UseCreationWorkspaceOptions) {
   const initialCreation = cloneCreationFixture(studio, initialShotId, initialView);
   const timersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const generationTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -115,6 +153,72 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
     setStoryToolDraft(makeStoryToolDraft(activeShot));
     setModelPickerDraft(makeModelPickerDraft(activeShot));
   }, [activeShot]);
+
+  const refreshCreationWorkspaceFromApi = async () => {
+    if (!runtimeApi) {
+      return false;
+    }
+
+    const workspace = await requestCreationApi<ApiCreationWorkspace>(
+      `/api/creation/projects/${encodeURIComponent(runtimeApi.projectId)}/workspace?episodeId=${encodeURIComponent(runtimeApi.episodeId)}`,
+    );
+    setCreation((current) => mergeCreationWorkspaceFromApi(current, workspace));
+    return true;
+  };
+
+  const pollRunUntilTerminal = async (runId: string, targetShotId: string, successMessage: string) => {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const run = await requestCreationApi<ApiRun>(`/api/creation/runs/${encodeURIComponent(runId)}`);
+
+      if (run.status === 'completed') {
+        await refreshCreationWorkspaceFromApi();
+        setNotice(successMessage);
+        generationTimersRef.current.delete(targetShotId);
+        return;
+      }
+
+      if (run.status === 'failed' || run.status === 'canceled' || run.status === 'timed_out') {
+        await refreshCreationWorkspaceFromApi().catch(() => {
+          setCreation((current) => cancelShotGenerationState(current, targetShotId));
+        });
+        setNotice(run.errorMessage ?? '生成失败，请稍后重试。');
+        generationTimersRef.current.delete(targetShotId);
+        return;
+      }
+    }
+
+    setNotice('任务已提交，正在后台处理中。');
+    generationTimersRef.current.delete(targetShotId);
+  };
+
+  const toApiVideoPayload = () => ({
+    durationSeconds: generateDraft.durationMode === '6s' ? 6 : 4,
+    aspectRatio: activeShot?.canvasTransform.ratio ?? '9:16',
+    resolution: generateDraft.resolution === '1080P' ? '1080p' : '720p',
+  });
+
+  const submitRunViaApi = async (targetShotId: string, mediaKind: 'image' | 'video') => {
+    if (!runtimeApi) {
+      return false;
+    }
+
+    const path = mediaKind === 'image'
+      ? `/api/creation/projects/${encodeURIComponent(runtimeApi.projectId)}/shots/${encodeURIComponent(targetShotId)}/generate-image`
+      : `/api/creation/projects/${encodeURIComponent(runtimeApi.projectId)}/shots/${encodeURIComponent(targetShotId)}/generate-video`;
+
+    const payload = mediaKind === 'image'
+      ? { options: { aspectRatio: activeShot?.canvasTransform.ratio ?? '9:16' } }
+      : toApiVideoPayload();
+
+    const result = await requestCreationApi<{ run: { id: string } }>(path, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    await pollRunUntilTerminal(result.run.id, targetShotId, mediaKind === 'image' ? '图片生成已完成。' : '已提交当前分镜生成任务。');
+    return true;
+  };
 
   useEffect(() => {
     if (!creation.playback.playing) {
@@ -218,6 +322,20 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
     setNotice(creationCopy.bootCopy);
     setCreation((current) => startShotGenerationState(current, targetShotId, generateDraft));
 
+    if (runtimeApi) {
+      submitRunViaApi(targetShotId, 'video').catch(() => {
+        const timer = setTimeout(() => {
+          setCreation((current) => finishShotGenerationState(current, targetShotId, generateDraft.model));
+          setNotice(wasFailed ? creationCopy.retrySubmitted : '已提交当前分镜生成任务。');
+          generationTimersRef.current.delete(targetShotId);
+        }, 960);
+
+        timersRef.current.push(timer);
+        generationTimersRef.current.set(targetShotId, timer);
+      });
+      return;
+    }
+
     const timer = setTimeout(() => {
       setCreation((current) => finishShotGenerationState(current, targetShotId, generateDraft.model));
       setNotice(wasFailed ? creationCopy.retrySubmitted : '已提交当前分镜生成任务。');
@@ -236,6 +354,20 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
     setDialog({ type: 'none' });
     setNotice(null);
     setCreation((current) => startShotGenerationState(current, targetShotId, generateDraft));
+
+    if (runtimeApi) {
+      submitRunViaApi(targetShotId, mediaKind).catch(() => {
+        const timer = setTimeout(() => {
+          setCreation((current) => finishShotGenerationState(current, targetShotId, generateDraft.model, mediaKind));
+          setNotice(null);
+          generationTimersRef.current.delete(targetShotId);
+        }, 4800);
+
+        timersRef.current.push(timer);
+        generationTimersRef.current.set(targetShotId, timer);
+      });
+      return;
+    }
 
     const timer = setTimeout(() => {
       setCreation((current) => finishShotGenerationState(current, targetShotId, generateDraft.model, mediaKind));
@@ -333,6 +465,18 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
       const started = startShotGenerationState(current, targetShot.id, retryDraft);
       return selectShotState(started, targetShot.id, false);
     });
+
+    if (runtimeApi) {
+      submitRunViaApi(targetShot.id, 'video').catch(() => {
+        const timer = setTimeout(() => {
+          setCreation((current) => finishShotGenerationState(current, targetShot.id, retryDraft.model));
+          setNotice(`${targetShot.title} 已提交重试，新的候选版本已追加。`);
+        }, 960);
+
+        timersRef.current.push(timer);
+      });
+      return;
+    }
 
     const timer = setTimeout(() => {
       setCreation((current) => finishShotGenerationState(current, targetShot.id, retryDraft.model));

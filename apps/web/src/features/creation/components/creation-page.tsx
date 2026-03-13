@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { cx } from '@aiv/ui';
 import { useEffect, useRef, useState } from 'react';
 
+import type { CreationRuntimeApiContext } from '../lib/creation-api';
 import { useCreationWorkspace } from '../lib/use-creation-workspace';
 import { CreationCanvasEditor } from './creation-canvas-editor';
 import { CreationDialogs } from './creation-dialogs';
@@ -18,12 +19,13 @@ import styles from './creation-page.module.css';
 
 interface CreationPageProps {
   studio: StudioFixture;
+  runtimeApi?: CreationRuntimeApiContext;
   initialShotId?: string;
   initialView?: CreationViewMode;
 }
 
-export function CreationPage({ studio, initialShotId, initialView }: CreationPageProps) {
-  const controller = useCreationWorkspace({ studio, initialShotId, initialView });
+export function CreationPage({ studio, runtimeApi, initialShotId, initialView }: CreationPageProps) {
+  const controller = useCreationWorkspace({ studio, runtimeApi, initialShotId, initialView });
   const episodeTitle = studio.episodes[0]?.title ?? '第1集';
   const hasGeneratingShot = controller.creation.shots.some((shot) => shot.status === 'generating');
   const [exportMenuOpen, setExportMenuOpen] = useState(false);

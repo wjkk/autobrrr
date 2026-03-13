@@ -68,7 +68,9 @@ export function CreationDialogs({ controller }: CreationDialogsProps) {
   }
 
   const sourceVersion = activeShot.versions.find((version) => version.id === storyToolDraft.sourceVersionId) ?? activeVersion;
-  const modelOptions = MODEL_OPTIONS.filter((item) => item.category === modelPickerDraft.category);
+  const modelOptions = controller.availableModelOptions.length
+    ? controller.availableModelOptions
+    : MODEL_OPTIONS.filter((item) => item.category === modelPickerDraft.category);
   const [historyCategory, setHistoryCategory] = useState<(typeof studio.explore.categories)[number]>('全部');
   const [selectedHistoryWorkId, setSelectedHistoryWorkId] = useState<string | null>(null);
   const [cropOpen, setCropOpen] = useState(false);
@@ -568,22 +570,24 @@ export function CreationDialogs({ controller }: CreationDialogsProps) {
           </>
         }
       >
-        <div className={dialogStyles.modelCategoryTabs}>
-          {([
-            ['auto', '自动推荐'],
-            ['detail', '细节强化'],
-            ['reference', '参考一致'],
-          ] as const).map(([category, label]) => (
-            <button
-              key={category}
-              type="button"
-              className={modelPickerDraft.category === category ? styles.segmentedButtonActive : styles.segmentedButton}
-              onClick={() => controller.setModelPickerField('category', category)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {!controller.availableModelOptions.length ? (
+          <div className={dialogStyles.modelCategoryTabs}>
+            {([
+              ['auto', '自动推荐'],
+              ['detail', '细节强化'],
+              ['reference', '参考一致'],
+            ] as const).map(([category, label]) => (
+              <button
+                key={category}
+                type="button"
+                className={modelPickerDraft.category === category ? styles.segmentedButtonActive : styles.segmentedButton}
+                onClick={() => controller.setModelPickerField('category', category)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className={dialogStyles.modelGrid}>
           {modelOptions.map((item) => (
             <button
@@ -591,8 +595,10 @@ export function CreationDialogs({ controller }: CreationDialogsProps) {
               type="button"
               className={cx(dialogStyles.modelCard, modelPickerDraft.selectedModel === item.id && dialogStyles.modelCardActive)}
               onClick={() => {
-                controller.setModelPickerField('category', item.category);
                 controller.setModelPickerField('selectedModel', item.id);
+                if ('category' in item) {
+                  controller.setModelPickerField('category', item.category);
+                }
               }}
             >
               <div className={dialogStyles.modelHead}>
@@ -600,13 +606,15 @@ export function CreationDialogs({ controller }: CreationDialogsProps) {
                 {modelPickerDraft.selectedModel === item.id ? <CreationIcon name="magic" className={styles.buttonGlyph} /> : null}
               </div>
               <p>{item.description}</p>
-              <div className={dialogStyles.modelTags}>
-                {item.tags.map((tag) => (
-                  <span key={tag} className={dialogStyles.modelTag}>
-                    {tag}
-                  </span>
-                ))}
-              </div>
+              {'tags' in item ? (
+                <div className={dialogStyles.modelTags}>
+                  {item.tags.map((tag) => (
+                    <span key={tag} className={dialogStyles.modelTag}>
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </button>
           ))}
         </div>
@@ -630,7 +638,7 @@ export function CreationDialogs({ controller }: CreationDialogsProps) {
         }
       >
         <div className={dialogStyles.warningCard}>
-          <strong>{`${activeShot.preferredModel} -> ${dialog.type === 'confirm-model-reset' ? dialog.nextModel : ''}`}</strong>
+          <strong>{`${controller.resolveModelDisplayName(activeShot.preferredModel)} -> ${dialog.type === 'confirm-model-reset' ? controller.resolveModelDisplayName(dialog.nextModel) : ''}`}</strong>
           <p>确认后会将主体图和场景图回退到待生成状态，并按新模型重新生成。</p>
         </div>
       </CreationModalShell>

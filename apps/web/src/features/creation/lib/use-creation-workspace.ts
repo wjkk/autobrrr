@@ -84,6 +84,32 @@ interface VideoFrameOptions {
   lastFrameUrl?: string;
 }
 
+interface ApiModelEndpoint {
+  id: string;
+  slug: string;
+  label: string;
+  family: {
+    id: string;
+    slug: string;
+    name: string;
+    modelKind: 'image' | 'video' | 'text' | 'audio' | 'lipsync';
+  };
+  provider: {
+    id: string;
+    code: string;
+    name: string;
+    providerType: string;
+    enabled: boolean;
+  };
+}
+
+interface RuntimeModelOption {
+  id: string;
+  title: string;
+  description: string;
+  modelKind: 'image' | 'video';
+}
+
 interface UseCreationWorkspaceOptions {
   studio: StudioFixture;
   runtimeApi?: CreationRuntimeApiContext;
@@ -108,6 +134,14 @@ export function useCreationWorkspace({ studio, runtimeApi, initialShotId, initia
   const [storyToolDraft, setStoryToolDraft] = useState<StoryToolDraft>(() => makeStoryToolDraft(initialCreation.shots.find((shot) => shot.id === initialCreation.selectedShotId) ?? initialCreation.shots[0]));
   const [modelPickerDraft, setModelPickerDraft] = useState<ModelPickerDraft>(() => makeModelPickerDraft(initialCreation.shots.find((shot) => shot.id === initialCreation.selectedShotId) ?? initialCreation.shots[0]));
   const [lipsyncNotice, setLipsyncNotice] = useState<string | null>(null);
+  const [modelPickerKind, setModelPickerKind] = useState<'image' | 'video'>('image');
+  const [runtimeModelCatalog, setRuntimeModelCatalog] = useState<{
+    image: ApiModelEndpoint[];
+    video: ApiModelEndpoint[];
+  }>({
+    image: [],
+    video: [],
+  });
 
   useEffect(() => {
     return () => {
@@ -159,6 +193,35 @@ export function useCreationWorkspace({ studio, runtimeApi, initialShotId, initia
     setModelPickerDraft(makeModelPickerDraft(activeShot));
   }, [activeShot]);
 
+  useEffect(() => {
+    if (!runtimeApi) {
+      return;
+    }
+
+    let canceled = false;
+
+    void Promise.all([
+      requestCreationApi<ApiModelEndpoint[]>('/api/model-endpoints?modelKind=image'),
+      requestCreationApi<ApiModelEndpoint[]>('/api/model-endpoints?modelKind=video'),
+    ])
+      .then(([image, video]) => {
+        if (canceled) {
+          return;
+        }
+        setRuntimeModelCatalog({ image, video });
+      })
+      .catch(() => {
+        if (canceled) {
+          return;
+        }
+        setRuntimeModelCatalog({ image: [], video: [] });
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [runtimeApi]);
+
   const refreshCreationWorkspaceFromApi = async () => {
     if (!runtimeApi) {
       return false;
@@ -201,6 +264,7 @@ export function useCreationWorkspace({ studio, runtimeApi, initialShotId, initia
     durationSeconds: generateDraft.durationMode === '6s' ? 6 : 4,
     aspectRatio: activeShot?.canvasTransform.ratio ?? '9:16',
     resolution: generateDraft.resolution === '1080P' ? '1080p' : '720p',
+    ...(runtimeModelCatalog.video.some((item) => item.slug === generateDraft.model) ? { modelEndpoint: generateDraft.model } : {}),
     ...(frameOptions?.firstFrameUrl ? { firstFrameUrl: frameOptions.firstFrameUrl } : {}),
     ...(frameOptions?.lastFrameUrl ? { lastFrameUrl: frameOptions.lastFrameUrl } : {}),
   });
@@ -215,7 +279,10 @@ export function useCreationWorkspace({ studio, runtimeApi, initialShotId, initia
       : `/api/creation/projects/${encodeURIComponent(runtimeApi.projectId)}/shots/${encodeURIComponent(targetShotId)}/generate-video`;
 
     const payload = mediaKind === 'image'
-      ? { options: { aspectRatio: activeShot?.canvasTransform.ratio ?? '9:16' } }
+      ? {
+          ...(runtimeModelCatalog.image.some((item) => item.slug === generateDraft.model) ? { modelEndpoint: generateDraft.model } : {}),
+          options: { aspectRatio: activeShot?.canvasTransform.ratio ?? '9:16' },
+        }
       : toApiVideoPayload(frameOptions);
 
     const result = await requestCreationApi<{ run: { id: string } }>(path, {
@@ -535,17 +602,30 @@ export function useCreationWorkspace({ studio, runtimeApi, initialShotId, initia
     setDialog({ type: 'none' });
   };
 
-  const openModelPicker = () => {
+  const openModelPicker = (kind: 'image' | 'video' = 'image') => {
     if (!activeShot) {
       return;
     }
 
+    setModelPickerKind(kind);
     setModelPickerDraft(makeModelPickerDraft(activeShot));
     setDialog({ type: 'model-picker' });
   };
 
   const setModelPickerField = <T extends keyof ModelPickerDraft>(field: T, value: ModelPickerDraft[T]) => {
     setModelPickerDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const availableModelOptions: RuntimeModelOption[] = (modelPickerKind === 'video' ? runtimeModelCatalog.video : runtimeModelCatalog.image).map((item) => ({
+    id: item.slug,
+    title: item.label,
+    description: `${item.provider.name} · ${item.family.name}`,
+    modelKind: modelPickerKind,
+  }));
+
+  const resolveModelDisplayName = (modelId: string) => {
+    const found = [...runtimeModelCatalog.image, ...runtimeModelCatalog.video].find((item) => item.slug === modelId);
+    return found?.label ?? modelId;
   };
 
   const applyModelPicker = () => {
@@ -745,6 +825,9 @@ export function useCreationWorkspace({ studio, runtimeApi, initialShotId, initia
     setModelPickerField,
     setModelPickerDraft,
     setLipsyncNotice,
+    modelPickerKind,
+    availableModelOptions,
+    resolveModelDisplayName,
     setViewMode,
     setActiveTrack,
     selectShot,

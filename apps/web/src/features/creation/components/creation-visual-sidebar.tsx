@@ -24,12 +24,6 @@ const IMAGE_PROMPT_ASSIST_OPTIONS = [
   { id: 'detail', label: '增强细节', suffix: '，补充材质细节、表情层次和环境质感。' },
   { id: 'camera', label: '加入镜头感', suffix: '，加入景深、构图层次和主体聚焦。' },
 ] as const;
-const IMAGE_MODEL_OPTIONS = [
-  { id: 'Vision Auto', category: 'auto' as const, title: '智能选择', description: '平衡速度与一致性' },
-  { id: 'Vision Detail', category: 'detail' as const, title: '细节增强', description: '强化材质与表情细节' },
-  { id: 'Vision Reference', category: 'reference' as const, title: '参考一致', description: '更贴合参考图与历史素材' },
-] as const;
-
 function hasVideoResult(shot: CreationWorkspaceController['activeShot']) {
   if (!shot) {
     return false;
@@ -325,8 +319,10 @@ export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps
     setPromptAssistMenuOpen(false);
   };
 
-  const applyImageModel = (modelId: string, category: 'auto' | 'detail' | 'reference') => {
-    controller.setModelPickerField('category', category);
+  const applyImageModel = (modelId: string, category?: 'auto' | 'detail' | 'reference') => {
+    if (category) {
+      controller.setModelPickerField('category', category);
+    }
     controller.setModelPickerField('selectedModel', modelId);
     controller.requestModelChange(modelId);
     setImageModelMenuOpen(false);
@@ -542,10 +538,10 @@ export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps
                   ))}
                 </div>
               </div>
-              <button type="button" className={styles.settingRow} onClick={controller.openModelPicker}>
+              <button type="button" className={styles.settingRow} onClick={() => controller.openModelPicker('video')}>
                 <span>选用模型</span>
                 <span className={styles.settingValue}>
-                  {generateDraft.model}
+                  {controller.resolveModelDisplayName(generateDraft.model)}
                   <CreationIcon name="chevron" className={styles.smallIcon} />
                 </span>
               </button>
@@ -590,8 +586,8 @@ export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps
             <div className={cx(styles.inlinePanel, styles.modelPanel)} ref={imageModelMenuRef}>
               <div className={styles.inlinePanelHeader}>选择模型</div>
               <div className={styles.inlinePanelList}>
-                {IMAGE_MODEL_OPTIONS.map((item) => (
-                  <button key={item.id} type="button" className={cx(styles.inlinePanelItem, modelPickerDraft.selectedModel === item.id && styles.inlinePanelItemActive)} onClick={() => applyImageModel(item.id, item.category)}>
+                {(controller.availableModelOptions.length ? controller.availableModelOptions.filter((item) => item.modelKind === 'image') : []).map((item) => (
+                  <button key={item.id} type="button" className={cx(styles.inlinePanelItem, modelPickerDraft.selectedModel === item.id && styles.inlinePanelItemActive)} onClick={() => applyImageModel(item.id)}>
                     <span className={styles.inlinePanelItemTitle}>{item.title}</span>
                     <span className={styles.inlinePanelItemMeta}>{item.description}</span>
                   </button>

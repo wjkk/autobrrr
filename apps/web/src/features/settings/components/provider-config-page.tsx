@@ -11,7 +11,7 @@ interface ProviderConfigPageProps {
   currentUser: SettingsAuthUser | null;
 }
 
-const CONFIGURABLE_PROVIDER_CODES = new Set(['ark', 'aicso']);
+const CONFIGURABLE_PROVIDER_CODES = new Set(['ark', 'aicso', 'platou']);
 
 interface DraftState {
   apiKey: string;

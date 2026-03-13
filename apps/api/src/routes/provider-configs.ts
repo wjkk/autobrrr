@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { submitAicsoImageGeneration } from '../lib/aicso-client.js';
 import { submitArkTextResponse } from '../lib/ark-client.js';
+import { queryPlatouVideoGeneration, submitPlatouChatCompletion, submitPlatouImageGeneration, submitPlatouVideoGeneration } from '../lib/platou-client.js';
 import { requireUser } from '../lib/auth.js';
 import { prisma } from '../lib/prisma.js';
 
@@ -177,6 +178,17 @@ function pickTestEndpoint(args: {
       args.endpoints.find((endpoint) => endpoint.modelKind === 'image')
       ?? args.endpoints.find((endpoint) => endpoint.modelKind === 'video')
       ?? null
+    );
+  }
+
+  if (args.providerCode === 'platou') {
+    return (
+      args.requestedKind
+        ? candidates[0] ?? null
+        : args.endpoints.find((endpoint) => endpoint.modelKind === 'video')
+          ?? args.endpoints.find((endpoint) => endpoint.modelKind === 'image')
+          ?? args.endpoints.find((endpoint) => endpoint.modelKind === 'text')
+          ?? null
     );
   }
 
@@ -631,6 +643,44 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
           }
         } else {
           throw new Error('Unsupported AICSO test kind.');
+        }
+      } else if (provider.code === 'platou') {
+        if (testEndpoint.modelKind === 'text') {
+          await submitPlatouChatCompletion({
+            baseUrl,
+            apiKey: config.apiKey,
+            model: testEndpoint.remoteModelKey,
+            prompt: 'reply with ok',
+          });
+        } else if (testEndpoint.modelKind === 'image') {
+          await submitPlatouImageGeneration({
+            baseUrl,
+            apiKey: config.apiKey,
+            model: testEndpoint.remoteModelKey,
+            prompt: 'A clean minimal test image.',
+          });
+        } else if (testEndpoint.modelKind === 'video') {
+          const created = await submitPlatouVideoGeneration({
+            baseUrl,
+            apiKey: config.apiKey,
+            model: testEndpoint.remoteModelKey,
+            prompt: 'A short simple test video of moving light.',
+          });
+          const taskId = typeof created.task_id === 'string'
+            ? created.task_id
+            : typeof created.id === 'string'
+              ? created.id
+              : null;
+          if (!taskId) {
+            throw new Error('Platou video test did not return a task id.');
+          }
+          await queryPlatouVideoGeneration({
+            baseUrl,
+            apiKey: config.apiKey,
+            taskId,
+          });
+        } else {
+          throw new Error('Unsupported Platou test kind.');
         }
       } else {
         return reply.code(400).send({

@@ -100,11 +100,28 @@ async function main() {
     durations: [4, 6, 8],
     aspectRatios: ['9:16', '16:9', '1:1'],
   });
+  const platouChat = await upsertFamily('platou-google-chat', 'Platou Google Chat', 'TEXT', {
+    provider: 'platou',
+    model: 'gemini-2.5-flash',
+    modalities: ['text'],
+  });
+  const platouImage = await upsertFamily('platou-nano-banana', 'Platou Nano Banana', 'IMAGE', {
+    provider: 'platou',
+    model: 'nano-banana',
+    aspectRatios: ['1:1', '9:16', '16:9'],
+  });
+  const platouVeo = await upsertFamily('platou-veo-video', 'Platou Veo Video', 'VIDEO', {
+    provider: 'platou',
+    model: 'veo3.1-fast',
+    durations: [4, 6, 8],
+    aspectRatios: ['9:16', '16:9', '1:1'],
+  });
 
   const officialSeko = await upsertProvider('official-seko', 'Seko Official', 'OFFICIAL', 'https://api.seko.local');
   const proxyA = await upsertProvider('proxy-hub-a', 'Proxy Hub A', 'PROXY', 'https://proxy-hub-a.local');
   const aicso = await upsertProvider('aicso', 'AICSO', 'PROXY', 'https://api.aicso.top');
   const ark = await upsertProvider('ark', 'Volcengine Ark', 'OFFICIAL', 'https://ark.cn-beijing.volces.com/api/v3');
+  const platou = await upsertProvider('platou', 'Platou', 'PROXY', 'https://api.bltcy.ai');
 
   await upsertEndpoint({
     slug: 'official-seko-image-v1',
@@ -154,6 +171,30 @@ async function main() {
     priority: 12,
     isDefault: false,
     defaultParamsJson: {},
+  });
+
+  await upsertEndpoint({
+    slug: 'platou-gemini-2-5-flash',
+    familyId: platouChat.id,
+    providerId: platou.id,
+    remoteModelKey: 'gemini-2.5-flash',
+    label: 'Gemini 2.5 Flash',
+    priority: 10,
+    isDefault: true,
+    defaultParamsJson: {},
+  });
+
+  await upsertEndpoint({
+    slug: 'platou-nano-banana',
+    familyId: platouImage.id,
+    providerId: platou.id,
+    remoteModelKey: 'nano-banana',
+    label: 'Nano Banana',
+    priority: 10,
+    isDefault: true,
+    defaultParamsJson: {
+      aspectRatio: '9:16',
+    },
   });
 
   await upsertEndpoint({
@@ -217,6 +258,51 @@ async function main() {
     remoteModelKey: 'veo3.1-fast-components',
     label: 'Veo 3.1 Fast Components',
     priority: 15,
+    isDefault: false,
+    defaultParamsJson: {
+      durationSeconds: 4,
+      aspectRatio: '9:16',
+      resolution: '1080p',
+    },
+  });
+
+  await upsertEndpoint({
+    slug: 'platou-veo-fast',
+    familyId: platouVeo.id,
+    providerId: platou.id,
+    remoteModelKey: 'veo3.1-fast',
+    label: 'Veo 3.1 Fast',
+    priority: 10,
+    isDefault: true,
+    defaultParamsJson: {
+      durationSeconds: 4,
+      aspectRatio: '9:16',
+      resolution: '1080p',
+    },
+  });
+
+  await upsertEndpoint({
+    slug: 'platou-veo-pro-4k',
+    familyId: platouVeo.id,
+    providerId: platou.id,
+    remoteModelKey: 'veo3.1-pro-4k',
+    label: 'Veo 3.1 Pro 4K',
+    priority: 20,
+    isDefault: false,
+    defaultParamsJson: {
+      durationSeconds: 4,
+      aspectRatio: '9:16',
+      resolution: '1080p',
+    },
+  });
+
+  await upsertEndpoint({
+    slug: 'platou-veo-fast-components',
+    familyId: platouVeo.id,
+    providerId: platou.id,
+    remoteModelKey: 'veo3.1-fast-components',
+    label: 'Veo 3.1 Fast Components',
+    priority: 30,
     isDefault: false,
     defaultParamsJson: {
       durationSeconds: 4,

@@ -8,6 +8,7 @@ import {
   submitAicsoVideoGeneration,
 } from './aicso-client.js';
 import { submitArkTextResponse } from './ark-client.js';
+import { queryPlatouVideoGeneration, submitPlatouChatCompletion, submitPlatouImageGeneration, submitPlatouVideoGeneration } from './platou-client.js';
 import { resolveRunProviderRuntimeConfig } from './provider-runtime-config.js';
 
 export interface ProviderCallbackPayload {
@@ -149,6 +150,14 @@ function inferAicsoVideoState(payload: Record<string, unknown>) {
 
 function inferAicsoVideoJobId(payload: Record<string, unknown>) {
   return findStringDeep(payload, ['id', 'jobId', 'job_id', 'name']);
+}
+
+function inferPlatouVideoState(payload: Record<string, unknown>) {
+  return (findStringDeep(payload, ['status', 'state']) ?? 'processing').toLowerCase();
+}
+
+function inferPlatouVideoTaskId(payload: Record<string, unknown>) {
+  return findStringDeep(payload, ['task_id', 'id']);
 }
 
 const officialAdapter: ProviderAdapter = {
@@ -427,6 +436,149 @@ const aicsoAdapter: ProviderAdapter = {
   },
 };
 
+const platouAdapter: ProviderAdapter = {
+  async submit(run) {
+    const runtimeConfig = await resolveRunProviderRuntimeConfig(run);
+    if (!runtimeConfig.enabled || !runtimeConfig.apiKey || !runtimeConfig.baseUrl) {
+      return mockProxyAdapter.submit(run);
+    }
+
+    const model = getEndpointModelKey(run) ?? null;
+    const prompt = getPrompt(run);
+    if (!prompt) {
+      return {
+        type: 'failed',
+        providerStatus: 'failed',
+        errorCode: 'PROVIDER_PROMPT_REQUIRED',
+        errorMessage: 'Run prompt is required for provider submission.',
+      };
+    }
+    if (!model) {
+      return {
+        type: 'failed',
+        providerStatus: 'failed',
+        errorCode: 'PROVIDER_MODEL_REQUIRED',
+        errorMessage: 'Run model key is required for Platou submission.',
+      };
+    }
+
+    const input = getRunInput(run);
+    const options = readObject(input.options);
+
+    if (getModelKind(run) === 'text') {
+      const response = await submitPlatouChatCompletion({
+        baseUrl: runtimeConfig.baseUrl,
+        apiKey: runtimeConfig.apiKey,
+        model,
+        prompt,
+      });
+      return {
+        type: 'completed',
+        providerStatus: 'succeeded',
+        providerOutput: response,
+      };
+    }
+
+    if (getModelKind(run) === 'image') {
+      const response = await submitPlatouImageGeneration({
+        baseUrl: runtimeConfig.baseUrl,
+        apiKey: runtimeConfig.apiKey,
+        model,
+        prompt,
+      });
+      return {
+        type: 'completed',
+        providerStatus: 'succeeded',
+        providerOutput: response,
+      };
+    }
+
+    const images = [
+      readString(options.firstFrameUrl),
+      readString(options.lastFrameUrl),
+    ].filter((value): value is string => !!value);
+
+    const response = await submitPlatouVideoGeneration({
+      baseUrl: runtimeConfig.baseUrl,
+      apiKey: runtimeConfig.apiKey,
+      model,
+      prompt,
+      images,
+      duration: typeof options.durationSeconds === 'number' ? options.durationSeconds : undefined,
+      aspectRatio: readString(options.aspectRatio) ?? undefined,
+    });
+
+    const providerJobId = inferPlatouVideoTaskId(response);
+    if (!providerJobId) {
+      return {
+        type: 'failed',
+        providerStatus: 'failed',
+        errorCode: 'PROVIDER_JOB_ID_MISSING',
+        errorMessage: 'Platou video submission did not return a task id.',
+        providerOutput: response,
+      };
+    }
+
+    return {
+      type: 'submitted',
+      providerJobId,
+      providerCallbackToken: run.providerCallbackToken ?? randomUUID(),
+      providerStatus: 'submitted',
+      nextPollAt: secondsFromNow(6),
+      providerOutput: response,
+    };
+  },
+  async poll(run) {
+    const runtimeConfig = await resolveRunProviderRuntimeConfig(run);
+    if (!runtimeConfig.enabled || !runtimeConfig.apiKey || !runtimeConfig.baseUrl) {
+      return mockProxyAdapter.poll(run);
+    }
+    if (!run.providerJobId) {
+      return {
+        type: 'failed',
+        providerStatus: 'failed',
+        errorCode: 'PROVIDER_JOB_ID_REQUIRED',
+        errorMessage: 'Platou video polling requires providerJobId.',
+      };
+    }
+
+    const response = await queryPlatouVideoGeneration({
+      baseUrl: runtimeConfig.baseUrl,
+      apiKey: runtimeConfig.apiKey,
+      taskId: run.providerJobId,
+    });
+    const state = inferPlatouVideoState(response);
+
+    if (state === 'completed' || state === 'succeeded' || state === 'success') {
+      return {
+        type: 'completed',
+        providerStatus: 'succeeded',
+        providerOutput: response,
+      };
+    }
+
+    if (state === 'failed' || state === 'error' || state === 'canceled') {
+      return {
+        type: 'failed',
+        providerStatus: 'failed',
+        errorCode: 'PROVIDER_TASK_FAILED',
+        errorMessage: 'Platou video task failed.',
+        providerOutput: response,
+      };
+    }
+
+    return {
+      type: 'running',
+      providerStatus: state,
+      nextPollAt: secondsFromNow(6),
+      providerOutput: response,
+    };
+  },
+  async handleCallback(_run, payload) {
+    return mockProxyAdapter.handleCallback(_run, payload);
+  },
+};
+
 export function resolveProviderAdapter(run: Run): ProviderAdapter {
   const providerCode = getProviderCode(run);
   if (providerCode === 'ark') {
@@ -434,6 +586,9 @@ export function resolveProviderAdapter(run: Run): ProviderAdapter {
   }
   if (providerCode === 'aicso') {
     return aicsoAdapter;
+  }
+  if (providerCode === 'platou') {
+    return platouAdapter;
   }
 
   return getProviderType(run) === 'proxy' ? mockProxyAdapter : officialAdapter;

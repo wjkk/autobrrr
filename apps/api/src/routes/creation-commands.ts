@@ -27,6 +27,8 @@ const videoCommandSchema = commandSchema.extend({
   durationSeconds: z.number().int().positive().max(60).optional(),
   aspectRatio: z.string().trim().min(1).max(24).optional(),
   resolution: z.string().trim().min(1).max(24).optional(),
+  firstFrameUrl: z.string().trim().url().optional(),
+  lastFrameUrl: z.string().trim().url().optional(),
 });
 
 async function createGenerationRun(args: {
@@ -246,6 +248,8 @@ export async function registerCreationCommandRoutes(app: FastifyInstance) {
         ...(payload.data.durationSeconds ? { durationSeconds: payload.data.durationSeconds } : {}),
         ...(payload.data.aspectRatio ? { aspectRatio: payload.data.aspectRatio } : {}),
         ...(payload.data.resolution ? { resolution: payload.data.resolution } : {}),
+        ...(payload.data.firstFrameUrl ? { firstFrameUrl: payload.data.firstFrameUrl } : {}),
+        ...(payload.data.lastFrameUrl ? { lastFrameUrl: payload.data.lastFrameUrl } : {}),
       },
     });
 

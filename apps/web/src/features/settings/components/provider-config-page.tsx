@@ -11,6 +11,8 @@ interface ProviderConfigPageProps {
   currentUser: SettingsAuthUser | null;
 }
 
+const CONFIGURABLE_PROVIDER_CODES = new Set(['ark', 'aicso']);
+
 interface DraftState {
   apiKey: string;
   baseUrlOverride: string;
@@ -83,10 +85,11 @@ async function testProviderConfig(providerCode: string) {
 }
 
 export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }: ProviderConfigPageProps) {
+  const visibleInitialConfigs = initialConfigs.filter((item) => CONFIGURABLE_PROVIDER_CODES.has(item.provider.code));
   const [currentUser, setCurrentUser] = useState<SettingsAuthUser | null>(initialUser);
-  const [configs, setConfigs] = useState(initialConfigs);
+  const [configs, setConfigs] = useState(visibleInitialConfigs);
   const [drafts, setDrafts] = useState<Record<string, DraftState>>(() =>
-    Object.fromEntries(initialConfigs.map((item) => [item.provider.code, makeDraft(item)])),
+    Object.fromEntries(visibleInitialConfigs.map((item) => [item.provider.code, makeDraft(item)])),
   );
   const [savingCode, setSavingCode] = useState<string | null>(null);
   const [testingCode, setTestingCode] = useState<string | null>(null);

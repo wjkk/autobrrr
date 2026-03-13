@@ -19,6 +19,7 @@ export interface ProviderConfigItem {
     id: string | null;
     configured: boolean;
     hasApiKey: boolean;
+    maskedApiKey: string | null;
     enabled: boolean;
     baseUrlOverride: string | null;
     defaults: {

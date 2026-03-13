@@ -550,12 +550,17 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                     <label className={styles.field}>
                       <div className={styles.fieldLabel}>
                         <span>API Key</span>
-                        <span className={styles.fieldHint}>留空表示保持现有密钥</span>
+                        <span className={styles.fieldHint}>
+                          {item.userConfig.maskedApiKey ? `当前：${item.userConfig.maskedApiKey}` : '留空表示保持现有密钥'}
+                        </span>
                       </div>
-                      <textarea
-                        className={styles.textarea}
+                      <input
+                        className={styles.input}
                         value={draft.apiKey}
                         placeholder={item.userConfig.hasApiKey ? '已保存密钥，重新输入可覆盖' : '输入当前 provider 的 API Key'}
+                        type="text"
+                        autoComplete="off"
+                        spellCheck={false}
                         onChange={(event) => onDraftChange(item.provider.code, { apiKey: event.target.value })}
                       />
                     </label>

@@ -58,6 +58,12 @@ function mapProviderConfig(args: {
   } | null;
 }) {
   const options = args.config ? ((args.config.optionsJson && typeof args.config.optionsJson === 'object' && !Array.isArray(args.config.optionsJson) ? args.config.optionsJson : {}) as Record<string, unknown>) : {};
+  const maskedApiKey =
+    args.config?.apiKey && args.config.apiKey.length > 8
+      ? `${args.config.apiKey.slice(0, 4)}••••${args.config.apiKey.slice(-4)}`
+      : args.config?.apiKey
+        ? '••••'
+        : null;
   return {
     provider: {
       id: args.provider.id,
@@ -80,6 +86,7 @@ function mapProviderConfig(args: {
           id: args.config.id,
           configured: !!args.config.apiKey,
           hasApiKey: !!args.config.apiKey,
+          maskedApiKey,
           enabled: args.config.enabled,
           baseUrlOverride: args.config.baseUrlOverride,
           defaults: {
@@ -99,6 +106,7 @@ function mapProviderConfig(args: {
           id: null,
           configured: false,
           hasApiKey: false,
+          maskedApiKey: null,
           enabled: true,
           baseUrlOverride: null,
           defaults: {

@@ -168,6 +168,9 @@ async function main() {
   await request('/api/model-endpoints?familySlug=seko-image', { cookie });
   console.log('[smoke] model endpoints ok');
 
+  await request('/api/model-endpoints?familySlug=gemini-text', { cookie });
+  console.log('[smoke] text model endpoints ok');
+
   await request('/api/model-resolution/resolve', {
     method: 'POST',
     cookie,
@@ -178,6 +181,48 @@ async function main() {
     }),
   });
   console.log('[smoke] model resolution ok');
+
+  const plannerRun = await request<{ run: { id: string; status: string } }>(
+    `/api/projects/${createdProject.data.projectId}/planner/generate-doc`,
+    {
+      method: 'POST',
+      cookie,
+      body: JSON.stringify({
+        episodeId,
+        prompt: '请为这个机械猫雨夜短片生成一份三段式策划文档，包含故事梗概、视觉风格和分镜方向。',
+        modelFamily: 'gemini-text',
+        modelEndpoint: 'aicso-gemini-text-lite-preview',
+        idempotencyKey: `smoke-planner-${Date.now()}`,
+      }),
+    },
+  );
+  console.log(`[smoke] planner run created: ${plannerRun.data.run.id}`);
+
+  const plannerProcessed = await processUntilMatch(
+    (processed) => !!processed && processed.runId === plannerRun.data.run.id && processed.action === 'processed',
+  );
+  if (!plannerProcessed) {
+    throw new Error('Worker did not complete the planner run.');
+  }
+  console.log('[smoke] planner worker completed run');
+
+  const plannerRunDetail = await request<{ status: string; output: { generatedText?: string } | null }>(
+    `/api/runs/${plannerRun.data.run.id}`,
+    { cookie },
+  );
+  if (plannerRunDetail.data.status !== 'completed' || !plannerRunDetail.data.output?.generatedText) {
+    throw new Error('Expected planner run to complete with generated text.');
+  }
+  console.log('[smoke] planner run completed ok');
+
+  const plannerWorkspaceAfterRun = await request<{ plannerSession: { status: string } | null; latestPlannerRun: { generatedText: string | null } | null }>(
+    `/api/projects/${createdProject.data.projectId}/planner/workspace?episodeId=${episodeId}`,
+    { cookie },
+  );
+  if (plannerWorkspaceAfterRun.data.plannerSession?.status !== 'ready' || !plannerWorkspaceAfterRun.data.latestPlannerRun?.generatedText) {
+    throw new Error('Planner workspace did not reflect generated planner text.');
+  }
+  console.log('[smoke] planner workspace reflects generated doc');
 
   const createdShot = await request<{
     id: string;

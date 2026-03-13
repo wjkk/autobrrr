@@ -6,7 +6,7 @@ import { prisma } from './prisma.js';
 export type SupportedMediaKind = 'IMAGE' | 'VIDEO';
 
 export type RunLifecycleAction =
-  | { runId: string; status: string; action: 'processed'; assetId: string; shotVersionId: string }
+  | { runId: string; status: string; action: 'processed'; assetId?: string; shotVersionId?: string }
   | { runId: string; status: string; action: 'failed' };
 
 export function inferMediaKindFromRunType(runType: string): SupportedMediaKind | null {
@@ -113,6 +113,89 @@ function resolveDimensions(mediaKind: SupportedMediaKind, run: Run) {
     width: scaled.width,
     height: scaled.height,
     durationMs: video.durationSeconds * 1000,
+  };
+}
+
+function extractPlannerText(providerData: unknown, fallbackPrompt: string) {
+  const record = readObject(providerData);
+  const candidates = Array.isArray(record.candidates) ? record.candidates : [];
+  for (const candidate of candidates) {
+    const content = readObject(readObject(candidate).content);
+    const parts = Array.isArray(content.parts) ? content.parts : [];
+    const textPart = parts.find((part) => typeof readObject(part).text === 'string');
+    const text = textPart ? (readObject(textPart).text as string).trim() : '';
+    if (text) {
+      return text;
+    }
+  }
+
+  return `【策划草案】
+主题：${fallbackPrompt}
+
+1. 故事梗概：围绕该主题生成单集短片策划。
+2. 视觉风格：保持角色一致性与镜头节奏。
+3. 分镜方向：先建立场景，再推进动作与情绪变化。`;
+}
+
+export async function finalizePlannerRun(run: Run): Promise<RunLifecycleAction> {
+  if (run.resourceType !== 'planner_session' || !run.resourceId || !run.projectId || !run.episodeId) {
+    return failRun(run.id, 'RUN_RESOURCE_INVALID', 'Run is missing planner session/project/episode linkage.');
+  }
+
+  const plannerSession = await prisma.plannerSession.findUnique({
+    where: { id: run.resourceId },
+  });
+
+  if (!plannerSession) {
+    return failRun(run.id, 'PLANNER_SESSION_NOT_FOUND', 'Planner session not found for run resource.');
+  }
+
+  const input = readObject(run.inputJson);
+  const output = readObject(run.outputJson);
+  const generatedText = extractPlannerText(output.providerData, typeof input.prompt === 'string' ? input.prompt : '未命名策划');
+
+  await prisma.$transaction(async (tx) => {
+    await tx.plannerSession.update({
+      where: { id: plannerSession.id },
+      data: {
+        status: 'READY',
+      },
+    });
+
+    await tx.project.update({
+      where: { id: plannerSession.projectId },
+      data: {
+        status: 'READY_FOR_STORYBOARD',
+      },
+    });
+
+    await tx.episode.update({
+      where: { id: plannerSession.episodeId },
+      data: {
+        status: 'READY_FOR_STORYBOARD',
+      },
+    });
+
+    await tx.run.update({
+      where: { id: run.id },
+      data: {
+        status: 'COMPLETED',
+        providerStatus: run.providerStatus ?? 'succeeded',
+        outputJson: {
+          ...output,
+          generatedText,
+          plannerSessionId: plannerSession.id,
+        },
+        finishedAt: new Date(),
+        nextPollAt: null,
+      },
+    });
+  });
+
+  return {
+    runId: run.id,
+    status: 'completed',
+    action: 'processed',
   };
 }
 

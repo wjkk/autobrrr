@@ -3,7 +3,7 @@ import type { Run } from '@prisma/client';
 
 import { resolveProviderAdapter, type ProviderAdapterUpdate } from './provider-adapters.js';
 import { prisma } from './prisma.js';
-import { failRun, finalizeGeneratedRun, inferMediaKindFromRunType } from './run-lifecycle.js';
+import { failRun, finalizeGeneratedRun, finalizePlannerRun, inferMediaKindFromRunType } from './run-lifecycle.js';
 
 function buildProviderOutputJson(run: Run, update: ProviderAdapterUpdate) {
   if (!('providerOutput' in update) || !update.providerOutput) {
@@ -23,7 +23,7 @@ function buildProviderOutputJson(run: Run, update: ProviderAdapterUpdate) {
 export type WorkerAction =
   | { runId: string; status: string; action: 'submitted'; providerJobId: string }
   | { runId: string; status: string; action: 'polled'; providerStatus: string }
-  | { runId: string; status: string; action: 'processed'; assetId: string; shotVersionId: string }
+  | { runId: string; status: string; action: 'processed'; assetId?: string; shotVersionId?: string }
   | { runId: string; status: string; action: 'failed' };
 
 async function handleProviderSubmission(run: Run): Promise<WorkerAction> {
@@ -45,6 +45,10 @@ async function handleProviderSubmission(run: Run): Promise<WorkerAction> {
     });
 
     const refreshedRun = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+    if (refreshedRun.runType === 'PLANNER_DOC_UPDATE') {
+      return finalizePlannerRun(refreshedRun);
+    }
+
     const mediaKind = inferMediaKindFromRunType(refreshedRun.runType);
     if (!mediaKind) {
       return failRun(refreshedRun.id, 'RUN_TYPE_NOT_SUPPORTED', `Unsupported run type: ${refreshedRun.runType}`);
@@ -119,6 +123,10 @@ async function handleProviderPoll(run: Run): Promise<WorkerAction> {
   });
 
   const refreshedRun = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+  if (refreshedRun.runType === 'PLANNER_DOC_UPDATE') {
+    return finalizePlannerRun(refreshedRun);
+  }
+
   const mediaKind = inferMediaKindFromRunType(refreshedRun.runType);
   if (!mediaKind) {
     return failRun(refreshedRun.id, 'RUN_TYPE_NOT_SUPPORTED', `Unsupported run type: ${refreshedRun.runType}`);
@@ -135,7 +143,7 @@ async function claimNextRun(): Promise<Run | null> {
       providerJobId: { not: null },
       nextPollAt: { lte: now },
       runType: {
-        in: ['IMAGE_GENERATION', 'VIDEO_GENERATION'],
+        in: ['PLANNER_DOC_UPDATE', 'IMAGE_GENERATION', 'VIDEO_GENERATION'],
       },
     },
     orderBy: { nextPollAt: 'asc' },
@@ -149,7 +157,7 @@ async function claimNextRun(): Promise<Run | null> {
     where: {
       status: 'QUEUED',
       runType: {
-        in: ['IMAGE_GENERATION', 'VIDEO_GENERATION'],
+        in: ['PLANNER_DOC_UPDATE', 'IMAGE_GENERATION', 'VIDEO_GENERATION'],
       },
     },
     orderBy: { createdAt: 'asc' },
@@ -183,6 +191,14 @@ export async function processNextQueuedRun(): Promise<WorkerAction | null> {
   const run = await claimNextRun();
   if (!run) {
     return null;
+  }
+
+  if (run.runType === 'PLANNER_DOC_UPDATE') {
+    if (run.providerJobId) {
+      return handleProviderPoll(run);
+    }
+
+    return handleProviderSubmission(run);
   }
 
   const mediaKind = inferMediaKindFromRunType(run.runType);

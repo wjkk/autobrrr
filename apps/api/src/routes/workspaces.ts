@@ -80,6 +80,28 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
       },
     });
 
+    const latestPlannerRun = plannerSession
+      ? await prisma.run.findFirst({
+          where: {
+            episodeId: episode.id,
+            resourceType: 'planner_session',
+            resourceId: plannerSession.id,
+            runType: 'PLANNER_DOC_UPDATE',
+          },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            status: true,
+            providerStatus: true,
+            outputJson: true,
+            errorCode: true,
+            errorMessage: true,
+            createdAt: true,
+            finishedAt: true,
+          },
+        })
+      : null;
+
     return reply.send({
       ok: true,
       data: {
@@ -104,6 +126,21 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
               outlineConfirmedAt: plannerSession.outlineConfirmedAt?.toISOString() ?? null,
               createdAt: plannerSession.createdAt.toISOString(),
               updatedAt: plannerSession.updatedAt.toISOString(),
+            }
+          : null,
+        latestPlannerRun: latestPlannerRun
+          ? {
+              id: latestPlannerRun.id,
+              status: latestPlannerRun.status.toLowerCase(),
+              providerStatus: latestPlannerRun.providerStatus,
+              generatedText:
+                latestPlannerRun.outputJson && typeof latestPlannerRun.outputJson === 'object' && !Array.isArray(latestPlannerRun.outputJson)
+                  ? (((latestPlannerRun.outputJson as Record<string, unknown>).generatedText as string | undefined) ?? null)
+                  : null,
+              errorCode: latestPlannerRun.errorCode,
+              errorMessage: latestPlannerRun.errorMessage,
+              createdAt: latestPlannerRun.createdAt.toISOString(),
+              finishedAt: latestPlannerRun.finishedAt?.toISOString() ?? null,
             }
           : null,
       },

@@ -102,7 +102,7 @@ async function main() {
   });
   const platouChat = await upsertFamily('platou-google-chat', 'Platou Google Chat', 'TEXT', {
     provider: 'platou',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.1-flash-lite-preview',
     modalities: ['text'],
   });
   const platouImage = await upsertFamily('platou-nano-banana', 'Platou Nano Banana', 'IMAGE', {
@@ -174,11 +174,11 @@ async function main() {
   });
 
   await upsertEndpoint({
-    slug: 'platou-gemini-2-5-flash',
+    slug: 'platou-gemini-3-1-flash-lite-preview',
     familyId: platouChat.id,
     providerId: platou.id,
-    remoteModelKey: 'gemini-2.5-flash',
-    label: 'Gemini 2.5 Flash',
+    remoteModelKey: 'gemini-3.1-flash-lite-preview',
+    label: 'Gemini 3.1 Flash Lite Preview',
     priority: 10,
     isDefault: true,
     defaultParamsJson: {},

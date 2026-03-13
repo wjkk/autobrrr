@@ -137,6 +137,10 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
                 latestPlannerRun.outputJson && typeof latestPlannerRun.outputJson === 'object' && !Array.isArray(latestPlannerRun.outputJson)
                   ? (((latestPlannerRun.outputJson as Record<string, unknown>).generatedText as string | undefined) ?? null)
                   : null,
+              structuredDoc:
+                latestPlannerRun.outputJson && typeof latestPlannerRun.outputJson === 'object' && !Array.isArray(latestPlannerRun.outputJson)
+                  ? (((latestPlannerRun.outputJson as Record<string, unknown>).structuredDoc as Record<string, unknown> | undefined) ?? null)
+                  : null,
               errorCode: latestPlannerRun.errorCode,
               errorMessage: latestPlannerRun.errorMessage,
               createdAt: latestPlannerRun.createdAt.toISOString(),

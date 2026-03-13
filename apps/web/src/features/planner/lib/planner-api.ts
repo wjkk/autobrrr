@@ -1,5 +1,7 @@
 import type { StudioFixture } from '@aiv/domain';
 
+import type { PlannerStructuredDoc } from './planner-structured-doc';
+
 export interface PlannerRuntimeApiContext {
   projectId: string;
   episodeId: string;
@@ -32,6 +34,7 @@ export interface ApiPlannerWorkspace {
     status: string;
     providerStatus: string | null;
     generatedText: string | null;
+    structuredDoc: PlannerStructuredDoc | null;
     errorCode: string | null;
     errorMessage: string | null;
     createdAt: string;
@@ -50,5 +53,6 @@ export interface PlannerPageBootstrap {
   studio: StudioFixture | null;
   runtimeApi?: PlannerRuntimeApiContext;
   initialGeneratedText?: string | null;
+  initialStructuredDoc?: PlannerStructuredDoc | null;
   initialPlannerReady?: boolean;
 }

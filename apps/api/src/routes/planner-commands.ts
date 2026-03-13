@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { mapRun } from '../lib/api-mappers.js';
 import { requireUser } from '../lib/auth.js';
 import { resolveModelSelection } from '../lib/model-registry.js';
+import { buildPlannerGenerationPrompt } from '../lib/planner-doc.js';
 import { findOwnedEpisode } from '../lib/ownership.js';
 import { prisma } from '../lib/prisma.js';
 
@@ -102,7 +103,12 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
     }
 
     const plannerSession = await findOrCreateActivePlannerSession(episode.project.id, episode.id, user.id);
-    const effectivePrompt = payload.data.prompt ?? episode.summary ?? episode.project.title;
+    const rawPrompt = payload.data.prompt ?? episode.summary ?? episode.project.title;
+    const effectivePrompt = buildPlannerGenerationPrompt({
+      userPrompt: rawPrompt,
+      projectTitle: episode.project.title,
+      episodeTitle: episode.title,
+    });
 
     const result = await prisma.$transaction(async (tx) => {
       await tx.plannerSession.update({
@@ -130,6 +136,9 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
             episodeId: episode.id,
             projectId: episode.project.id,
             prompt: effectivePrompt,
+            rawPrompt,
+            projectTitle: episode.project.title,
+            episodeTitle: episode.title,
             modelFamily: {
               id: resolvedModel.family.id,
               slug: resolvedModel.family.slug,

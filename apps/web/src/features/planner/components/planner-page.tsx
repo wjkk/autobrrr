@@ -9,8 +9,10 @@ import { Dialog } from '@/features/shared/components/dialog';
 import { plannerCopy } from '@/lib/copy';
 
 import type { PlannerRuntimeApiContext } from '../lib/planner-api';
+import type { PlannerStructuredDoc } from '../lib/planner-structured-doc';
 import { usePlannerRefinement } from '../hooks/use-planner-refinement';
 import { sekoPlanData, type SekoActDraft, type SekoImageCard } from '../lib/seko-plan-data';
+import { toPlannerSeedData } from '../lib/planner-structured-doc';
 import { sekoPlanThreadData } from '../lib/seko-plan-thread-data';
 import { PlannerHistoryMenu } from './internal/planner-history-menu';
 import styles from './planner-page.module.css';
@@ -19,6 +21,7 @@ interface PlannerPageProps {
   studio: StudioFixture;
   runtimeApi?: PlannerRuntimeApiContext;
   initialGeneratedText?: string | null;
+  initialStructuredDoc?: PlannerStructuredDoc | null;
   initialPlannerReady?: boolean;
 }
 
@@ -133,9 +136,8 @@ function nextImageFromPool(current: string, pool: string[]) {
   return pool[nextIndex];
 }
 
-function buildPlannerEpisodes(title: string, mode: PlannerMode, brief: string): PlannerEpisodeDraft[] {
+function buildPlannerEpisodes(title: string, mode: PlannerMode, brief: string, episodeCount: number, shotTotal: number): PlannerEpisodeDraft[] {
   const baseTitle = title.slice(0, 18) || '霓虹代码：神秘U盘';
-  const shotTotal = sekoPlanData.acts.reduce((sum, item) => sum + item.shots.length, 0);
 
   if (mode === 'single') {
     return [
@@ -150,7 +152,7 @@ function buildPlannerEpisodes(title: string, mode: PlannerMode, brief: string): 
     ];
   }
 
-  return Array.from({ length: sekoPlanData.episodeCount }, (_item, index) => ({
+  return Array.from({ length: episodeCount }, (_item, index) => ({
     id: `episode-${index + 1}`,
     label: `EP ${String(index + 1).padStart(2, '0')}`,
     title: index === 0 ? baseTitle : `${baseTitle}·待策划`,
@@ -196,14 +198,13 @@ function ratioCardWidth(ratio: PlannerAssetRatio) {
   return 150;
 }
 
-export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialPlannerReady }: PlannerPageProps) {
+export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialStructuredDoc, initialPlannerReady }: PlannerPageProps) {
   const router = useRouter();
   const timersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
 
   const plannerMode: PlannerMode = studio.project.contentMode === 'series' ? 'series' : 'single';
-  const plannerEpisodes = useMemo(() => buildPlannerEpisodes(studio.project.title, plannerMode, studio.project.brief), [plannerMode, studio.project.title, studio.project.brief]);
 
-  const [activeEpisodeId, setActiveEpisodeId] = useState(plannerEpisodes[0]?.id ?? 'episode-1');
+  const [activeEpisodeId, setActiveEpisodeId] = useState('episode-1');
   const [displayTitle, setDisplayTitle] = useState(studio.project.title);
 
   const [aspectRatio, setAspectRatio] = useState<PlannerAssetRatio>('16:9');
@@ -236,7 +237,12 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialP
   const [booting, setBooting] = useState(false);
   const [bootProgress, setBootProgress] = useState(0);
   const [serverPlannerText, setServerPlannerText] = useState(initialGeneratedText ?? '');
+  const [structuredPlannerDoc, setStructuredPlannerDoc] = useState<PlannerStructuredDoc | null>(initialStructuredDoc ?? null);
   const [plannerSubmitting, setPlannerSubmitting] = useState(false);
+
+  const plannerDoc = useMemo(() => (structuredPlannerDoc ? toPlannerSeedData(structuredPlannerDoc, sekoPlanData) : sekoPlanData), [structuredPlannerDoc]);
+
+  const plannerEpisodes = useMemo(() => buildPlannerEpisodes(studio.project.title, plannerMode, studio.project.brief, plannerDoc.episodeCount, plannerDoc.acts.reduce((sum, item) => sum + item.shots.length, 0)), [plannerDoc.acts, plannerDoc.episodeCount, plannerMode, studio.project.title, studio.project.brief]);
 
   const {
     versions,
@@ -251,9 +257,9 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialP
     deleteShot,
   } = usePlannerRefinement({
     stepCount: sekoPlanThreadData.refinementSteps.length,
-    seedSubjects: sekoPlanData.subjects,
-    seedScenes: sekoPlanData.scenes,
-    seedActs: sekoPlanData.acts,
+    seedSubjects: plannerDoc.subjects,
+    seedScenes: plannerDoc.scenes,
+    seedActs: plannerDoc.acts,
   });
 
   useEffect(() => {
@@ -277,13 +283,14 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialP
   const pollPlannerRunUntilTerminal = async (runId: string, trigger: 'confirm_outline' | 'rerun', instruction: string) => {
     for (let attempt = 0; attempt < 20; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      const run = await requestPlannerApi<{ status: string; output: { generatedText?: string } | null; errorMessage: string | null }>(
+      const run = await requestPlannerApi<{ status: string; output: { generatedText?: string; structuredDoc?: PlannerStructuredDoc | null } | null; errorMessage: string | null }>(
         `/api/planner/runs/${encodeURIComponent(runId)}`,
       );
 
       if (run.status === 'completed' && run.output?.generatedText) {
         const generatedText = run.output?.generatedText ?? '';
         setServerPlannerText(generatedText);
+        setStructuredPlannerDoc(run.output?.structuredDoc ?? null);
         setOutlineConfirmed(true);
         const nextId = hydrateReadyVersion({ trigger, instruction });
         selectVersion(nextId);
@@ -341,7 +348,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialP
   const activeStyle = styleById(activeEpisode?.styleId ?? 61);
   const activeEpisodeNumber = Number.parseInt(activeEpisode?.label.replace('EP ', '') ?? '1', 10);
 
-  const pointCost = studio.planner.pointCost > 0 ? studio.planner.pointCost : sekoPlanData.pointCost;
+  const pointCost = studio.planner.pointCost > 0 ? studio.planner.pointCost : plannerDoc.pointCost;
   const mediaCardStyle = useMemo(
     () =>
       ({
@@ -836,7 +843,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialP
             <header className={styles.resultHeader}>
               <div className={styles.resultTitleWrap}>
                 <h2>
-                  第{Number.isNaN(activeEpisodeNumber) ? 1 : activeEpisodeNumber}集：{activeEpisode?.title ?? sekoPlanData.episodeTitle}
+                  第{Number.isNaN(activeEpisodeNumber) ? 1 : activeEpisodeNumber}集：{activeEpisode?.title ?? plannerDoc.episodeTitle}
                 </h2>
                 <p>内容由 AI 生成</p>
               </div>
@@ -868,14 +875,14 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialP
                   <section id="doc-summary" className={styles.docSection}>
                     <h3 className={styles.sectionTitle}>故事梗概</h3>
                     <ul>
-                      {sekoPlanData.summaryBullets.map((line, index) => (
+                      {plannerDoc.summaryBullets.map((line, index) => (
                         <li key={`summary-${index}`}>{line}</li>
                       ))}
                     </ul>
                     <div className={styles.highlightCard}>
                       <strong>剧本亮点</strong>
                       <ul>
-                        {sekoPlanData.highlights.map((item) => (
+                        {plannerDoc.highlights.map((item) => (
                           <li key={item.title}>
                             <span>{item.title}</span>
                             {item.description}
@@ -890,7 +897,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialP
                   <section id="doc-style" className={styles.docSection}>
                     <h3 className={styles.sectionTitle}>美术风格</h3>
                     <ul>
-                      {sekoPlanData.styleBullets.map((line, index) => (
+                      {plannerDoc.styleBullets.map((line, index) => (
                         <li key={`style-${index}`}>{line}</li>
                       ))}
                     </ul>
@@ -902,7 +909,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialP
                   <section id="doc-subjects" className={styles.docSection}>
                     <h3 className={styles.sectionTitle}>主体列表</h3>
                     <ul>
-                      {sekoPlanData.subjectBullets.map((line, index) => (
+                      {plannerDoc.subjectBullets.map((line, index) => (
                         <li key={`subject-line-${index}`}>{line}</li>
                       ))}
                     </ul>
@@ -938,7 +945,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialP
                   <section id="doc-scenes" className={styles.docSection}>
                     <h3 className={styles.sectionTitle}>场景列表</h3>
                     <ul>
-                      {sekoPlanData.sceneBullets.map((line, index) => (
+                      {plannerDoc.sceneBullets.map((line, index) => (
                         <li key={`scene-line-${index}`}>{line}</li>
                       ))}
                     </ul>
@@ -977,7 +984,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialP
                     <div className={styles.scriptSummaryCard}>
                       <strong>剧本摘要</strong>
                       <ul>
-                        {sekoPlanData.scriptSummary.map((line, index) => (
+                        {plannerDoc.scriptSummary.map((line, index) => (
                           <li key={`script-summary-${index}`}>{line}</li>
                         ))}
                         <li>总分镜数：{scriptActs.reduce((sum, act) => sum + act.shots.length, 0)}</li>

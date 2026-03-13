@@ -89,6 +89,7 @@ export async function fetchPlannerStudioProject(projectId: string): Promise<Plan
         episodeId: workspace.episode.id,
       },
       initialGeneratedText: workspace.latestPlannerRun?.generatedText ?? null,
+      initialStructuredDoc: workspace.latestPlannerRun?.structuredDoc ?? null,
       initialPlannerReady: workspace.plannerSession?.status === 'ready',
     };
   } catch {

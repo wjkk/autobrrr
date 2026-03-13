@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { Run } from '@prisma/client';
 
+import { parsePlannerStructuredDoc } from './planner-doc.js';
 import { prisma } from './prisma.js';
 
 export type SupportedMediaKind = 'IMAGE' | 'VIDEO';
@@ -152,7 +153,14 @@ export async function finalizePlannerRun(run: Run): Promise<RunLifecycleAction> 
 
   const input = readObject(run.inputJson);
   const output = readObject(run.outputJson);
-  const generatedText = extractPlannerText(output.providerData, typeof input.prompt === 'string' ? input.prompt : '未命名策划');
+  const rawPrompt = typeof input.rawPrompt === 'string' ? input.rawPrompt : '未命名策划';
+  const generatedText = extractPlannerText(output.providerData, rawPrompt);
+  const structuredDoc = parsePlannerStructuredDoc({
+    rawText: generatedText,
+    userPrompt: rawPrompt,
+    projectTitle: typeof input.projectTitle === 'string' ? input.projectTitle : '未命名项目',
+    episodeTitle: typeof input.episodeTitle === 'string' ? input.episodeTitle : '第1集',
+  });
 
   await prisma.$transaction(async (tx) => {
     await tx.plannerSession.update({
@@ -184,6 +192,7 @@ export async function finalizePlannerRun(run: Run): Promise<RunLifecycleAction> 
         outputJson: {
           ...output,
           generatedText,
+          structuredDoc,
           plannerSessionId: plannerSession.id,
         },
         finishedAt: new Date(),

@@ -29,21 +29,26 @@ const stageConfig: Array<{ id: ProjectStage; label: string; href: (projectId: st
 
 export function StageLinks({ projectId, activeStage }: StageLinksProps) {
   return (
-    <nav className="stage-links" aria-label="项目阶段">
-      {stageConfig.map((stage) => {
-        const active = stage.id === activeStage;
+    <div className="stage-links-wrap">
+      <nav className="stage-links" aria-label="项目阶段">
+        {stageConfig.map((stage) => {
+          const active = stage.id === activeStage;
 
-        return (
-          <Link
-            key={stage.id}
-            href={stage.href(projectId)}
-            className={cx('stage-links__item', active && 'stage-links__item--active')}
-            aria-current={active ? 'page' : undefined}
-          >
-            {stage.label}
-          </Link>
-        );
-      })}
-    </nav>
+          return (
+            <Link
+              key={stage.id}
+              href={stage.href(projectId)}
+              className={cx('stage-links__item', active && 'stage-links__item--active')}
+              aria-current={active ? 'page' : undefined}
+            >
+              {stage.label}
+            </Link>
+          );
+        })}
+      </nav>
+      <Link href="/settings/providers" className="stage-links__settings">
+        接口配置
+      </Link>
+    </div>
   );
 }

@@ -42,3 +42,10 @@ export interface PublishPageBootstrap {
   runtimeApi?: PublishRuntimeApiContext;
   initialPublishWorkspace?: ApiPublishWorkspace | null;
 }
+
+export interface PublishSubmitResult {
+  run: {
+    id: string;
+    status: string;
+  };
+}

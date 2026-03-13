@@ -473,6 +473,25 @@ async function main() {
 
   const projectList = await request<Array<{ id: string; title: string }>>('/api/studio/projects', { cookie });
   console.log(`[smoke] project list ok (${projectList.data.length} projects)`);
+
+  const publishSubmit = await request<{ run: { id: string; status: string } }>(
+    `/api/projects/${createdProject.data.projectId}/publish/submit`,
+    {
+      method: 'POST',
+      cookie,
+      body: JSON.stringify({
+        episodeId,
+        title: '机械猫雨夜纪行',
+        intro: '一支关于机械猫在雨夜城市中观察、回望与移动的短片。',
+        script: '围绕机械猫、雨夜、霓虹与城市空间展开。',
+        tag: 'RainCity',
+      }),
+    },
+  );
+  if (publishSubmit.data.run.status !== 'completed') {
+    throw new Error('Expected publish submit run to complete immediately.');
+  }
+  console.log('[smoke] publish submit ok');
 }
 
 main()

@@ -9,7 +9,7 @@ import { Dialog } from '@/features/shared/components/dialog';
 import { StageLinks } from '@/features/shared/components/stage-links';
 import { publishCopy } from '@/lib/copy';
 
-import type { ApiPublishWorkspace, PublishRuntimeApiContext } from '../lib/publish-api';
+import type { ApiPublishWorkspace, PublishRuntimeApiContext, PublishSubmitResult } from '../lib/publish-api';
 import styles from './publish-page.module.css';
 
 interface PublishPageProps {
@@ -34,6 +34,7 @@ export function PublishPage({ studio, runtimeApi, initialPublishWorkspace }: Pub
   const [activeCategory, setActiveCategory] = useState<(typeof HISTORY_CATEGORIES)[number]>('全部');
   const [notice, setNotice] = useState<string | null>(null);
   const [successOpen, setSuccessOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const filteredHistoryWorks = useMemo(() => {
     if (activeCategory === '全部') {
@@ -94,9 +95,42 @@ export function PublishPage({ studio, runtimeApi, initialPublishWorkspace }: Pub
     setHistoryPickerOpen(false);
   };
 
-  const submitPublish = () => {
+  const submitPublish = async () => {
     if (!draft.title.trim() || !draft.intro.trim()) {
       setNotice('标题和简介未完成，暂不能发布。');
+      return;
+    }
+
+    if (runtimeApi) {
+      setSubmitting(true);
+      try {
+        const response = await fetch(`/api/publish/projects/${encodeURIComponent(runtimeApi.projectId)}/submit`, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            episodeId: runtimeApi.episodeId,
+            title: draft.title,
+            intro: draft.intro,
+            script: draft.script,
+            tag: draft.tag,
+            sourceHistoryId: selectedHistoryId,
+          }),
+        });
+        const payload = (await response.json()) as { ok: boolean; data?: PublishSubmitResult; error?: { message?: string } };
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error?.message ?? '发布失败，请稍后重试。');
+        }
+        setDraft((current) => ({ ...current, status: 'submitted' }));
+        setSuccessOpen(true);
+        setNotice(null);
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : '发布失败，请稍后重试。');
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
 
@@ -131,7 +165,7 @@ export function PublishPage({ studio, runtimeApi, initialPublishWorkspace }: Pub
               <Button variant="secondary" onClick={openHistoryPicker}>
                 选择历史
               </Button>
-              <Button onClick={submitPublish}>发布作品</Button>
+              <Button onClick={submitPublish} disabled={submitting}>{submitting ? '发布中...' : '发布作品'}</Button>
             </>
           }
         >
@@ -244,7 +278,7 @@ export function PublishPage({ studio, runtimeApi, initialPublishWorkspace }: Pub
                       <Button variant="secondary" onClick={resetDraft}>
                         重置草稿
                       </Button>
-                      <Button onClick={submitPublish}>发布作品</Button>
+                      <Button onClick={submitPublish} disabled={submitting}>{submitting ? '发布中...' : '发布作品'}</Button>
                     </div>
                   </div>
                 </div>

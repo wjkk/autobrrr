@@ -41,6 +41,7 @@ export function ShotPoster({
     '--poster-zoom': `${shot.canvasTransform.zoom / 100}`,
     '--poster-offset-x': `${shot.canvasTransform.offsetX}px`,
     '--poster-offset-y': `${shot.canvasTransform.offsetY}px`,
+    '--poster-flip-x': shot.canvasTransform.flipX ? -1 : 1,
   } as CSSProperties;
 
   return (

@@ -177,11 +177,11 @@ export function startShotGenerationState(current: CreationWorkspace, shotId: str
   };
 }
 
-export function finishShotGenerationState(current: CreationWorkspace, shotId: string, modelId: string): CreationWorkspace {
+export function finishShotGenerationState(current: CreationWorkspace, shotId: string, modelId: string, mediaKind: 'image' | 'video' = 'video'): CreationWorkspace {
   return {
     ...current,
     shots: updateShotList(current.shots, shotId, (shot) => {
-      const newVersion = buildVersion(shot, modelId);
+      const newVersion = buildVersion(shot, modelId, mediaKind);
       return {
         ...shot,
         preferredModel: modelId,
@@ -378,6 +378,7 @@ export function applyCropStoryboardState(current: CreationWorkspace, shotId: str
         zoom: focusTransform.zoom,
         offsetX: focusTransform.offsetX,
         offsetY: focusTransform.offsetY,
+        flipX: shot.canvasTransform.flipX,
       },
       imagePrompt: `${shot.imagePrompt} 已按${draft.focus === 'subject' ? '主体' : draft.focus === 'motion' ? '动作' : '环境'}重新裁切。`,
     };

@@ -1,0 +1,518 @@
+.editorShell {
+  position: fixed;
+  inset: 0;
+  z-index: 155;
+  display: flex;
+  flex-direction: column;
+  background: #040507;
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.editorShell button,
+.editorShell input,
+.editorShell textarea {
+  font: inherit;
+}
+
+.editorHeader {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  min-height: 48px;
+  padding: 8px 14px 0;
+}
+
+.headerEdge,
+.headerEdgeRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.headerEdgeRight {
+  justify-content: flex-end;
+}
+
+.backButton,
+.modeButton,
+.segmentButton,
+.replaceButton,
+.voiceMainRow,
+.voiceSubRow,
+.addDialogueButton,
+.removeDialogueButton,
+.modelButton,
+.resolutionButton,
+.submitButton,
+.memberButton,
+.pointBadge,
+.shotPickerItem,
+.metaButton {
+  border: none;
+  cursor: pointer;
+}
+
+.backButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 13px 0 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(13, 15, 20, 0.96);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.backButtonIcon {
+  width: 14px;
+  height: 14px;
+}
+
+.modeToggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(23, 25, 31, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-width: 84px;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 16px;
+  font-weight: 400;
+  background: transparent;
+}
+
+.modeButtonActive {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.pointBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(18, 20, 26, 0.92);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.memberButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(18, 20, 26, 0.92);
+  color: #e2b24e;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.editorBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 318px;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+  padding: 10px 14px 14px;
+}
+
+.previewStage {
+  min-width: 0;
+  min-height: 0;
+}
+
+.previewCard {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 0;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  background: rgba(13, 15, 20, 0.9);
+  overflow: hidden;
+}
+
+.previewPosterWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 63px 18px 27px;
+}
+
+.previewPoster {
+  width: min(316px, 100%) !important;
+  min-width: 0 !important;
+  height: auto !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.replaceButton {
+  position: absolute;
+  top: 61px;
+  right: calc(50% - 158px + 7px);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(64, 64, 69, 0.72);
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 12px;
+  font-weight: 700;
+  backdrop-filter: blur(12px);
+}
+
+.replaceButtonIcon {
+  width: 12px;
+  height: 12px;
+}
+
+.shotPicker {
+  position: absolute;
+  top: 94px;
+  right: calc(50% - 158px + 8px);
+  z-index: 5;
+  display: grid;
+  gap: 6px;
+  width: 180px;
+  padding: 8px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(18, 20, 26, 0.96);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.34);
+}
+
+.shotPickerItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.shotPickerItem small {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.shotPickerItemActive {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.sidePanel {
+  min-height: 0;
+}
+
+.sideInner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  padding: 10px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  background: rgba(13, 15, 20, 0.94);
+}
+
+.segmentedRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.segmentButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.44);
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.segmentButtonActive {
+  background: rgba(255, 255, 255, 0.96);
+  color: #181b22;
+}
+
+.textCard,
+.voiceCard,
+.promptTextarea,
+.audioUploadCard,
+.multiDialogueCard {
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.072);
+  background: rgba(255, 255, 255, 0.028);
+}
+
+.textCard {
+  padding: 10px 11px 9px;
+}
+
+.dialogueTextarea,
+.promptTextarea,
+.multiDialogueCard textarea,
+.multiDialogueCard input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.94);
+  resize: none;
+  outline: none;
+}
+
+.dialogueTextarea {
+  min-height: 84px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.textMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 7px;
+  padding-top: 9px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.metaButton {
+  padding: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.54);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.sectionBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.sectionTitle {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.voiceCard {
+  padding: 0 11px;
+}
+
+.voiceMainRow,
+.voiceSubRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 50px;
+  padding: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  text-align: left;
+}
+
+.voiceMainRow {
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.voiceMainMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.voiceMainMeta strong {
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.voiceMainMeta small,
+.audioUploadMeta {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 11px;
+}
+
+.voiceSwapIcon,
+.voiceChevron,
+.bottomChevron {
+  width: 14px;
+  height: 14px;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.sliderRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.sliderRow input {
+  width: 100%;
+}
+
+.sliderRow strong {
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.promptTextarea {
+  min-height: 96px;
+  padding: 12px 11px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 14px;
+}
+
+.audioUploadCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 12px;
+}
+
+.audioUploadTitle {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.audioUploadInput {
+  margin-top: 6px;
+}
+
+.multiHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.addDialogueButton,
+.removeDialogueButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.multiDialogueList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.multiDialogueCard {
+  display: grid;
+  gap: 8px;
+  padding: 9px 10px;
+}
+
+.multiDialogueCard input {
+  min-height: 32px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.multiDialogueCard textarea {
+  min-height: 74px;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.notice {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.bottomBar {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.modelButton,
+.resolutionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.submitButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #131720;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+@media (max-width: 1180px) {
+  .editorBody {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -172,6 +172,7 @@ function makeShot(seed: Partial<Shot> & Pick<Shot, 'id' | 'title' | 'subtitleTex
       zoom: 100,
       offsetX: 0,
       offsetY: 0,
+      flipX: false,
     },
     lastError: seed.lastError ?? '',
   };
@@ -228,6 +229,8 @@ function baseCreation(shots: Shot[], selectedShotId: string, viewMode: CreationW
       subtitleVisible: true,
     },
     voice: {
+      mode: 'text',
+      audioName: '',
       voiceName: '旁白女声 A',
       emotion: '沉稳',
       volume: 72,

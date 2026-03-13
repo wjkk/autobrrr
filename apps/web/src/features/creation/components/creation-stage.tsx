@@ -2,7 +2,7 @@
 
 import { cx } from '@aiv/ui';
 
-import { getPlaybackSubtitle, getStageMotionStyle } from '../lib/creation-playback';
+import { getPlaybackShot, getPlaybackSubtitle, getStageMotionStyle } from '../lib/creation-playback';
 import type { CreationWorkspaceController } from '../lib/use-creation-workspace';
 import { CreationIcon } from './creation-icons';
 import { CreationVersionRail } from './creation-version-rail';
@@ -15,17 +15,23 @@ interface CreationStageProps {
 
 export function CreationStage({ controller }: CreationStageProps) {
   const { activeShot, activeVersion, selectedVersion, creation, dialog } = controller;
+  const playbackShot = getPlaybackShot(creation);
 
   if (!activeShot) {
     return null;
   }
 
-  const accent = controller.shotAccent(activeShot.id);
-  const displayVersion = selectedVersion ?? activeVersion;
-  const isGenerating = activeShot.status === 'generating';
-  const showReplaceAction = !!displayVersion && displayVersion.id !== activeVersion?.id;
-  const stageCaption = getPlaybackSubtitle(creation, activeShot);
-  const stageStyle = getStageMotionStyle(creation, activeShot);
+  const stageShot = creation.playback.playing ? playbackShot ?? activeShot : activeShot;
+  const stageActiveVersion = stageShot.versions.find((version) => version.id === stageShot.activeVersionId) ?? stageShot.versions[0] ?? null;
+  const stageSelectedVersion = stageShot.id === activeShot.id
+    ? selectedVersion ?? activeVersion
+    : stageShot.versions.find((version) => version.id === stageShot.selectedVersionId) ?? stageActiveVersion;
+  const accent = controller.shotAccent(stageShot.id);
+  const displayVersion = stageSelectedVersion ?? stageActiveVersion;
+  const isGenerating = stageShot.status === 'generating';
+  const showReplaceAction = !!displayVersion && displayVersion.id !== stageActiveVersion?.id;
+  const stageCaption = getPlaybackSubtitle(creation, stageShot);
+  const stageStyle = getStageMotionStyle(creation, stageShot);
   const topTools = [
     {
       id: 'canvas',
@@ -74,17 +80,17 @@ export function CreationStage({ controller }: CreationStageProps) {
             <div className={styles.stagePosterFrame}>
               {displayVersion ? (
                 <div className={styles.stagePosterActions} data-visible={showReplaceAction || isGenerating ? 'true' : 'false'}>
-                  <button type="button" className={cx(styles.overlayAction, styles.stagePosterActionButton)} onClick={() => controller.downloadVersion(activeShot.id, displayVersion.id)}>
+                  <button type="button" className={cx(styles.overlayAction, styles.stagePosterActionButton)} onClick={() => controller.downloadVersion(stageShot.id, displayVersion.id)}>
                     <CreationIcon name="download" className={styles.buttonGlyph} />
                     <span>下载</span>
                   </button>
                   {isGenerating ? (
-                    <button type="button" className={cx(styles.overlayAction, styles.stagePosterActionButton)} onClick={() => controller.cancelGeneration(activeShot.id)}>
+                    <button type="button" className={cx(styles.overlayAction, styles.stagePosterActionButton)} onClick={() => controller.cancelGeneration(stageShot.id)}>
                       <CreationIcon name="close" className={styles.buttonGlyph} />
                       <span>取消生成</span>
                     </button>
                   ) : showReplaceAction ? (
-                    <button type="button" className={cx(styles.overlayAction, styles.stagePosterActionButton)} onClick={() => controller.applySelectedVersion(activeShot.id, displayVersion.id)}>
+                    <button type="button" className={cx(styles.overlayAction, styles.stagePosterActionButton)} onClick={() => controller.applySelectedVersion(stageShot.id, displayVersion.id)}>
                       <CreationIcon name="replace" className={styles.buttonGlyph} />
                       <span>替换</span>
                     </button>
@@ -94,7 +100,8 @@ export function CreationStage({ controller }: CreationStageProps) {
 
               <div className={styles.stagePosterSurface}>
                 <ShotPoster
-                  shot={activeShot}
+                  key={`${stageShot.id}-${displayVersion?.id ?? 'active'}`}
+                  shot={stageShot}
                   versionId={displayVersion?.id}
                   size="stage"
                   accent={accent}
@@ -104,7 +111,7 @@ export function CreationStage({ controller }: CreationStageProps) {
               </div>
 
               <div className={styles.stageSubtitleDock} data-hidden={!creation.playback.subtitleVisible || !stageCaption}>
-                <span key={`${activeShot.id}-${stageCaption}`} className={styles.stageSubtitleText}>
+                <span key={`${stageShot.id}-${stageCaption}`} className={styles.stageSubtitleText}>
                   {stageCaption}
                 </span>
               </div>

@@ -6,8 +6,10 @@ import { cx } from '@aiv/ui';
 import { useEffect, useRef, useState } from 'react';
 
 import { useCreationWorkspace } from '../lib/use-creation-workspace';
+import { CreationCanvasEditor } from './creation-canvas-editor';
 import { CreationDialogs } from './creation-dialogs';
 import { CreationIcon } from './creation-icons';
+import { CreationLipsyncEditor } from './creation-lipsync-editor';
 import { CreationSidebar } from './creation-sidebar';
 import { CreationStage } from './creation-stage';
 import { CreationStoryboardView } from './creation-storyboard-view';
@@ -144,6 +146,8 @@ export function CreationPage({ studio, initialShotId, initialView }: CreationPag
         </div>
       </div>
 
+      <CreationCanvasEditor controller={controller} />
+      <CreationLipsyncEditor controller={controller} />
       <CreationDialogs controller={controller} />
     </>
   );

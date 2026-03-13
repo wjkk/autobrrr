@@ -16,8 +16,19 @@ interface CreationVisualSidebarProps {
 
 type ComposerMode = 'edit' | 'image' | 'video';
 
-const IMAGE_COST = 1;
+const EDIT_COST = 1;
+const IMAGE_COST = 2;
 const VIDEO_COST = 8;
+const IMAGE_PROMPT_ASSIST_OPTIONS = [
+  { id: 'style', label: '补充画风', suffix: '，现代科技感，电影级灯光，角色形象统一。' },
+  { id: 'detail', label: '增强细节', suffix: '，补充材质细节、表情层次和环境质感。' },
+  { id: 'camera', label: '加入镜头感', suffix: '，加入景深、构图层次和主体聚焦。' },
+] as const;
+const IMAGE_MODEL_OPTIONS = [
+  { id: 'Vision Auto', category: 'auto' as const, title: '智能选择', description: '平衡速度与一致性' },
+  { id: 'Vision Detail', category: 'detail' as const, title: '细节增强', description: '强化材质与表情细节' },
+  { id: 'Vision Reference', category: 'reference' as const, title: '参考一致', description: '更贴合参考图与历史素材' },
+] as const;
 
 function hasVideoResult(shot: CreationWorkspaceController['activeShot']) {
   if (!shot) {
@@ -67,18 +78,25 @@ function canElementConsumeWheel(target: EventTarget | null, boundary: HTMLElemen
 }
 
 export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps) {
-  const { activeShot, activeVersion, selectedVersion, generateDraft, creation } = controller;
+  const { activeShot, activeVersion, selectedVersion, generateDraft, creation, modelPickerDraft, activeMaterial, studio } = controller;
   const [composerMode, setComposerMode] = useState<ComposerMode>('edit');
   const [videoThreadVisible, setVideoThreadVisible] = useState(() => hasVideoResult(controller.activeShot));
   const [composerText, setComposerText] = useState('');
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tailFrameMenuOpen, setTailFrameMenuOpen] = useState(false);
+  const [imageModelMenuOpen, setImageModelMenuOpen] = useState(false);
+  const [imageReferenceMenuOpen, setImageReferenceMenuOpen] = useState(false);
+  const [promptAssistMenuOpen, setPromptAssistMenuOpen] = useState(false);
   const [tailFramePreviewUrl, setTailFramePreviewUrl] = useState('');
   const modeMenuRef = useRef<HTMLDivElement | null>(null);
   const settingsRef = useRef<HTMLDivElement | null>(null);
   const tailFrameMenuRef = useRef<HTMLDivElement | null>(null);
+  const imageModelMenuRef = useRef<HTMLDivElement | null>(null);
+  const imageReferenceMenuRef = useRef<HTMLDivElement | null>(null);
+  const promptAssistMenuRef = useRef<HTMLDivElement | null>(null);
   const tailFrameUploadRef = useRef<HTMLInputElement | null>(null);
+  const imageReferenceUploadRef = useRef<HTMLInputElement | null>(null);
   const threadRef = useRef<HTMLDivElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -96,6 +114,18 @@ export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps
 
       if (tailFrameMenuRef.current && !tailFrameMenuRef.current.contains(target)) {
         setTailFrameMenuOpen(false);
+      }
+
+      if (imageModelMenuRef.current && !imageModelMenuRef.current.contains(target)) {
+        setImageModelMenuOpen(false);
+      }
+
+      if (imageReferenceMenuRef.current && !imageReferenceMenuRef.current.contains(target)) {
+        setImageReferenceMenuOpen(false);
+      }
+
+      if (promptAssistMenuRef.current && !promptAssistMenuRef.current.contains(target)) {
+        setPromptAssistMenuOpen(false);
       }
     }
 
@@ -154,6 +184,9 @@ export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps
     setModeMenuOpen(false);
     setSettingsOpen(false);
     setTailFrameMenuOpen(false);
+    setImageModelMenuOpen(false);
+    setImageReferenceMenuOpen(false);
+    setPromptAssistMenuOpen(false);
     setTailFramePreviewUrl('');
   }, [activeShot]);
 
@@ -200,10 +233,14 @@ export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps
 
   const switchComposerMode = (nextMode: ComposerMode) => {
     setComposerMode(nextMode);
+    setVideoThreadVisible(nextMode === 'video');
     setComposerText(nextMode === 'video' ? videoPrompt : '');
     setModeMenuOpen(false);
     setSettingsOpen(false);
     setTailFrameMenuOpen(false);
+    setImageModelMenuOpen(false);
+    setImageReferenceMenuOpen(false);
+    setPromptAssistMenuOpen(false);
   };
 
   const composerModeLabel = composerMode === 'video' ? '视频生成' : composerMode === 'image' ? '图片生成' : '对话改图';
@@ -213,7 +250,10 @@ export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps
       : composerMode === 'image'
         ? '输入你想生成的图片内容'
         : '输入你想要对当前画面修改的内容';
-  const composerModeIcon = composerMode === 'video' ? 'video' : composerMode === 'image' ? 'image' : 'magic';
+  const composerModeIcon = composerMode === 'video' ? 'video' : composerMode === 'image' ? 'imageMagic' : 'magic';
+  const isImageComposer = composerMode === 'image';
+  const canSubmitComposer = !isGenerating && composerText.trim().length > 0;
+  const composerCost = composerMode === 'video' ? VIDEO_COST : composerMode === 'image' ? IMAGE_COST : EDIT_COST;
 
   const handleTailFrameUpload = () => {
     tailFrameUploadRef.current?.click();
@@ -261,12 +301,44 @@ export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps
   const submitComposer = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    if (!canSubmitComposer) {
+      return;
+    }
+
     if (composerMode === 'video') {
       setVideoThreadVisible(true);
     }
 
-    controller.submitInlineGeneration();
+    controller.submitInlineGeneration(composerMode === 'video' ? 'video' : 'image');
   };
+
+  const applyPromptAssist = (suffix: string) => {
+    setComposerText((current) => `${current.trim()}${suffix}`.trim());
+    setPromptAssistMenuOpen(false);
+  };
+
+  const applyImageModel = (modelId: string, category: 'auto' | 'detail' | 'reference') => {
+    controller.setModelPickerField('category', category);
+    controller.setModelPickerField('selectedModel', modelId);
+    controller.requestModelChange(modelId);
+    setImageModelMenuOpen(false);
+  };
+
+  const handleImageReferenceUpload = () => {
+    imageReferenceUploadRef.current?.click();
+  };
+
+  const handleImageReferenceFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    controller.applyUploadedMaterial(file.name);
+    setImageReferenceMenuOpen(false);
+    event.target.value = '';
+  };
+
+  const visibleHistoryWorks = studio.historyWorks.slice(0, 4);
 
   return (
     <aside className={pageStyles.sidebar}>
@@ -355,7 +427,7 @@ export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps
                     <button type="button" className={styles.resultHoverAction} aria-label="打开素材" onClick={controller.openMaterialsDialog}>
                       <CreationIcon name="image" className={styles.smallIcon} />
                     </button>
-                    <button type="button" className={styles.resultHoverAction} aria-label="重新生成" onClick={controller.submitInlineGeneration}>
+                    <button type="button" className={styles.resultHoverAction} aria-label="重新生成" onClick={() => controller.submitInlineGeneration(videoThreadVisible ? 'video' : 'image')}>
                       <CreationIcon name="retry" className={styles.smallIcon} />
                     </button>
                   </div>
@@ -366,39 +438,41 @@ export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps
         </div>
 
         <form className={styles.composerForm} onSubmit={submitComposer}>
-          <div className={styles.composerDeck}>
-            <div className={styles.frameCardShell}>
-              <div className={styles.frameThumbStatic} aria-hidden="true">
-                {sourceImageUrl ? (
-                  <img className={styles.sourceThumbImage} src={sourceImageUrl} alt={activeShot.title} />
-                ) : (
-                  <span className={styles.sourceThumbPlaceholder}>首帧</span>
-                )}
-              </div>
-            </div>
-
-            {composerMode === 'video' ? (
+          {composerMode !== 'image' ? (
+            <div className={styles.composerDeck}>
               <div className={styles.frameCardShell}>
-                <button
-                  type="button"
-                  className={styles.tailFrameCard}
-                  onClick={() => {
-                    setTailFrameMenuOpen((current) => !current);
-                  }}
-                  aria-label="选择尾帧"
-                >
-                  {tailFramePreviewUrl ? (
-                    <img className={styles.tailFramePreview} src={tailFramePreviewUrl} alt="尾帧预览" />
+                <div className={styles.frameThumbStatic} aria-hidden="true">
+                  {sourceImageUrl ? (
+                    <img className={styles.sourceThumbImage} src={sourceImageUrl} alt={activeShot.title} />
                   ) : (
-                    <>
-                      <span className={styles.tailFramePlus}>+</span>
-                      <span className={styles.tailFrameLabel}>尾帧</span>
-                    </>
+                    <span className={styles.sourceThumbPlaceholder}>首帧</span>
                   )}
-                </button>
+                </div>
               </div>
-            ) : null}
-          </div>
+
+              {composerMode === 'video' ? (
+                <div className={styles.frameCardShell}>
+                  <button
+                    type="button"
+                    className={styles.tailFrameCard}
+                    onClick={() => {
+                      setTailFrameMenuOpen((current) => !current);
+                    }}
+                    aria-label="选择尾帧"
+                  >
+                    {tailFramePreviewUrl ? (
+                      <img className={styles.tailFramePreview} src={tailFramePreviewUrl} alt="尾帧预览" />
+                    ) : (
+                      <>
+                        <span className={styles.tailFramePlus}>+</span>
+                        <span className={styles.tailFrameLabel}>尾帧</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <textarea
             className={styles.textarea}
@@ -489,6 +563,93 @@ export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps
             </div>
           ) : null}
 
+          {imageModelMenuOpen && composerMode === 'image' ? (
+            <div className={cx(styles.inlinePanel, styles.modelPanel)} ref={imageModelMenuRef}>
+              <div className={styles.inlinePanelHeader}>选择模型</div>
+              <div className={styles.inlinePanelList}>
+                {IMAGE_MODEL_OPTIONS.map((item) => (
+                  <button key={item.id} type="button" className={cx(styles.inlinePanelItem, modelPickerDraft.selectedModel === item.id && styles.inlinePanelItemActive)} onClick={() => applyImageModel(item.id, item.category)}>
+                    <span className={styles.inlinePanelItemTitle}>{item.title}</span>
+                    <span className={styles.inlinePanelItemMeta}>{item.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {imageReferenceMenuOpen && composerMode === 'image' ? (
+            <div className={cx(styles.inlinePanel, styles.referencePanel)} ref={imageReferenceMenuRef}>
+              <div className={styles.inlinePanelHeader}>引用与素材</div>
+              <div className={styles.inlineActionRow}>
+                <button type="button" className={styles.inlineActionChip} onClick={handleImageReferenceUpload}>
+                  上传图片
+                </button>
+                {imageResultUrl ? (
+                  <button
+                    type="button"
+                    className={styles.inlineActionChip}
+                    onClick={() => {
+                      controller.applyUploadedMaterial(`${activeShot.title}-当前图`);
+                      setImageReferenceMenuOpen(false);
+                    }}
+                  >
+                    引用当前图
+                  </button>
+                ) : null}
+              </div>
+              {activeShot.materials.length ? (
+                <div className={styles.inlineSection}>
+                  <div className={styles.inlineSectionTitle}>当前分镜素材</div>
+                  <div className={styles.inlineTokenRow}>
+                    {activeShot.materials.slice(0, 4).map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={cx(styles.inlineToken, activeMaterial?.id === item.id && styles.inlineTokenActive)}
+                        onClick={() => {
+                          controller.setActiveMaterial(item.id);
+                          setImageReferenceMenuOpen(false);
+                        }}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <div className={styles.inlineSection}>
+                <div className={styles.inlineSectionTitle}>历史作品</div>
+                <div className={styles.inlineWorkList}>
+                  {visibleHistoryWorks.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={styles.inlineWorkCard}
+                      onClick={() => {
+                        controller.attachHistoryMaterial(item.title);
+                        setImageReferenceMenuOpen(false);
+                      }}
+                    >
+                      <span className={styles.inlineWorkTitle}>{item.title}</span>
+                      <span className={styles.inlineWorkMeta}>{item.durationLabel}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {promptAssistMenuOpen && composerMode === 'image' ? (
+            <div className={cx(styles.inlinePanel, styles.promptAssistMenu)} ref={promptAssistMenuRef}>
+              <div className={styles.inlinePanelHeader}>提示词辅助</div>
+              {IMAGE_PROMPT_ASSIST_OPTIONS.map((item) => (
+                <button key={item.id} type="button" className={styles.promptAssistItem} onClick={() => applyPromptAssist(item.suffix)}>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
           <div className={styles.composerFooter}>
             <div className={styles.footerLeft}>
               <button
@@ -507,22 +668,60 @@ export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps
               <button
                 type="button"
                 className={styles.utilityButton}
-                onClick={composerMode === 'video' ? () => setSettingsOpen((current) => !current) : controller.openMaterialsDialog}
-                aria-label={composerMode === 'video' ? '打开视频设置' : '打开素材面板'}
+                onClick={
+                  composerMode === 'video'
+                    ? () => setSettingsOpen((current) => !current)
+                    : () => {
+                        setImageReferenceMenuOpen(false);
+                        setPromptAssistMenuOpen(false);
+                        setImageModelMenuOpen((current) => !current);
+                      }
+                }
+                aria-label={composerMode === 'video' ? '打开视频设置' : '打开模型面板'}
               >
                 <CreationIcon name="model" className={styles.smallIcon} />
               </button>
+
+              {isImageComposer ? (
+                <>
+                  <button
+                    type="button"
+                    className={cx(styles.utilityButton, imageReferenceMenuOpen && styles.utilityButtonActive)}
+                    onClick={() => {
+                      setImageModelMenuOpen(false);
+                      setPromptAssistMenuOpen(false);
+                      setImageReferenceMenuOpen((current) => !current);
+                    }}
+                    aria-label="打开引用素材"
+                  >
+                    <CreationIcon name="mention" className={styles.smallIcon} />
+                  </button>
+                  <button
+                    type="button"
+                    className={cx(styles.utilityButton, promptAssistMenuOpen && styles.utilityButtonActive)}
+                    onClick={() => {
+                      setImageModelMenuOpen(false);
+                      setImageReferenceMenuOpen(false);
+                      setPromptAssistMenuOpen((current) => !current);
+                    }}
+                    aria-label="打开提示词辅助"
+                  >
+                    <CreationIcon name="edit" className={styles.smallIcon} />
+                  </button>
+                </>
+              ) : null}
             </div>
 
             <div className={styles.footerRight}>
-              <span className={styles.costBadge}>{`✦ ${composerMode === 'video' ? VIDEO_COST : IMAGE_COST}`}</span>
-              <button type="submit" className={styles.submitButton} disabled={isGenerating} aria-label="提交生成">
+              <span className={styles.costBadge}>{`✦ ${composerCost}`}</span>
+              <button type="submit" className={styles.submitButton} disabled={!canSubmitComposer} aria-label="提交生成">
                 <span className={styles.submitArrow}>↑</span>
               </button>
             </div>
           </div>
 
           <input ref={tailFrameUploadRef} type="file" accept="image/*" hidden onChange={handleTailFrameFileChange} />
+          <input ref={imageReferenceUploadRef} type="file" accept="image/*" hidden onChange={handleImageReferenceFileChange} />
         </form>
 
         {controller.notice ? <div className={styles.notice}>{controller.notice}</div> : null}

@@ -15,7 +15,7 @@ interface CreationTimelineProps {
   controller: CreationWorkspaceController;
 }
 
-const TIMELINE_TILE_WIDTH = 160;
+const TIMELINE_TILE_WIDTH = 154;
 const TIMELINE_TILE_GAP = 8;
 
 export function CreationTimeline({ controller }: CreationTimelineProps) {
@@ -74,7 +74,7 @@ export function CreationTimeline({ controller }: CreationTimelineProps) {
 
       <div className={styles.timelineShotsWrap}>
         {playbackShot ? (
-          <div className={styles.timelinePlayhead} style={{ transform: `translateX(${playheadLeft}px)` }}>
+          <div className={styles.timelinePlayhead} style={{ transform: `translate3d(${playheadLeft}px, 0, 0)` }}>
             <span className={styles.timelinePlayheadDot} />
             <span className={styles.timelinePlayheadLine} />
           </div>

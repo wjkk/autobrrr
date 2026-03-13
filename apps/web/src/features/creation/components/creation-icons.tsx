@@ -18,11 +18,23 @@ export type CreationIconName =
   | 'chevron'
   | 'magic'
   | 'image'
+  | 'imageMagic'
   | 'video'
   | 'close'
   | 'edit'
+  | 'mention'
   | 'copy'
-  | 'play';
+  | 'play'
+  | 'undo'
+  | 'redo'
+  | 'erase'
+  | 'add'
+  | 'flip'
+  | 'minus'
+  | 'plus'
+  | 'check'
+  | 'history'
+  | 'fit';
 
 interface CreationIconProps extends SVGProps<SVGSVGElement> {
   name: CreationIconName;
@@ -61,11 +73,28 @@ export function CreationIcon({ name, ...props }: CreationIconProps) {
       {name === 'chevron' ? <path d="m4.5 6 3.5 3.75L11.5 6" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" /> : null}
       {name === 'magic' ? <path d="m8 2.3.85 2.35L11.2 5.5l-2.35.85L8 8.7l-.85-2.35L4.8 5.5l2.35-.85L8 2.3Zm4.25 7.15.5 1.35 1.35.5-1.35.5-.5 1.35-.5-1.35-1.35-.5 1.35-.5.5-1.35ZM3.7 9.3l.65 1.7 1.7.65-1.7.65-.65 1.7-.65-1.7-1.7-.65 1.7-.65.65-1.7Z" stroke="currentColor" strokeWidth="1.15" strokeLinecap="round" strokeLinejoin="round" /> : null}
       {name === 'image' ? <path d="M2.75 3.25h10.5v9.5H2.75zM5.1 9.4l1.7-1.8 1.55 1.35 2.2-2.55 1.2 1.4M5.3 5.6h.02" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /> : null}
+      {name === 'imageMagic' ? (
+        <>
+          <path d="M2.75 3.25h10.5v9.5H2.75zM5.1 9.4l1.7-1.8 1.55 1.35 2.2-2.55 1.2 1.4M5.3 5.6h.02" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="m10.9 2.15.42 1.16 1.16.42-1.16.42-.42 1.16-.42-1.16-1.16-.42 1.16-.42.42-1.16Z" fill="currentColor" />
+        </>
+      ) : null}
       {name === 'video' ? <path d="M3 4.1h6.55c.52 0 .95.42.95.95v5.9c0 .53-.43.95-.95.95H3.95A.95.95 0 0 1 3 10.95V4.1Zm7.5 2.15 2.5-1.55v6.6l-2.5-1.55" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /> : null}
       {name === 'close' ? <path d="m4 4 8 8M12 4 4 12" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" /> : null}
       {name === 'edit' ? <path d="M10.9 3.2a1.15 1.15 0 0 1 1.62 0l.3.3a1.15 1.15 0 0 1 0 1.62l-5.95 5.95-2.2.26.26-2.2 5.97-5.93Z" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" /> : null}
+      {name === 'mention' ? <path d="M10.45 12.1A4.85 4.85 0 1 1 12.4 8v.55a1.35 1.35 0 0 1-2.7 0V6.8a2.15 2.15 0 1 0-1.72 3.67A2.15 2.15 0 0 0 9.7 9.55" stroke="currentColor" strokeWidth="1.15" strokeLinecap="round" strokeLinejoin="round" /> : null}
       {name === 'copy' ? <path d="M5.45 4.1h5.05a1.1 1.1 0 0 1 1.1 1.1v5.15a1.1 1.1 0 0 1-1.1 1.1H5.45a1.1 1.1 0 0 1-1.1-1.1V5.2a1.1 1.1 0 0 1 1.1-1.1Zm-1.8 7.35V6.55a1.6 1.6 0 0 1 1.6-1.6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" /> : null}
       {name === 'play' ? <path d="m6.2 4.6 5 3.4-5 3.4V4.6Z" fill="currentColor" /> : null}
+      {name === 'undo' ? <path d="M5 5.3H2.9V3.2M3.1 5.2A4.9 4.9 0 0 1 12.7 7a4.9 4.9 0 0 1-4.9 4.9 4.8 4.8 0 0 1-3.55-1.55" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /> : null}
+      {name === 'redo' ? <path d="M11 5.3h2.1V3.2M12.9 5.2A4.9 4.9 0 0 0 3.3 7a4.9 4.9 0 0 0 4.9 4.9 4.8 4.8 0 0 0 3.55-1.55" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /> : null}
+      {name === 'erase' ? <path d="m5.2 4.1 3-1.7 3.65 3.65-4.2 4.2H4.1L2.7 8.85 5.2 4.1Zm2.6 6.1h5.2" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" /> : null}
+      {name === 'add' ? <path d="M8 3v10M3 8h10M4.2 4.2h7.6v7.6H4.2z" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" /> : null}
+      {name === 'flip' ? <path d="M7.8 2.8v10.4M5.1 4.4 2.8 6.7l2.3 2.3M10.5 9l2.3-2.3-2.3-2.3M5.4 6.7h5.2" stroke="currentColor" strokeWidth="1.15" strokeLinecap="round" strokeLinejoin="round" /> : null}
+      {name === 'minus' ? <path d="M3 8h10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /> : null}
+      {name === 'plus' ? <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /> : null}
+      {name === 'check' ? <path d="m3.2 8.1 2.7 2.7 6-6.1" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" /> : null}
+      {name === 'history' ? <path d="M8 3.1a4.9 4.9 0 1 1-4.16 2.3M3.4 3.3v2.6H6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /> : null}
+      {name === 'fit' ? <path d="M2.9 6V3.2H5.7M10.3 3.2h2.8V6M13.1 10v2.8h-2.8M5.7 12.8H2.9V10" stroke="currentColor" strokeWidth="1.15" strokeLinecap="round" strokeLinejoin="round" /> : null}
     </svg>
   );
 }

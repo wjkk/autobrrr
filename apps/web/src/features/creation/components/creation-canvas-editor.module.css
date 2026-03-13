@@ -1,0 +1,482 @@
+.editorShell {
+  position: fixed;
+  inset: 0;
+  z-index: 160;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(34, 40, 54, 0.72), transparent 30%),
+    linear-gradient(180deg, #07090d 0%, #06070a 100%);
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.editorShell button,
+.editorShell input {
+  font: inherit;
+}
+
+.editorHeader {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 18px;
+  min-height: 64px;
+  padding: 14px 24px 8px;
+}
+
+.editorHeaderEdge {
+  display: flex;
+  align-items: center;
+}
+
+.editorHeaderEdge:last-child {
+  justify-content: flex-end;
+}
+
+.backButton,
+.zoomValue,
+.zoomButton,
+.toolChip,
+.iconChip,
+.optionChip,
+.applyButton {
+  border: none;
+  cursor: pointer;
+}
+
+.backButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 14px 0 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(18, 20, 26, 0.92);
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.backButtonIcon {
+  width: 16px;
+  height: 16px;
+}
+
+.zoomBar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.zoomButton,
+.zoomValue {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(17, 19, 25, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.zoomButton {
+  width: 34px;
+  padding: 0;
+}
+
+.zoomButton:disabled,
+.iconChip:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.zoomValue {
+  gap: 6px;
+  min-width: 82px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.zoomButtonIcon,
+.zoomChevron {
+  width: 14px;
+  height: 14px;
+}
+
+.applyButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #11141b;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.editorBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 18px;
+  flex: 1;
+  min-height: 0;
+  padding: 0 20px 20px;
+}
+
+.editorMain {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.toolDock {
+  display: flex;
+  justify-content: center;
+  min-height: 42px;
+  margin-bottom: 14px;
+}
+
+.toolPill,
+.toolSubbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(17, 19, 25, 0.96);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+}
+
+.toolChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.toolChipActive {
+  background: rgba(255, 255, 255, 0.98);
+  color: #12161f;
+}
+
+.toolIcon,
+.iconChipGlyph,
+.panelHeaderIcon,
+.elementTokenIcon {
+  width: 14px;
+  height: 14px;
+}
+
+.iconChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.84);
+}
+
+.sliderWrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 192px;
+  padding: 0 12px;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.sliderWrap input,
+.inspectorField input {
+  width: 100%;
+}
+
+.canvasStage {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  flex: 1;
+  min-height: 0;
+  border-radius: 28px;
+  overflow: hidden;
+}
+
+.canvasBackdrop {
+  position: absolute;
+  inset: 20px 14% 16px;
+  border-radius: 999px;
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.98) 0%, rgba(248, 244, 239, 0.62) 28%, rgba(214, 210, 202, 0.14) 52%, transparent 76%);
+  filter: blur(34px);
+  pointer-events: none;
+}
+
+.canvasViewport {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.canvasViewportScale {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center center;
+  transition: transform 160ms ease;
+}
+
+.canvasArtboard {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  width: min(440px, calc(100vw - 640px));
+  min-width: 260px;
+  max-height: calc(100vh - 188px);
+  border-radius: 28px;
+  overflow: hidden;
+  background: rgba(6, 8, 12, 0.72);
+  box-shadow: 0 28px 56px rgba(0, 0, 0, 0.42);
+}
+
+.editorPoster {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  border-radius: 28px !important;
+}
+
+.editorPoster :global(.posterImage) {
+  background: #0c0f15;
+}
+
+.strokeOverlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.strokePath {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.strokePathRedraw {
+  stroke: rgba(255, 255, 255, 0.82);
+}
+
+.strokePathErase {
+  stroke: rgba(255, 150, 150, 0.78);
+}
+
+.elementToken {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(14, 18, 26, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  font-weight: 600;
+  transform: translate(-50%, -50%);
+  backdrop-filter: blur(16px);
+}
+
+.canvasHud {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(10, 12, 18, 0.72);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 11px;
+  font-weight: 600;
+  backdrop-filter: blur(12px);
+}
+
+.sidePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.panelSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  background: rgba(15, 17, 23, 0.92);
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panelHeader strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.panelHint {
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.historyList,
+.sessionList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.historyCard {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.historyCardActive {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.historyPoster {
+  width: 54px;
+  flex: 0 0 54px;
+}
+
+.historyPoster :global(.poster--version) {
+  width: 54px;
+  height: 96px;
+  border-radius: 16px;
+}
+
+.historyMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.historyMeta strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.historyMeta small,
+.sessionItem small {
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.inspectorGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.inlineChipRow {
+  display: flex;
+  gap: 8px;
+}
+
+.optionChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  min-width: 58px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.optionChipActive {
+  background: rgba(255, 255, 255, 0.96);
+  color: #12161f;
+}
+
+.inspectorField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inspectorField span,
+.sessionItem span {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sessionItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sessionItem:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+@media (max-width: 1180px) {
+  .editorBody {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidePanel {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

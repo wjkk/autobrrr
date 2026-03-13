@@ -28,6 +28,7 @@ export interface CanvasDraft {
   zoom: number;
   offsetX: number;
   offsetY: number;
+  flipX: boolean;
 }
 
 export interface StoryToolDraft {
@@ -61,6 +62,7 @@ export function makeCanvasDraft(shot: Shot): CanvasDraft {
     zoom: shot.canvasTransform.zoom,
     offsetX: shot.canvasTransform.offsetX,
     offsetY: shot.canvasTransform.offsetY,
+    flipX: shot.canvasTransform.flipX,
   };
 }
 

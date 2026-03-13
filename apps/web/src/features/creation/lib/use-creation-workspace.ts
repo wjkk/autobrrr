@@ -52,7 +52,8 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
   const initialCreation = cloneCreationFixture(studio, initialShotId, initialView);
   const timersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const generationTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const playbackFrameRef = useRef<number | null>(null);
+  const playbackLastTickRef = useRef<number | null>(null);
 
   const [creation, setCreation] = useState(initialCreation);
   const [dialog, setDialog] = useState<CreationDialogState>({ type: 'none' });
@@ -69,8 +70,8 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
     return () => {
       timersRef.current.forEach((timer) => clearTimeout(timer));
       generationTimersRef.current.forEach((timer) => clearTimeout(timer));
-      if (playbackIntervalRef.current) {
-        clearInterval(playbackIntervalRef.current);
+      if (playbackFrameRef.current !== null) {
+        cancelAnimationFrame(playbackFrameRef.current);
       }
     };
   }, []);
@@ -117,22 +118,40 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
 
   useEffect(() => {
     if (!creation.playback.playing) {
-      if (playbackIntervalRef.current) {
-        clearInterval(playbackIntervalRef.current);
-        playbackIntervalRef.current = null;
+      if (playbackFrameRef.current !== null) {
+        cancelAnimationFrame(playbackFrameRef.current);
+        playbackFrameRef.current = null;
       }
+      playbackLastTickRef.current = null;
       return;
     }
 
-    playbackIntervalRef.current = setInterval(() => {
-      setCreation((current) => advancePlaybackState(current, 0.2));
-    }, 200);
+    const tick = (timestamp: number) => {
+      if (playbackLastTickRef.current === null) {
+        playbackLastTickRef.current = timestamp;
+      }
+
+      const deltaSeconds = Math.min((timestamp - playbackLastTickRef.current) / 1000, 0.08);
+      playbackLastTickRef.current = timestamp;
+
+      setCreation((current) => {
+        if (!current.playback.playing) {
+          return current;
+        }
+        return advancePlaybackState(current, deltaSeconds);
+      });
+
+      playbackFrameRef.current = window.requestAnimationFrame(tick);
+    };
+
+    playbackFrameRef.current = window.requestAnimationFrame(tick);
 
     return () => {
-      if (playbackIntervalRef.current) {
-        clearInterval(playbackIntervalRef.current);
-        playbackIntervalRef.current = null;
+      if (playbackFrameRef.current !== null) {
+        cancelAnimationFrame(playbackFrameRef.current);
+        playbackFrameRef.current = null;
       }
+      playbackLastTickRef.current = null;
     };
   }, [creation.playback.playing]);
 
@@ -209,7 +228,7 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
     generationTimersRef.current.set(targetShotId, timer);
   };
 
-  const submitInlineGeneration = () => {
+  const submitInlineGeneration = (mediaKind: 'image' | 'video' = 'video') => {
     if (!activeShot) {
       return;
     }
@@ -219,7 +238,7 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
     setCreation((current) => startShotGenerationState(current, targetShotId, generateDraft));
 
     const timer = setTimeout(() => {
-      setCreation((current) => finishShotGenerationState(current, targetShotId, generateDraft.model));
+      setCreation((current) => finishShotGenerationState(current, targetShotId, generateDraft.model, mediaKind));
       setNotice(null);
       generationTimersRef.current.delete(targetShotId);
     }, 4800);
@@ -528,7 +547,14 @@ export function useCreationWorkspace({ studio, initialShotId, initialView }: Use
   };
 
   const openMaterialsDialog = () => setDialog({ type: 'materials' });
-  const openCanvasDialog = () => setDialog((current) => (current.type === 'canvas' ? { type: 'none' } : { type: 'canvas' }));
+  const openCanvasDialog = () => {
+    if (!activeShot) {
+      return;
+    }
+
+    setCanvasDraft(makeCanvasDraft(activeShot));
+    setDialog((current) => (current.type === 'canvas' ? { type: 'none' } : { type: 'canvas' }));
+  };
   const openLipsyncDialog = () => {
     setLipsyncNotice(null);
     setDialog((current) => (current.type === 'lipsync' ? { type: 'none' } : { type: 'lipsync' }));

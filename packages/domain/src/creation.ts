@@ -12,6 +12,7 @@ export interface CanvasTransform {
   zoom: number;
   offsetX: number;
   offsetY: number;
+  flipX: boolean;
 }
 
 export interface ShotVersion {
@@ -54,6 +55,8 @@ export interface CreationPlayback {
 }
 
 export interface VoiceWorkspace {
+  mode: 'text' | 'upload';
+  audioName: string;
   voiceName: string;
   emotion: '默认' | '沉稳' | '开心' | '悲伤';
   volume: number;

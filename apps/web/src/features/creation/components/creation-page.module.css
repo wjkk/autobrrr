@@ -451,15 +451,19 @@
 }
 
 .trackButton:hover {
-  background: var(--creation-panel-soft);
   color: var(--creation-text);
 }
 
 .trackButtonActive {
-  background: var(--creation-bg);
-  border: 1px solid var(--creation-border);
   color: var(--creation-text);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.trackButton:hover .trackButtonIcon,
+.trackButtonActive .trackButtonIcon {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .sidebar,
@@ -491,6 +495,293 @@
   height: 100%;
   padding: 12px 14px 16px;
   overflow: auto;
+}
+
+.trackPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  height: 100%;
+  padding: 14px 16px 18px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top left, rgba(22, 25, 32, 0.18), transparent 28%),
+    linear-gradient(180deg, rgba(14, 16, 22, 0.98), rgba(10, 12, 18, 0.98));
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.trackPanel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.trackPanel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.trackPanel::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: transparent;
+}
+
+.trackPanel:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+}
+
+.trackPanel:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.trackPanelTopline {
+  display: flex;
+  align-items: center;
+  min-height: 20px;
+}
+
+.trackPanelDivider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.trackModeRow {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 0 2px;
+}
+
+.trackModeTab {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 24px;
+  line-height: 34px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.trackModeTabActive {
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.trackSection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trackSectionLabel {
+  color: rgba(255, 255, 255, 0.44);
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 500;
+}
+
+.trackPromptCard {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(34, 37, 46, 0.96), rgba(22, 24, 31, 0.98));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.trackPromptTextarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 18px 18px 16px;
+  resize: none;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 18px;
+  line-height: 1.55;
+  font-weight: 400;
+  outline: none;
+}
+
+.trackPromptTextarea::placeholder {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.musicPreviewSurface,
+.musicTrackMetaCard,
+.voicePresetCard,
+.trackSelectRow,
+.trackUploadCard {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(34, 37, 46, 0.96), rgba(22, 24, 31, 0.98));
+}
+
+.musicPreviewSurface {
+  position: relative;
+  min-height: 72px;
+  overflow: hidden;
+}
+
+.musicPreviewWave {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 244, 244, 0.96)),
+    repeating-linear-gradient(90deg, transparent 0 10px, rgba(14, 16, 22, 0.08) 10px 12px);
+}
+
+.musicTrackMetaCard,
+.voicePresetCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 70px;
+  padding: 0 18px;
+}
+
+.musicTrackMetaCard strong,
+.voicePresetMeta strong,
+.trackSelectRow strong,
+.musicLibraryCard strong {
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 500;
+}
+
+.musicTrackMetaCard small,
+.voicePresetMeta small,
+.trackSelectRow span,
+.musicLibraryCard small {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+}
+
+.voicePresetMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.voicePresetSwap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.trackSettingGrid,
+.musicLibraryList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trackSelectRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 0 18px;
+  text-align: left;
+}
+
+.trackUploadCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 84px;
+  padding: 18px;
+  cursor: pointer;
+}
+
+.trackUploadInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.trackUploadMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.trackUploadMeta strong {
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 500;
+}
+
+.trackUploadMeta small {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+}
+
+.trackSliderBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.44);
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 500;
+}
+
+.trackSlider {
+  width: 100%;
+  accent-color: #78a0ff;
+}
+
+.primaryTrackButton,
+.secondaryTrackButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.primaryTrackButton {
+  background: rgba(255, 255, 255, 0.94);
+  color: #11141a;
+}
+
+.secondaryTrackButton {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.musicLibraryCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(34, 37, 46, 0.96), rgba(22, 24, 31, 0.98));
+  text-align: left;
+}
+
+.musicLibraryCardActive {
+  border-color: rgba(120, 160, 255, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(120, 160, 255, 0.18);
 }
 
 .sidebarTitleRow,
@@ -828,7 +1119,6 @@
 .inlineSwitchActive,
 .timelineToggleActive,
 .timelinePlayButtonActive,
-.trackButtonActive,
 .versionCardSelected,
 .versionCardActive {
   border-color: rgba(120, 160, 255, 0.36);
@@ -1651,7 +1941,7 @@
   height: 100%;
   object-fit: cover;
   object-position: center;
-  transform: scale(var(--poster-zoom)) translate(var(--poster-offset-x), var(--poster-offset-y));
+  transform: scaleX(var(--poster-flip-x, 1)) scale(var(--poster-zoom)) translate(var(--poster-offset-x), var(--poster-offset-y));
 }
 
 .poster[data-has-media='true'] .posterImage {
@@ -2102,7 +2392,7 @@
 
 .trackButton:hover {
   transform: none;
-  background: rgba(255, 255, 255, 0.05);
+  background: transparent;
   color: var(--creation-text);
 }
 
@@ -2123,8 +2413,8 @@
 }
 
 .trackButtonActive .trackButtonLabel {
-  color: #1f2937;
-  font-weight: 700;
+  color: var(--creation-text);
+  font-weight: 600;
 }
 
 .sidebar,
@@ -3673,11 +3963,11 @@
 
 @keyframes sekoPosterDrift {
   from {
-    transform: scale(calc(var(--poster-zoom) * 1.015)) translate(var(--poster-offset-x), var(--poster-offset-y));
+    transform: scaleX(var(--poster-flip-x, 1)) scale(calc(var(--poster-zoom) * 1.015)) translate(var(--poster-offset-x), var(--poster-offset-y));
   }
 
   to {
-    transform: scale(calc(var(--poster-zoom) * 1.045)) translate(calc(var(--poster-offset-x) + 2px), calc(var(--poster-offset-y) - 2px));
+    transform: scaleX(var(--poster-flip-x, 1)) scale(calc(var(--poster-zoom) * 1.045)) translate(calc(var(--poster-offset-x) + 2px), calc(var(--poster-offset-y) - 2px));
   }
 }
 
@@ -4019,7 +4309,7 @@
 /* Final geometry hotfixes */
 .stageArea {
   position: relative;
-  --stage-toolbar-center-offset: -27px;
+  --stage-toolbar-center-offset: 1px;
   --stage-toolbar-top-offset: -4px;
   padding: 26px 0 0;
 }
@@ -4071,7 +4361,7 @@
   }
 
   .stageArea {
-    --stage-toolbar-center-offset: -46px;
+    --stage-toolbar-center-offset: -18px;
     --stage-toolbar-top-offset: 8px;
     padding-top: 42px;
   }
@@ -4427,23 +4717,26 @@
 
 .trackButton:hover {
   transform: none;
-  background: rgba(255, 255, 255, 0.05);
+  background: transparent;
   color: var(--creation-text);
 }
 
 .trackButton:hover .trackButtonIcon,
 .trackButtonActive .trackButtonIcon {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
   box-shadow: none;
 }
 
 .trackButtonActive {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: var(--creation-text);
 }
 
 .trackButtonActive .trackButtonLabel {
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--creation-text);
+  font-weight: 600;
 }
 
 .sidebar,
@@ -4561,17 +4854,58 @@
 .timelineShots {
   grid-auto-columns: 154px;
   gap: 6px;
-  padding-top: 6px;
+  overflow: auto hidden;
+  padding: 6px 0 10px;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.timelineShots:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.26) transparent;
+}
+
+.timelineShots::-webkit-scrollbar {
+  height: 8px;
+}
+
+.timelineShots::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.timelineShots::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: transparent;
+}
+
+.timelineShots:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.timelineShots:hover::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.timelinePlayhead {
+  will-change: transform;
 }
 
 .timelinePlayheadDot {
+  top: 0;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  transform: translateX(-50%);
   background: #ffffff;
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
 }
 
 .timelinePlayheadLine {
-  height: 84px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.1));
+  top: 16px;
+  left: 0;
+  width: 3px;
+  height: 86px;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.14));
 }
 
 .timelineShot {
@@ -4609,6 +4943,7 @@
 .timelineShotProgress {
   height: 2px;
   background: rgba(255, 255, 255, 0.94);
+  transition: width 60ms linear;
 }
 
 .timelineShotActions .miniActionButton {

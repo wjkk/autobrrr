@@ -13,13 +13,13 @@ export function cloneShot(shot: Shot): Shot {
   };
 }
 
-export function buildVersion(shot: Shot, modelId: string): ShotVersion {
+export function buildVersion(shot: Shot, modelId: string, mediaKind: ShotVersion['mediaKind'] = 'video'): ShotVersion {
   return {
     id: nextLocalId(`${shot.id}-v`),
     label: `版本 ${shot.versions.length + 1}`,
     modelId,
     status: 'pending_apply',
-    mediaKind: 'video',
+    mediaKind,
     createdAt: '刚刚',
   };
 }

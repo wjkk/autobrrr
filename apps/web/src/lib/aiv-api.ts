@@ -128,6 +128,7 @@ export async function proxyAivApiRoute(request: Request, path: string) {
     status: response.status,
     headers: {
       'Content-Type': response.headers.get('content-type') ?? 'application/json',
+      ...(response.headers.get('set-cookie') ? { 'set-cookie': response.headers.get('set-cookie') as string } : {}),
     },
   });
 }

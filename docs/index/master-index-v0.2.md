@@ -64,6 +64,10 @@
    说明：首页到策划页后端落地指导（创建项目、统一提交、版本历史、配置持久化）。
 7. `docs/specs/backend-implementation-checklist-v0.2.md`  
    说明：后端实施清单（按 P0/P1 拆分任务、DoD、联调顺序与回归场景）。
+8. `docs/specs/backend-replanning-and-recipe-model-spec-v0.3.md`  
+   说明：后端复盘与新基线规划，明确 MySQL、配方复用生成、模型 provider 分层与迁移路线。
+9. `docs/specs/backend-system-design-spec-v0.3.md`  
+   说明：后端可开工设计稿，覆盖 MySQL 领域模型、表结构、API、Worker 链路与迁移步骤。
 
 ## 4. 历史文档归档约定
 

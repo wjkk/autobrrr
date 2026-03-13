@@ -104,7 +104,7 @@
 .heroMeta {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -169,6 +169,54 @@
 .list {
   display: grid;
   gap: 18px;
+}
+
+.authCard {
+  width: min(520px, 100%);
+  padding: 24px;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+}
+
+.authTabs {
+  display: inline-flex;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(241, 245, 249, 0.96);
+}
+
+.authTab {
+  min-height: 38px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.authTabActive {
+  background: #111827;
+  color: #f8fafc;
+}
+
+.authFields {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.authFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 18px;
 }
 
 .providerCard {

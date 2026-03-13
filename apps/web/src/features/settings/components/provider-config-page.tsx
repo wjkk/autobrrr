@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
-import type { ProviderConfigItem } from '../lib/provider-config-api';
+import type { ProviderConfigItem, SettingsAuthUser } from '../lib/provider-config-api';
 import styles from './provider-config-page.module.css';
 
 interface ProviderConfigPageProps {
   initialConfigs: ProviderConfigItem[];
+  currentUser: SettingsAuthUser | null;
 }
 
 interface DraftState {
@@ -77,7 +78,8 @@ async function testProviderConfig(providerCode: string) {
   return payload.data?.message ?? 'Provider connectivity test succeeded.';
 }
 
-export function ProviderConfigPage({ initialConfigs }: ProviderConfigPageProps) {
+export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }: ProviderConfigPageProps) {
+  const [currentUser, setCurrentUser] = useState<SettingsAuthUser | null>(initialUser);
   const [configs, setConfigs] = useState(initialConfigs);
   const [drafts, setDrafts] = useState<Record<string, DraftState>>(() =>
     Object.fromEntries(initialConfigs.map((item) => [item.provider.code, makeDraft(item)])),
@@ -85,6 +87,12 @@ export function ProviderConfigPage({ initialConfigs }: ProviderConfigPageProps) 
   const [savingCode, setSavingCode] = useState<string | null>(null);
   const [testingCode, setTestingCode] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Record<string, { message: string; error?: boolean }>>({});
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authDisplayName, setAuthDisplayName] = useState('');
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [authFeedback, setAuthFeedback] = useState<string | null>(null);
 
   const configuredCount = useMemo(() => configs.filter((item) => item.userConfig.configured).length, [configs]);
   const enabledCount = useMemo(() => configs.filter((item) => item.userConfig.enabled).length, [configs]);
@@ -189,6 +197,126 @@ export function ProviderConfigPage({ initialConfigs }: ProviderConfigPageProps) 
     }
   };
 
+  const effectiveUser = currentUser;
+
+  async function refreshCurrentUser() {
+    const response = await fetch('/api/auth/me', { headers: { Accept: 'application/json' } });
+    const payload = (await response.json()) as { ok: boolean; data?: SettingsAuthUser; error?: { message?: string } };
+    if (!response.ok || !payload.ok || !payload.data) {
+      throw new Error(payload.error?.message ?? '获取当前用户失败。');
+    }
+    setCurrentUser(payload.data);
+  }
+
+  const submitAuth = async () => {
+    if (!authEmail.trim() || !authPassword.trim()) {
+      setAuthFeedback('请输入邮箱和密码。');
+      return;
+    }
+
+    setAuthSubmitting(true);
+    setAuthFeedback(null);
+    try {
+      const endpoint = authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: authEmail.trim(),
+          password: authPassword,
+          ...(authMode === 'register' && authDisplayName.trim() ? { displayName: authDisplayName.trim() } : {}),
+        }),
+      });
+      const payload = (await response.json()) as { ok: boolean; error?: { message?: string } };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error?.message ?? '认证失败。');
+      }
+
+      if (authMode === 'register') {
+        const loginResponse = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: authEmail.trim(),
+            password: authPassword,
+          }),
+        });
+        const loginPayload = (await loginResponse.json()) as { ok: boolean; error?: { message?: string } };
+        if (!loginResponse.ok || !loginPayload.ok) {
+          throw new Error(loginPayload.error?.message ?? '注册成功，但自动登录失败。');
+        }
+      }
+
+      await refreshCurrentUser();
+      window.location.reload();
+    } catch (error) {
+      setAuthFeedback(error instanceof Error ? error.message : '认证失败。');
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const logout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST', headers: { Accept: 'application/json' } });
+    window.location.reload();
+  };
+
+  if (!effectiveUser) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.shell}>
+          <div className={styles.topbar}>
+            <div>
+              <span className={styles.eyebrow}>
+                <span className={styles.eyebrowDot} />
+                Provider Keys
+              </span>
+              <h1 className={styles.title}>先登录，再测试 provider 配置</h1>
+              <p className={styles.subtitle}>
+                这里会把 `ARK`、`AICSO` 等配置保存到当前用户自己的表里。为了让你直接在页面里完成测试，我补了一个最小登录入口。
+              </p>
+            </div>
+            <Link href="/explore" className={styles.backLink}>
+              返回工作台
+            </Link>
+          </div>
+
+          <section className={styles.authCard}>
+            <div className={styles.authTabs}>
+              <button type="button" className={`${styles.authTab} ${authMode === 'login' ? styles.authTabActive : ''}`} onClick={() => setAuthMode('login')}>
+                登录
+              </button>
+              <button type="button" className={`${styles.authTab} ${authMode === 'register' ? styles.authTabActive : ''}`} onClick={() => setAuthMode('register')}>
+                注册
+              </button>
+            </div>
+
+            <div className={styles.authFields}>
+              {authMode === 'register' ? (
+                <input className={styles.input} value={authDisplayName} onChange={(event) => setAuthDisplayName(event.target.value)} placeholder="显示名称（可选）" />
+              ) : null}
+              <input className={styles.input} type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} placeholder="邮箱" />
+              <input className={styles.input} type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} placeholder="密码（至少 8 位）" />
+            </div>
+
+            <div className={styles.authFooter}>
+              <div className={`${styles.feedback} ${authFeedback ? styles.feedbackError : ''}`}>{authFeedback ?? ''}</div>
+              <button type="button" className={styles.saveButton} onClick={submitAuth} disabled={authSubmitting}>
+                {authSubmitting ? '提交中...' : authMode === 'login' ? '登录' : '注册并登录'}
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.page}>
       <div className={styles.shell}>
@@ -223,6 +351,10 @@ export function ProviderConfigPage({ initialConfigs }: ProviderConfigPageProps) 
                 <small>当前启用</small>
                 <strong>{enabledCount}</strong>
               </div>
+              <div className={styles.heroPill}>
+                <small>当前用户</small>
+                <strong>{effectiveUser.displayName ?? effectiveUser.email}</strong>
+              </div>
             </div>
           </section>
 
@@ -241,7 +373,14 @@ export function ProviderConfigPage({ initialConfigs }: ProviderConfigPageProps) 
                 <span>作用范围</span>
                 <strong>当前登录用户</strong>
               </div>
+              <div className={styles.statsItem}>
+                <span>账号</span>
+                <strong>{effectiveUser.email}</strong>
+              </div>
             </div>
+            <button type="button" className={styles.testButton} onClick={logout}>
+              退出登录
+            </button>
           </aside>
         </div>
 

@@ -29,3 +29,9 @@ export interface ProviderConfigItem {
     updatedAt: string | null;
   };
 }
+
+export interface SettingsAuthUser {
+  id: string;
+  email: string;
+  displayName: string | null;
+}

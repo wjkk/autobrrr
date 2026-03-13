@@ -50,6 +50,12 @@ interface PlannerEpisodeDraft {
   shotCount: number;
 }
 
+type PlannerSaveState =
+  | { status: 'idle'; message: '' }
+  | { status: 'saving'; message: string }
+  | { status: 'saved'; message: string }
+  | { status: 'error'; message: string };
+
 const BOOT_PROGRESS_STEPS = [28, 49, 67, 85, 100];
 
 const STYLE_LIBRARY = [
@@ -239,14 +245,17 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
   const [serverPlannerText, setServerPlannerText] = useState(initialGeneratedText ?? '');
   const [structuredPlannerDoc, setStructuredPlannerDoc] = useState<PlannerStructuredDoc | null>(initialStructuredDoc ?? null);
   const [plannerSubmitting, setPlannerSubmitting] = useState(false);
+  const [saveState, setSaveState] = useState<PlannerSaveState>({ status: 'idle', message: '' });
 
   const plannerDoc = useMemo(() => (structuredPlannerDoc ? toPlannerSeedData(structuredPlannerDoc, sekoPlanData) : sekoPlanData), [structuredPlannerDoc]);
 
   const persistPlannerDoc = async (nextDoc: PlannerStructuredDoc, successMessage: string) => {
     setStructuredPlannerDoc(nextDoc);
+    setSaveState({ status: 'saving', message: '正在保存更改...' });
 
     if (!runtimeApi) {
       setNotice(successMessage);
+      setSaveState({ status: 'saved', message: '已保存到本地状态。' });
       return;
     }
 
@@ -267,8 +276,11 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
         throw new Error(payload.error?.message ?? '保存策划文档失败。');
       }
       setNotice(successMessage);
+      setSaveState({ status: 'saved', message: '已同步到后端。' });
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : '保存策划文档失败。');
+      const message = error instanceof Error ? error.message : '保存策划文档失败。';
+      setNotice(message);
+      setSaveState({ status: 'error', message });
     }
   };
 
@@ -297,6 +309,18 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
       timersRef.current.forEach((timer) => clearTimeout(timer));
     };
   }, []);
+
+  useEffect(() => {
+    if (saveState.status !== 'saved') {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setSaveState({ status: 'idle', message: '' });
+    }, 2200);
+
+    return () => window.clearTimeout(timer);
+  }, [saveState]);
 
   useEffect(() => {
     if (!initialPlannerReady || !initialGeneratedText || versions.length > 0) {
@@ -950,17 +974,31 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
                 </h2>
                 <p>内容由 AI 生成</p>
               </div>
-
-              <PlannerHistoryMenu
-                open={historyMenuOpen}
-                versions={versions}
-                activeVersionId={activeVersionId}
-                onToggle={() => setHistoryMenuOpen((current) => !current)}
-                onSelect={(versionId) => {
-                  selectVersion(versionId);
-                  setHistoryMenuOpen(false);
-                }}
-              />
+              <div className={styles.resultHeaderActions}>
+                {saveState.status !== 'idle' ? (
+                  <div
+                    className={cx(
+                      styles.saveStatusBadge,
+                      saveState.status === 'saving' && styles.saveStatusBadgeSaving,
+                      saveState.status === 'saved' && styles.saveStatusBadgeSaved,
+                      saveState.status === 'error' && styles.saveStatusBadgeError,
+                    )}
+                  >
+                    <span className={styles.saveStatusDot} />
+                    <span>{saveState.message}</span>
+                  </div>
+                ) : null}
+                <PlannerHistoryMenu
+                  open={historyMenuOpen}
+                  versions={versions}
+                  activeVersionId={activeVersionId}
+                  onToggle={() => setHistoryMenuOpen((current) => !current)}
+                  onSelect={(versionId) => {
+                    selectVersion(versionId);
+                    setHistoryMenuOpen(false);
+                  }}
+                />
+              </div>
             </header>
 
             <div className={styles.resultContent}>

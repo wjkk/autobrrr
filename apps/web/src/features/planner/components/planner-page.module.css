@@ -638,6 +638,48 @@
   padding: 14px 16px;
 }
 
+.resultHeaderActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.saveStatusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.saveStatusBadgeSaving {
+  background: #eef4ff;
+  color: #1d4ed8;
+}
+
+.saveStatusBadgeSaved {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.saveStatusBadgeError {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.saveStatusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
 .resultTitleWrap {
   min-width: 0;
 }

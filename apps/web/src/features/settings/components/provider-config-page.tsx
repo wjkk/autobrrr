@@ -96,6 +96,9 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
 
   const configuredCount = useMemo(() => configs.filter((item) => item.userConfig.configured).length, [configs]);
   const enabledCount = useMemo(() => configs.filter((item) => item.userConfig.enabled).length, [configs]);
+  const testedCount = useMemo(() => configs.filter((item) => !!item.userConfig.lastTest.testedAt).length, [configs]);
+  const passedCount = useMemo(() => configs.filter((item) => item.userConfig.lastTest.status === 'passed').length, [configs]);
+  const failedCount = useMemo(() => configs.filter((item) => item.userConfig.lastTest.status === 'failed').length, [configs]);
 
   const onDraftChange = (providerCode: string, next: Partial<DraftState>) => {
     setDrafts((current) => ({
@@ -384,6 +387,36 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
           </aside>
         </div>
 
+        <section className={styles.healthSection}>
+          <div className={styles.healthHeader}>
+            <div>
+              <small className={styles.healthEyebrow}>Health Snapshot</small>
+              <h2 className={styles.healthTitle}>最近一次连接测试总览</h2>
+            </div>
+            <p className={styles.healthSummary}>
+              {testedCount > 0 ? `最近已测试 ${testedCount} 个 provider，其中 ${passedCount} 个成功、${failedCount} 个失败。` : '还没有 provider 做过连接测试。保存配置后会自动触发一次测试。'}
+            </p>
+          </div>
+
+          <div className={styles.healthGrid}>
+            <article className={`${styles.healthCard} ${styles.healthCardNeutral}`}>
+              <small>最近已测试</small>
+              <strong>{testedCount}</strong>
+              <span>至少完成过一次连通性测试</span>
+            </article>
+            <article className={`${styles.healthCard} ${styles.healthCardSuccess}`}>
+              <small>测试成功</small>
+              <strong>{passedCount}</strong>
+              <span>可直接参与实际执行</span>
+            </article>
+            <article className={`${styles.healthCard} ${styles.healthCardDanger}`}>
+              <small>测试失败</small>
+              <strong>{failedCount}</strong>
+              <span>建议优先检查 key、地址或通道</span>
+            </article>
+          </div>
+        </section>
+
         <div className={styles.list}>
           {configs.map((item) => {
             const draft = drafts[item.provider.code] ?? makeDraft(item);
@@ -391,9 +424,29 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
             const textEndpoints = item.endpoints.filter((endpoint) => endpoint.modelKind === 'text');
             const imageEndpoints = item.endpoints.filter((endpoint) => endpoint.modelKind === 'image');
             const videoEndpoints = item.endpoints.filter((endpoint) => endpoint.modelKind === 'video');
+            const testStatus = item.userConfig.lastTest.status;
+            const testStatusLabel =
+              testStatus === 'passed'
+                ? '最近测试成功'
+                : testStatus === 'failed'
+                  ? '最近测试失败'
+                  : '尚未测试';
 
             return (
               <section key={item.provider.id} className={styles.providerCard}>
+                <div
+                  className={`${styles.testRibbon} ${
+                    testStatus === 'passed'
+                      ? styles.testRibbonSuccess
+                      : testStatus === 'failed'
+                        ? styles.testRibbonDanger
+                        : styles.testRibbonNeutral
+                  }`}
+                >
+                  <span className={styles.testRibbonDot} />
+                  <strong>{testStatusLabel}</strong>
+                  <span>{item.userConfig.lastTest.testedAt ? new Date(item.userConfig.lastTest.testedAt).toLocaleString('zh-CN') : '等待首次测试'}</span>
+                </div>
                 <div className={styles.providerHead}>
                   <div>
                     <div className={styles.providerName}>
@@ -425,13 +478,30 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                     </div>
                     <div className={styles.asideCard}>
                       <small>最近一次测试</small>
-                      <strong>
-                        {item.userConfig.lastTest.status === 'passed'
-                          ? '连接成功'
-                          : item.userConfig.lastTest.status === 'failed'
-                            ? '连接失败'
-                            : '尚未测试'}
-                      </strong>
+                      <div className={styles.statusRow}>
+                        <strong>
+                          {item.userConfig.lastTest.status === 'passed'
+                            ? '连接成功'
+                            : item.userConfig.lastTest.status === 'failed'
+                              ? '连接失败'
+                              : '尚未测试'}
+                        </strong>
+                        <span
+                          className={`${styles.statusBadge} ${
+                            item.userConfig.lastTest.status === 'passed'
+                              ? styles.statusBadgeSuccess
+                              : item.userConfig.lastTest.status === 'failed'
+                                ? styles.statusBadgeDanger
+                                : styles.statusBadgeNeutral
+                          }`}
+                        >
+                          {item.userConfig.lastTest.status === 'passed'
+                            ? 'PASS'
+                            : item.userConfig.lastTest.status === 'failed'
+                              ? 'FAIL'
+                              : 'PENDING'}
+                        </span>
+                      </div>
                       <p>
                         {item.userConfig.lastTest.testedAt
                           ? `${new Date(item.userConfig.lastTest.testedAt).toLocaleString('zh-CN')} · ${item.userConfig.lastTest.endpointSlug ?? '未记录模型'}`

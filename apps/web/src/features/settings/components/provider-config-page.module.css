@@ -171,6 +171,90 @@
   gap: 18px;
 }
 
+.healthSection {
+  margin-bottom: 24px;
+  padding: 24px;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.healthHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.healthEyebrow {
+  display: block;
+  margin-bottom: 8px;
+  color: #64748b;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.healthTitle {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: -0.05em;
+}
+
+.healthSummary {
+  max-width: 540px;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.healthGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.healthCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 108px;
+  padding: 18px;
+  border-radius: 22px;
+}
+
+.healthCard small {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.healthCard strong {
+  font-size: 30px;
+  letter-spacing: -0.06em;
+}
+
+.healthCard span {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.healthCardNeutral {
+  background: linear-gradient(180deg, rgba(247, 248, 252, 0.95), rgba(239, 242, 247, 0.96));
+}
+
+.healthCardSuccess {
+  background: linear-gradient(180deg, rgba(236, 253, 245, 0.96), rgba(209, 250, 229, 0.94));
+}
+
+.healthCardDanger {
+  background: linear-gradient(180deg, rgba(254, 242, 242, 0.96), rgba(254, 226, 226, 0.94));
+}
+
 .authCard {
   width: min(520px, 100%);
   padding: 24px;
@@ -222,6 +306,43 @@
 .providerCard {
   border-radius: 28px;
   overflow: hidden;
+}
+
+.testRibbon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 20px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.testRibbon span:last-child {
+  font-weight: 500;
+}
+
+.testRibbonDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.testRibbonNeutral {
+  background: rgba(148, 163, 184, 0.12);
+  color: #475569;
+}
+
+.testRibbonSuccess {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.testRibbonDanger {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
 }
 
 .providerHead {
@@ -322,6 +443,40 @@
   display: block;
   font-size: 16px;
   letter-spacing: -0.03em;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.statusBadgeSuccess {
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
+}
+
+.statusBadgeDanger {
+  background: rgba(239, 68, 68, 0.14);
+  color: #b91c1c;
+}
+
+.statusBadgeNeutral {
+  background: rgba(148, 163, 184, 0.16);
+  color: #475569;
 }
 
 .asideCard p {
@@ -506,11 +661,16 @@
   .topbar,
   .providerBody,
   .heroGrid,
-  .heroMeta {
+  .heroMeta,
+  .healthGrid {
     grid-template-columns: 1fr;
   }
 
   .topbar {
+    display: grid;
+  }
+
+  .healthHeader {
     display: grid;
   }
 }

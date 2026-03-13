@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 
 import { PlannerPage } from '@/features/planner/components/planner-page';
-import { fetchStudioProject } from '@/lib/studio-service';
+import { fetchPlannerStudioProject } from '@/features/planner/lib/planner-api.server';
 
 interface PlannerRouteProps {
   params: Promise<{ projectId: string }>;
@@ -9,11 +9,11 @@ interface PlannerRouteProps {
 
 export default async function PlannerRoute({ params }: PlannerRouteProps) {
   const { projectId } = await params;
-  const studio = await fetchStudioProject(projectId);
+  const { studio, runtimeApi, initialGeneratedText, initialPlannerReady } = await fetchPlannerStudioProject(projectId);
 
   if (!studio) {
     notFound();
   }
 
-  return <PlannerPage studio={studio} />;
+  return <PlannerPage studio={studio} runtimeApi={runtimeApi} initialGeneratedText={initialGeneratedText} initialPlannerReady={initialPlannerReady} />;
 }

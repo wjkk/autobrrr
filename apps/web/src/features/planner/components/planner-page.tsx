@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { Dialog } from '@/features/shared/components/dialog';
 import { plannerCopy } from '@/lib/copy';
 
+import type { PlannerRuntimeApiContext } from '../lib/planner-api';
 import { usePlannerRefinement } from '../hooks/use-planner-refinement';
 import { sekoPlanData, type SekoActDraft, type SekoImageCard } from '../lib/seko-plan-data';
 import { sekoPlanThreadData } from '../lib/seko-plan-thread-data';
@@ -16,6 +17,9 @@ import styles from './planner-page.module.css';
 
 interface PlannerPageProps {
   studio: StudioFixture;
+  runtimeApi?: PlannerRuntimeApiContext;
+  initialGeneratedText?: string | null;
+  initialPlannerReady?: boolean;
 }
 
 type PlannerMode = 'single' | 'series';
@@ -75,6 +79,41 @@ const SCENE_IMAGE_POOL = sekoPlanData.scenes.map((item) => item.image);
 const SEKO_ASSISTANT_NAME = 'Seko';
 const SUBJECT_TONE_LABEL = '不羁青年';
 const SUBJECT_TONE_META = '男性/青年/普通话';
+
+interface ApiEnvelopeSuccess<T> {
+  ok: true;
+  data: T;
+}
+
+interface ApiEnvelopeFailure {
+  ok: false;
+  error: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+}
+
+type ApiEnvelope<T> = ApiEnvelopeSuccess<T> | ApiEnvelopeFailure;
+
+async function requestPlannerApi<T>(path: string, init?: RequestInit) {
+  const response = await fetch(path, {
+    ...init,
+    headers: {
+      Accept: 'application/json',
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.headers ?? {}),
+    },
+  });
+
+  const payload = (await response.json()) as ApiEnvelope<T>;
+  if (!response.ok || !payload.ok) {
+    const errorPayload = payload as ApiEnvelopeFailure;
+    throw new Error(errorPayload.error?.message ?? `Request failed: ${path}`);
+  }
+
+  return payload.data;
+}
 
 function nextLocalId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
@@ -157,7 +196,7 @@ function ratioCardWidth(ratio: PlannerAssetRatio) {
   return 150;
 }
 
-export function PlannerPage({ studio }: PlannerPageProps) {
+export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialPlannerReady }: PlannerPageProps) {
   const router = useRouter();
   const timersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
 
@@ -196,12 +235,15 @@ export function PlannerPage({ studio }: PlannerPageProps) {
 
   const [booting, setBooting] = useState(false);
   const [bootProgress, setBootProgress] = useState(0);
+  const [serverPlannerText, setServerPlannerText] = useState(initialGeneratedText ?? '');
+  const [plannerSubmitting, setPlannerSubmitting] = useState(false);
 
   const {
     versions,
     activeVersionId,
     activeVersion,
     startRefinement,
+    hydrateReadyVersion,
     selectVersion,
     updateSubject,
     updateScene,
@@ -219,6 +261,75 @@ export function PlannerPage({ studio }: PlannerPageProps) {
       timersRef.current.forEach((timer) => clearTimeout(timer));
     };
   }, []);
+
+  useEffect(() => {
+    if (!initialPlannerReady || !initialGeneratedText || versions.length > 0) {
+      return;
+    }
+
+    setOutlineConfirmed(true);
+    hydrateReadyVersion({
+      trigger: 'confirm_outline',
+      instruction: studio.planner.submittedRequirement || studio.project.brief,
+    });
+  }, [hydrateReadyVersion, initialGeneratedText, initialPlannerReady, studio.planner.submittedRequirement, studio.project.brief, versions.length]);
+
+  const pollPlannerRunUntilTerminal = async (runId: string, trigger: 'confirm_outline' | 'rerun', instruction: string) => {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const run = await requestPlannerApi<{ status: string; output: { generatedText?: string } | null; errorMessage: string | null }>(
+        `/api/planner/runs/${encodeURIComponent(runId)}`,
+      );
+
+      if (run.status === 'completed' && run.output?.generatedText) {
+        const generatedText = run.output?.generatedText ?? '';
+        setServerPlannerText(generatedText);
+        setOutlineConfirmed(true);
+        const nextId = hydrateReadyVersion({ trigger, instruction });
+        selectVersion(nextId);
+        setMessages((current) => [
+          ...current,
+          { id: nextLocalId('msg'), role: 'user', content: instruction || (trigger === 'confirm_outline' ? sekoPlanThreadData.confirmPrompt : '请重新细化剧情内容。') },
+          { id: nextLocalId('msg'), role: 'assistant', content: generatedText },
+        ]);
+        setNotice(trigger === 'confirm_outline' ? '已生成策划文档。' : '已生成新的策划版本。');
+        setPlannerSubmitting(false);
+        return;
+      }
+
+      if (run.status === 'failed' || run.status === 'canceled' || run.status === 'timed_out') {
+        setNotice(run.errorMessage ?? '策划生成失败，请稍后重试。');
+        setPlannerSubmitting(false);
+        return;
+      }
+    }
+
+    setNotice('策划任务已提交，仍在后台处理中。');
+    setPlannerSubmitting(false);
+  };
+
+  const submitPlannerRunViaApi = async (trigger: 'confirm_outline' | 'rerun', instruction: string) => {
+    if (!runtimeApi) {
+      return false;
+    }
+
+    setPlannerSubmitting(true);
+    const result = await requestPlannerApi<{ run: { id: string; status: string } }>(
+      `/api/planner/projects/${encodeURIComponent(runtimeApi.projectId)}/generate-doc`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          episodeId: runtimeApi.episodeId,
+          prompt: instruction,
+          modelFamily: 'gemini-text',
+          modelEndpoint: 'aicso-gemini-text-lite-preview',
+        }),
+      },
+    );
+
+    await pollPlannerRunUntilTerminal(result.run.id, trigger, instruction);
+    return true;
+  };
 
   useEffect(() => {
     if (!plannerEpisodes.some((item) => item.id === activeEpisodeId)) {
@@ -282,13 +393,22 @@ export function PlannerPage({ studio }: PlannerPageProps) {
   );
 
   const handleConfirmOutline = () => {
-    if (outlineConfirmed) {
+    if (outlineConfirmed || plannerSubmitting) {
+      return;
+    }
+
+    setHistoryMenuOpen(false);
+
+    if (runtimeApi) {
+      submitPlannerRunViaApi('confirm_outline', requirement.trim() || sekoPlanThreadData.confirmPrompt).catch((error: unknown) => {
+        setPlannerSubmitting(false);
+        setNotice(error instanceof Error ? error.message : '策划生成失败，请稍后重试。');
+      });
+      setNotice('已提交策划生成任务。');
       return;
     }
 
     setOutlineConfirmed(true);
-    setHistoryMenuOpen(false);
-
     const nextId = startRefinement({ trigger: 'confirm_outline' });
     selectVersion(nextId);
 
@@ -308,6 +428,16 @@ export function PlannerPage({ studio }: PlannerPageProps) {
     }
 
     const instruction = requirement.trim();
+    if (runtimeApi) {
+      submitPlannerRunViaApi('rerun', instruction || '请重新细化剧情内容。').catch((error: unknown) => {
+        setPlannerSubmitting(false);
+        setNotice(error instanceof Error ? error.message : '策划生成失败，请稍后重试。');
+      });
+      setHistoryMenuOpen(false);
+      setNotice('已提交新的策划生成任务。');
+      return;
+    }
+
     const nextId = startRefinement({
       trigger: 'rerun',
       instruction,
@@ -584,12 +714,13 @@ export function PlannerPage({ studio }: PlannerPageProps) {
 
                     <p className={styles.messageBubble}>{sekoPlanThreadData.assistantSummary}</p>
                     <p className={styles.messageBubble}>{sekoPlanThreadData.assistantPrompt}</p>
+                    {serverPlannerText ? <p className={styles.messageBubble}>{serverPlannerText}</p> : null}
 
                     {!outlineConfirmed ? (
                       <article className={styles.threadNoticeCard}>
                         <strong>确认后自动开始细化剧情内容</strong>
                         <p>右侧文档会按步骤逐步渲染，支持后续局部微调与历史版本切换。</p>
-                        <button type="button" className={styles.confirmOutlineButton} onClick={handleConfirmOutline}>
+                        <button type="button" className={styles.confirmOutlineButton} onClick={handleConfirmOutline} disabled={plannerSubmitting}>
                           确认大纲
                         </button>
                       </article>
@@ -684,7 +815,7 @@ export function PlannerPage({ studio }: PlannerPageProps) {
                       <button
                         type="submit"
                         className={styles.composerSubmitButton}
-                        disabled={!requirement.trim()}
+                        disabled={!requirement.trim() || plannerSubmitting}
                         aria-label={outlineConfirmed ? '提交并生成新版本' : '提交并开始细化'}
                         title={outlineConfirmed ? '提交' : '确认并提交'}
                       >

@@ -187,6 +187,42 @@ export function usePlannerRefinement({ stepCount, seedSubjects, seedScenes, seed
     [activeVersion, clearTimers, patchVersion, seedActs, seedScenes, seedSubjects, stepCount, versions],
   );
 
+  const hydrateReadyVersion = useCallback(
+    ({ trigger, instruction = '' }: StartRefinementOptions) => {
+      clearTimers();
+
+      const nextVersionNumber = (versions[versions.length - 1]?.versionNumber ?? 0) + 1;
+      const baseVersion = activeVersion;
+      const versionId = nextId('refinement');
+
+      const nextVersion: PlannerRefinementVersion = {
+        id: versionId,
+        versionNumber: nextVersionNumber,
+        trigger,
+        createdAt: Date.now(),
+        instruction,
+        status: 'ready',
+        progressPercent: 100,
+        steps: Array.from({ length: stepCount }, () => 'done'),
+        sections: {
+          summary: true,
+          style: true,
+          subjects: true,
+          scenes: true,
+          script: true,
+        },
+        subjectCards: cloneImageCards(baseVersion?.subjectCards ?? seedSubjects),
+        sceneCards: cloneImageCards(baseVersion?.sceneCards ?? seedScenes),
+        scriptActs: cloneActs(baseVersion?.scriptActs ?? seedActs),
+      };
+
+      setVersions((current) => [...current, nextVersion]);
+      setActiveVersionId(versionId);
+      return versionId;
+    },
+    [activeVersion, clearTimers, seedActs, seedScenes, seedSubjects, stepCount, versions],
+  );
+
   const selectVersion = useCallback((versionId: string) => {
     setActiveVersionId(versionId);
   }, []);
@@ -254,6 +290,7 @@ export function usePlannerRefinement({ stepCount, seedSubjects, seedScenes, seed
     activeVersionId,
     activeVersion,
     startRefinement,
+    hydrateReadyVersion,
     selectVersion,
     updateSubject,
     updateScene,

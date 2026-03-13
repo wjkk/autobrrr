@@ -132,6 +132,7 @@ model User {
   projects     Project[]
   plannerSessions PlannerSession[]
   assets       Asset[]
+  providerConfigs UserProviderConfig[]
 
   @@map("users")
 }
@@ -323,9 +324,28 @@ model ModelProvider {
   updatedAt       DateTime        @updatedAt @map("updated_at")
   endpoints       ModelEndpoint[]
   runs            Run[]
+  userConfigs     UserProviderConfig[]
 
   @@index([enabled, providerType])
   @@map("model_providers")
+}
+
+model UserProviderConfig {
+  id              String        @id @default(cuid())
+  userId          String        @map("user_id")
+  providerId      String        @map("provider_id")
+  apiKey          String?       @map("api_key") @db.Text
+  baseUrlOverride String?       @map("base_url_override") @db.VarChar(2048)
+  enabled         Boolean       @default(true)
+  optionsJson     Json?         @map("options_json")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider        ModelProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, providerId])
+  @@index([providerId, enabled])
+  @@map("user_provider_configs")
 }
 
 model ModelEndpoint {

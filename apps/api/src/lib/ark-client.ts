@@ -1,34 +1,16 @@
-import { env } from './env.js';
-
 interface ArkRequestOptions {
+  baseUrl: string;
+  apiKey: string;
   path: string;
   body: Record<string, unknown>;
 }
 
-function resolveKey() {
-  const key = env.ARK_API_KEY?.trim();
-  return key ? key : null;
-}
-
-function resolveUrl(path: string) {
-  return `${env.ARK_API_BASE_URL.replace(/\/$/, '')}${path}`;
-}
-
-export function isArkConfigured() {
-  return !!resolveKey();
-}
-
-async function requestArk<T>({ path, body }: ArkRequestOptions): Promise<T> {
-  const key = resolveKey();
-  if (!key) {
-    throw new Error('ARK_API_KEY is not configured.');
-  }
-
-  const response = await fetch(resolveUrl(path), {
+async function requestArk<T>({ baseUrl, apiKey, path, body }: ArkRequestOptions): Promise<T> {
+  const response = await fetch(`${baseUrl.replace(/\/$/, '')}${path}`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
-      Authorization: `Bearer ${key}`,
+      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
@@ -42,8 +24,10 @@ async function requestArk<T>({ path, body }: ArkRequestOptions): Promise<T> {
   return payload;
 }
 
-export async function submitArkTextResponse(args: { model: string; prompt: string }) {
+export async function submitArkTextResponse(args: { model: string; prompt: string; baseUrl: string; apiKey: string }) {
   return requestArk<Record<string, unknown>>({
+    baseUrl: args.baseUrl,
+    apiKey: args.apiKey,
     path: '/responses',
     body: {
       model: args.model,

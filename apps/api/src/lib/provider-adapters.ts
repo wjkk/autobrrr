@@ -3,13 +3,12 @@ import { randomUUID } from 'node:crypto';
 import type { Run } from '@prisma/client';
 
 import {
-  isAicsoConfigured,
   queryAicsoVideoGeneration,
   submitAicsoImageGeneration,
   submitAicsoVideoGeneration,
 } from './aicso-client.js';
-import { isArkConfigured, submitArkTextResponse } from './ark-client.js';
-import { env } from './env.js';
+import { submitArkTextResponse } from './ark-client.js';
+import { resolveRunProviderRuntimeConfig } from './provider-runtime-config.js';
 
 export interface ProviderCallbackPayload {
   providerJobId?: string;
@@ -105,6 +104,8 @@ function getModelKind(run: Run) {
 function secondsFromNow(seconds: number) {
   return new Date(Date.now() + seconds * 1000);
 }
+
+const AICSO_POLL_INTERVAL_SECONDS = 6;
 
 function normalizeProviderStatus(providerStatus: string) {
   const normalized = providerStatus.trim().toLowerCase();
@@ -231,6 +232,7 @@ const mockProxyAdapter: ProviderAdapter = {
 
 const arkAdapter: ProviderAdapter = {
   async submit(run) {
+    const runtimeConfig = await resolveRunProviderRuntimeConfig(run);
     const prompt = getPrompt(run);
     if (!prompt) {
       return {
@@ -250,20 +252,33 @@ const arkAdapter: ProviderAdapter = {
       };
     }
 
-    if (!isArkConfigured()) {
+    if (!runtimeConfig.enabled || !runtimeConfig.apiKey || !runtimeConfig.baseUrl) {
       return {
         type: 'completed',
         providerStatus: 'succeeded',
         providerOutput: {
           mocked: true,
           provider: 'ark',
-          modelUsed: getEndpointModelKey(run) ?? env.ARK_TEXT_MODEL,
+          modelUsed: getEndpointModelKey(run),
         },
       };
     }
 
-    const model = getEndpointModelKey(run) ?? env.ARK_TEXT_MODEL;
-    const response = await submitArkTextResponse({ model, prompt });
+    const model = getEndpointModelKey(run);
+    if (!model) {
+      return {
+        type: 'failed',
+        providerStatus: 'failed',
+        errorCode: 'PROVIDER_MODEL_REQUIRED',
+        errorMessage: 'Run model key is required for ARK submission.',
+      };
+    }
+    const response = await submitArkTextResponse({
+      model,
+      prompt,
+      apiKey: runtimeConfig.apiKey,
+      baseUrl: runtimeConfig.baseUrl,
+    });
     return {
       type: 'completed',
       providerStatus: 'succeeded',
@@ -293,16 +308,13 @@ const arkAdapter: ProviderAdapter = {
 
 const aicsoAdapter: ProviderAdapter = {
   async submit(run) {
-    if (!isAicsoConfigured()) {
+    const runtimeConfig = await resolveRunProviderRuntimeConfig(run);
+    if (!runtimeConfig.enabled || !runtimeConfig.apiKey || !runtimeConfig.baseUrl) {
       return mockProxyAdapter.submit(run);
     }
 
     const model = getEndpointModelKey(run)
-      ?? (getModelKind(run) === 'image'
-        ? env.AICSO_IMAGE_MODEL
-        : getModelKind(run) === 'video'
-          ? env.AICSO_VIDEO_MODEL
-          : env.ARK_TEXT_MODEL);
+      ?? null;
     const prompt = getPrompt(run);
 
     if (!prompt) {
@@ -314,8 +326,22 @@ const aicsoAdapter: ProviderAdapter = {
       };
     }
 
+    if (!model) {
+      return {
+        type: 'failed',
+        providerStatus: 'failed',
+        errorCode: 'PROVIDER_MODEL_REQUIRED',
+        errorMessage: 'Run model key is required for AICSO submission.',
+      };
+    }
+
     if (getModelKind(run) === 'image') {
-      const response = await submitAicsoImageGeneration({ model, prompt });
+      const response = await submitAicsoImageGeneration({
+        model,
+        prompt,
+        apiKey: runtimeConfig.apiKey,
+        baseUrl: runtimeConfig.baseUrl,
+      });
       return {
         type: 'completed',
         providerStatus: 'succeeded',
@@ -323,7 +349,12 @@ const aicsoAdapter: ProviderAdapter = {
       };
     }
 
-    const response = await submitAicsoVideoGeneration({ model, prompt });
+    const response = await submitAicsoVideoGeneration({
+      model,
+      prompt,
+      apiKey: runtimeConfig.apiKey,
+      baseUrl: runtimeConfig.baseUrl,
+    });
     const providerJobId = inferAicsoVideoJobId(response);
     if (!providerJobId) {
       return {
@@ -340,12 +371,13 @@ const aicsoAdapter: ProviderAdapter = {
       providerJobId,
       providerCallbackToken: run.providerCallbackToken ?? randomUUID(),
       providerStatus: 'submitted',
-      nextPollAt: secondsFromNow(env.AICSO_POLL_INTERVAL_SECONDS),
+      nextPollAt: secondsFromNow(AICSO_POLL_INTERVAL_SECONDS),
       providerOutput: response,
     };
   },
   async poll(run) {
-    if (!isAicsoConfigured()) {
+    const runtimeConfig = await resolveRunProviderRuntimeConfig(run);
+    if (!runtimeConfig.enabled || !runtimeConfig.apiKey || !runtimeConfig.baseUrl) {
       return mockProxyAdapter.poll(run);
     }
 
@@ -358,7 +390,11 @@ const aicsoAdapter: ProviderAdapter = {
       };
     }
 
-    const response = await queryAicsoVideoGeneration(run.providerJobId);
+    const response = await queryAicsoVideoGeneration({
+      id: run.providerJobId,
+      apiKey: runtimeConfig.apiKey,
+      baseUrl: runtimeConfig.baseUrl,
+    });
     const state = inferAicsoVideoState(response);
 
     if (state === 'completed' || state === 'succeeded' || state === 'success') {
@@ -382,7 +418,7 @@ const aicsoAdapter: ProviderAdapter = {
     return {
       type: 'running',
       providerStatus: state,
-      nextPollAt: secondsFromNow(env.AICSO_POLL_INTERVAL_SECONDS),
+      nextPollAt: secondsFromNow(AICSO_POLL_INTERVAL_SECONDS),
       providerOutput: response,
     };
   },

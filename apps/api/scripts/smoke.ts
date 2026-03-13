@@ -4,6 +4,8 @@ import { processNextQueuedRun } from '../src/lib/run-worker.js';
 const apiBaseUrl = (process.env.API_BASE_URL ?? 'http://127.0.0.1:8787').replace(/\/$/, '');
 const email = process.env.SMOKE_EMAIL ?? `smoke-${Date.now()}@example.com`;
 const password = process.env.SMOKE_PASSWORD ?? 'password123';
+const smokeArkApiKey = process.env.SMOKE_ARK_API_KEY ?? process.env.ARK_API_KEY ?? '';
+const smokeAicsoApiToken = process.env.SMOKE_AICSO_API_TOKEN ?? process.env.AICSO_API_TOKEN ?? '';
 
 interface ApiSuccess<T> {
   ok: true;
@@ -100,6 +102,23 @@ async function processUntilMatch(
   return null;
 }
 
+async function configureProviderIfPresent(args: { cookie: string; providerCode: string; apiKey: string }) {
+  if (!args.apiKey.trim()) {
+    return false;
+  }
+
+  await request(`/api/provider-configs/${encodeURIComponent(args.providerCode)}`, {
+    method: 'PUT',
+    cookie: args.cookie,
+    body: JSON.stringify({
+      apiKey: args.apiKey.trim(),
+      enabled: true,
+    }),
+  });
+
+  return true;
+}
+
 async function main() {
   console.log(`[smoke] API base: ${apiBaseUrl}`);
   console.log(`[smoke] email: ${email}`);
@@ -126,6 +145,24 @@ async function main() {
 
   await request('/api/auth/me', { cookie });
   console.log('[smoke] me ok');
+
+  const arkConfigured = await configureProviderIfPresent({
+    cookie,
+    providerCode: 'ark',
+    apiKey: smokeArkApiKey,
+  });
+  if (arkConfigured) {
+    console.log('[smoke] ark provider configured');
+  }
+
+  const aicsoConfigured = await configureProviderIfPresent({
+    cookie,
+    providerCode: 'aicso',
+    apiKey: smokeAicsoApiToken,
+  });
+  if (aicsoConfigured) {
+    console.log('[smoke] aicso provider configured');
+  }
 
   const createdProject = await request<{
     projectId: string;

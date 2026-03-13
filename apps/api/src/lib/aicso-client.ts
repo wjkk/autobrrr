@@ -1,6 +1,6 @@
-import { env } from './env.js';
-
 interface AicsoRequestOptions {
+  baseUrl: string;
+  apiKey: string;
   path: string;
   body?: Record<string, unknown>;
   method?: 'GET' | 'POST';
@@ -18,26 +18,12 @@ export class AicsoApiError extends Error {
   }
 }
 
-function resolveToken() {
-  const token = env.AICSO_API_TOKEN?.trim();
-  return token ? token : null;
-}
-
-function resolveUrl(path: string) {
-  return `${env.AICSO_API_BASE_URL.replace(/\/$/, '')}${path}`;
-}
-
-async function requestAicso<T>({ path, body, method = 'POST' }: AicsoRequestOptions): Promise<T> {
-  const token = resolveToken();
-  if (!token) {
-    throw new Error('AICSO_API_TOKEN is not configured.');
-  }
-
-  const response = await fetch(resolveUrl(path), {
+async function requestAicso<T>({ baseUrl, apiKey, path, body, method = 'POST' }: AicsoRequestOptions): Promise<T> {
+  const response = await fetch(`${baseUrl.replace(/\/$/, '')}${path}`, {
     method,
     headers: {
       Accept: 'application/json',
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${apiKey}`,
       ...(body ? { 'Content-Type': 'application/json' } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -51,12 +37,10 @@ async function requestAicso<T>({ path, body, method = 'POST' }: AicsoRequestOpti
   return payload;
 }
 
-export function isAicsoConfigured() {
-  return !!resolveToken();
-}
-
-export async function submitAicsoImageGeneration(args: { model: string; prompt: string }) {
+export async function submitAicsoImageGeneration(args: { model: string; prompt: string; baseUrl: string; apiKey: string }) {
   return requestAicso<Record<string, unknown>>({
+    baseUrl: args.baseUrl,
+    apiKey: args.apiKey,
     path: `/v1beta/models/${encodeURIComponent(args.model)}:generateContent`,
     body: {
       contents: [
@@ -75,8 +59,10 @@ export async function submitAicsoImageGeneration(args: { model: string; prompt: 
   });
 }
 
-export async function submitAicsoVideoGeneration(args: { model: string; prompt: string }) {
+export async function submitAicsoVideoGeneration(args: { model: string; prompt: string; baseUrl: string; apiKey: string }) {
   return requestAicso<Record<string, unknown>>({
+    baseUrl: args.baseUrl,
+    apiKey: args.apiKey,
     path: '/v1/video/create',
     body: {
       model: args.model,
@@ -87,9 +73,11 @@ export async function submitAicsoVideoGeneration(args: { model: string; prompt: 
   });
 }
 
-export async function queryAicsoVideoGeneration(id: string) {
+export async function queryAicsoVideoGeneration(args: { id: string; baseUrl: string; apiKey: string }) {
   return requestAicso<Record<string, unknown>>({
-    path: `/v1/video/query?id=${encodeURIComponent(id)}`,
+    baseUrl: args.baseUrl,
+    apiKey: args.apiKey,
+    path: `/v1/video/query?id=${encodeURIComponent(args.id)}`,
     method: 'GET',
   });
 }

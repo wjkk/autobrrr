@@ -397,6 +397,13 @@
   margin-top: 4px;
 }
 
+.footerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.testButton,
 .saveButton {
   display: inline-flex;
   align-items: center;
@@ -412,6 +419,16 @@
   cursor: pointer;
 }
 
+.testButton {
+  min-height: 48px;
+  padding: 0 18px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+}
+
+.testButton:disabled,
 .saveButton:disabled {
   opacity: 0.55;
   cursor: default;

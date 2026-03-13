@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { submitAicsoImageGeneration } from '../lib/aicso-client.js';
+import { submitArkTextResponse } from '../lib/ark-client.js';
 import { requireUser } from '../lib/auth.js';
 import { prisma } from '../lib/prisma.js';
 
@@ -93,6 +95,52 @@ function mapProviderConfig(args: {
           updatedAt: null,
         },
   };
+}
+
+function pickTestEndpoint(args: {
+  providerCode: string;
+  endpoints: Array<{
+    id: string;
+    slug: string;
+    label: string;
+    modelKind: string;
+    familySlug: string;
+    isDefault: boolean;
+    remoteModelKey: string;
+  }>;
+  defaults: {
+    textEndpointSlug: string | null;
+    imageEndpointSlug: string | null;
+    videoEndpointSlug: string | null;
+  };
+}) {
+  const bySlug = new Map(args.endpoints.map((endpoint) => [endpoint.slug, endpoint]));
+  const requested = [
+    args.defaults.textEndpointSlug,
+    args.defaults.imageEndpointSlug,
+    args.defaults.videoEndpointSlug,
+  ]
+    .filter((value): value is string => !!value)
+    .map((slug) => bySlug.get(slug))
+    .filter((value): value is NonNullable<typeof value> => !!value);
+
+  if (requested.length > 0) {
+    return requested[0];
+  }
+
+  if (args.providerCode === 'ark') {
+    return args.endpoints.find((endpoint) => endpoint.modelKind === 'text') ?? null;
+  }
+
+  if (args.providerCode === 'aicso') {
+    return (
+      args.endpoints.find((endpoint) => endpoint.modelKind === 'image')
+      ?? args.endpoints.find((endpoint) => endpoint.modelKind === 'video')
+      ?? null
+    );
+  }
+
+  return args.endpoints[0] ?? null;
 }
 
 export async function registerProviderConfigRoutes(app: FastifyInstance) {
@@ -284,6 +332,160 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
         })),
         config,
       }),
+    });
+  });
+
+  app.post('/api/provider-configs/:providerCode/test', async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) {
+      return;
+    }
+
+    const params = providerCodeParamsSchema.safeParse(request.params);
+    if (!params.success) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'INVALID_ARGUMENT',
+          message: 'Invalid provider code.',
+        },
+      });
+    }
+
+    const provider = await prisma.modelProvider.findUnique({
+      where: { code: params.data.providerCode },
+      include: {
+        endpoints: {
+          where: { status: 'ACTIVE' },
+          include: {
+            family: {
+              select: {
+                slug: true,
+                modelKind: true,
+              },
+            },
+          },
+          orderBy: [{ family: { modelKind: 'asc' } }, { priority: 'asc' }, { createdAt: 'asc' }],
+        },
+        userConfigs: {
+          where: { userId: user.id },
+          take: 1,
+        },
+      },
+    });
+
+    if (!provider) {
+      return reply.code(404).send({
+        ok: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Provider not found.',
+        },
+      });
+    }
+
+    const config = provider.userConfigs[0] ?? null;
+    if (!config?.enabled || !config.apiKey) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'PROVIDER_NOT_CONFIGURED',
+          message: 'This provider is not configured for the current user.',
+        },
+      });
+    }
+
+    const defaults = config.optionsJson && typeof config.optionsJson === 'object' && !Array.isArray(config.optionsJson)
+      ? {
+          textEndpointSlug: typeof (config.optionsJson as Record<string, unknown>).textEndpointSlug === 'string' ? ((config.optionsJson as Record<string, unknown>).textEndpointSlug as string) : null,
+          imageEndpointSlug: typeof (config.optionsJson as Record<string, unknown>).imageEndpointSlug === 'string' ? ((config.optionsJson as Record<string, unknown>).imageEndpointSlug as string) : null,
+          videoEndpointSlug: typeof (config.optionsJson as Record<string, unknown>).videoEndpointSlug === 'string' ? ((config.optionsJson as Record<string, unknown>).videoEndpointSlug as string) : null,
+        }
+      : {
+          textEndpointSlug: null,
+          imageEndpointSlug: null,
+          videoEndpointSlug: null,
+        };
+
+    const endpoints = provider.endpoints.map((endpoint) => ({
+      id: endpoint.id,
+      slug: endpoint.slug,
+      label: endpoint.label,
+      modelKind: endpoint.family.modelKind.toLowerCase(),
+      familySlug: endpoint.family.slug,
+      isDefault: endpoint.isDefault,
+      remoteModelKey: endpoint.remoteModelKey,
+    }));
+
+    const testEndpoint = pickTestEndpoint({
+      providerCode: provider.code,
+      endpoints,
+      defaults,
+    });
+
+    if (!testEndpoint) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'ENDPOINT_NOT_FOUND',
+          message: 'No active endpoint is available to test for this provider.',
+        },
+      });
+    }
+
+    const baseUrl = config.baseUrlOverride ?? provider.baseUrl;
+    if (!baseUrl) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'BASE_URL_REQUIRED',
+          message: 'This provider requires a base URL to be configured.',
+        },
+      });
+    }
+
+    try {
+      if (provider.code === 'ark') {
+        await submitArkTextResponse({
+          baseUrl,
+          apiKey: config.apiKey,
+          model: testEndpoint.remoteModelKey,
+          prompt: '请只返回 ok',
+        });
+      } else if (provider.code === 'aicso') {
+        await submitAicsoImageGeneration({
+          baseUrl,
+          apiKey: config.apiKey,
+          model: testEndpoint.remoteModelKey,
+          prompt: '一张简洁的测试图，纯色背景即可。',
+        });
+      } else {
+        return reply.code(400).send({
+          ok: false,
+          error: {
+            code: 'TEST_NOT_SUPPORTED',
+            message: 'This provider does not support connectivity testing yet.',
+          },
+        });
+      }
+    } catch (error) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'PROVIDER_TEST_FAILED',
+          message: error instanceof Error ? error.message : 'Provider test failed.',
+        },
+      });
+    }
+
+    return reply.send({
+      ok: true,
+      data: {
+        providerCode: provider.code,
+        endpointSlug: testEndpoint.slug,
+        modelKind: testEndpoint.modelKind,
+        message: 'Provider connectivity test succeeded.',
+      },
     });
   });
 }

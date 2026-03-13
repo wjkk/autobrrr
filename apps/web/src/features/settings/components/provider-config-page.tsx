@@ -61,12 +61,29 @@ async function updateProviderConfig(providerCode: string, draft: DraftState) {
   return payload.data;
 }
 
+async function testProviderConfig(providerCode: string) {
+  const response = await fetch(`/api/provider-configs/${encodeURIComponent(providerCode)}/test`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  const payload = (await response.json()) as { ok: boolean; data?: { message?: string }; error?: { message?: string } };
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.error?.message ?? '连通性测试失败。');
+  }
+
+  return payload.data?.message ?? 'Provider connectivity test succeeded.';
+}
+
 export function ProviderConfigPage({ initialConfigs }: ProviderConfigPageProps) {
   const [configs, setConfigs] = useState(initialConfigs);
   const [drafts, setDrafts] = useState<Record<string, DraftState>>(() =>
     Object.fromEntries(initialConfigs.map((item) => [item.provider.code, makeDraft(item)])),
   );
   const [savingCode, setSavingCode] = useState<string | null>(null);
+  const [testingCode, setTestingCode] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Record<string, { message: string; error?: boolean }>>({});
 
   const configuredCount = useMemo(() => configs.filter((item) => item.userConfig.configured).length, [configs]);
@@ -115,6 +132,24 @@ export function ProviderConfigPage({ initialConfigs }: ProviderConfigPageProps) 
         ...current,
         [providerCode]: { message: '配置已保存。' },
       }));
+      setTestingCode(providerCode);
+      try {
+        const message = await testProviderConfig(providerCode);
+        setFeedback((current) => ({
+          ...current,
+          [providerCode]: { message: `配置已保存，${message}` },
+        }));
+      } catch (error) {
+        setFeedback((current) => ({
+          ...current,
+          [providerCode]: {
+            message: error instanceof Error ? `配置已保存，但测试失败：${error.message}` : '配置已保存，但测试失败。',
+            error: true,
+          },
+        }));
+      } finally {
+        setTestingCode(null);
+      }
     } catch (error) {
       setFeedback((current) => ({
         ...current,
@@ -125,6 +160,32 @@ export function ProviderConfigPage({ initialConfigs }: ProviderConfigPageProps) 
       }));
     } finally {
       setSavingCode(null);
+    }
+  };
+
+  const onTest = async (providerCode: string) => {
+    setTestingCode(providerCode);
+    setFeedback((current) => ({
+      ...current,
+      [providerCode]: { message: '' },
+    }));
+
+    try {
+      const message = await testProviderConfig(providerCode);
+      setFeedback((current) => ({
+        ...current,
+        [providerCode]: { message },
+      }));
+    } catch (error) {
+      setFeedback((current) => ({
+        ...current,
+        [providerCode]: {
+          message: error instanceof Error ? error.message : '连通性测试失败。',
+          error: true,
+        },
+      }));
+    } finally {
+      setTestingCode(null);
     }
   };
 
@@ -354,14 +415,24 @@ export function ProviderConfigPage({ initialConfigs }: ProviderConfigPageProps) 
                       <div className={`${styles.feedback} ${currentFeedback?.error ? styles.feedbackError : ''}`}>
                         {currentFeedback?.message ?? ''}
                       </div>
-                      <button
-                        type="button"
-                        className={styles.saveButton}
-                        onClick={() => onSave(item.provider.code)}
-                        disabled={savingCode === item.provider.code}
-                      >
-                        {savingCode === item.provider.code ? '保存中...' : '保存配置'}
-                      </button>
+                      <div className={styles.footerActions}>
+                        <button
+                          type="button"
+                          className={styles.testButton}
+                          onClick={() => onTest(item.provider.code)}
+                          disabled={testingCode === item.provider.code || savingCode === item.provider.code}
+                        >
+                          {testingCode === item.provider.code ? '测试中...' : '测试连接'}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.saveButton}
+                          onClick={() => onSave(item.provider.code)}
+                          disabled={savingCode === item.provider.code}
+                        >
+                          {savingCode === item.provider.code ? '保存中...' : '保存配置'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

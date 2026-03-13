@@ -174,6 +174,10 @@ export function ExplorePage({ studio }: ExplorePageProps) {
             <span className={styles.pageTitle}>灵感创作台</span>
           </div>
           <div className={styles.topBarRight}>
+            <button className={styles.publishBtn} onClick={() => router.push('/settings/providers')}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v6m0 6v6M3 12h6m6 0h6" /></svg>
+              接口配置
+            </button>
             <button className={styles.publishBtn} onClick={() => router.push(`/projects/${studio.project.id}/creation`)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
               发布作品

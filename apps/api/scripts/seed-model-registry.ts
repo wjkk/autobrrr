@@ -107,7 +107,7 @@ async function main() {
   });
   const platouImage = await upsertFamily('platou-nano-banana', 'Platou Nano Banana', 'IMAGE', {
     provider: 'platou',
-    model: 'nano-banana',
+    model: 'nano-banana-2',
     aspectRatios: ['1:1', '9:16', '16:9'],
   });
   const platouVeo = await upsertFamily('platou-veo-video', 'Platou Veo Video', 'VIDEO', {
@@ -188,8 +188,8 @@ async function main() {
     slug: 'platou-nano-banana',
     familyId: platouImage.id,
     providerId: platou.id,
-    remoteModelKey: 'nano-banana',
-    label: 'Nano Banana',
+    remoteModelKey: 'nano-banana-2',
+    label: 'Nano Banana 2',
     priority: 10,
     isDefault: true,
     defaultParamsJson: {

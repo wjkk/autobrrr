@@ -194,6 +194,21 @@ async function main() {
     },
   });
 
+  await upsertEndpoint({
+    slug: 'aicso-veo-fast-components',
+    familyId: veoVideo.id,
+    providerId: aicso.id,
+    remoteModelKey: 'veo3.1-fast-components',
+    label: 'Veo 3.1 Fast Components',
+    priority: 15,
+    isDefault: false,
+    defaultParamsJson: {
+      durationSeconds: 4,
+      aspectRatio: '9:16',
+      resolution: '1080p',
+    },
+  });
+
   console.log('[seed-model-registry] ok');
 }
 

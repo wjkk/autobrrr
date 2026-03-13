@@ -195,6 +195,34 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
       },
     });
 
+    const runs = await prisma.run.findMany({
+      where: {
+        episodeId: episode.id,
+        resourceType: 'shot',
+        runType: {
+          in: ['IMAGE_GENERATION', 'VIDEO_GENERATION'],
+        },
+      },
+      include: {
+        modelEndpoint: {
+          select: {
+            id: true,
+            slug: true,
+            label: true,
+          },
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+
+    const latestRunByShotId = new Map<string, (typeof runs)[number]>();
+    for (const run of runs) {
+      if (!run.resourceId || latestRunByShotId.has(run.resourceId)) {
+        continue;
+      }
+      latestRunByShotId.set(run.resourceId, run);
+    }
+
     return reply.send({
       ok: true,
       data: {
@@ -218,6 +246,20 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
           imagePrompt: shot.imagePrompt,
           motionPrompt: shot.motionPrompt,
           status: shot.status.toLowerCase(),
+          latestGenerationRun: latestRunByShotId.get(shot.id)
+            ? {
+                id: latestRunByShotId.get(shot.id)?.id,
+                runType: latestRunByShotId.get(shot.id)?.runType.toLowerCase(),
+                status: latestRunByShotId.get(shot.id)?.status.toLowerCase(),
+                modelEndpoint: latestRunByShotId.get(shot.id)?.modelEndpoint
+                  ? {
+                      id: latestRunByShotId.get(shot.id)?.modelEndpoint?.id,
+                      slug: latestRunByShotId.get(shot.id)?.modelEndpoint?.slug,
+                      label: latestRunByShotId.get(shot.id)?.modelEndpoint?.label,
+                    }
+                  : null,
+              }
+            : null,
           activeVersionId: shot.activeVersionId,
           activeVersion: shot.activeVersion
             ? {

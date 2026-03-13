@@ -29,6 +29,16 @@ export interface ApiWorkspaceShot {
   imagePrompt: string;
   motionPrompt: string;
   status: string;
+  latestGenerationRun: {
+    id: string;
+    runType: string;
+    status: string;
+    modelEndpoint: {
+      id: string;
+      slug: string;
+      label: string;
+    } | null;
+  } | null;
   activeVersionId: string | null;
   activeVersion: {
     id: string;
@@ -90,8 +100,12 @@ function inferResolution(shot: ApiWorkspaceShot): '720P' | '1080P' {
   return shot.activeVersion?.mediaKind === 'video' ? '1080P' : '720P';
 }
 
-function inferPreferredModel() {
-  return 'Vision Auto';
+function inferPreferredModel(shot: ApiWorkspaceShot) {
+  return shot.latestGenerationRun?.modelEndpoint?.slug ?? 'vision-auto';
+}
+
+function inferPreferredModelLabel(shot: ApiWorkspaceShot) {
+  return shot.latestGenerationRun?.modelEndpoint?.label ?? '智能选择';
 }
 
 function mapVersionStatus(status: string): ShotVersion['status'] {
@@ -110,7 +124,7 @@ function mapWorkspaceShotToCreationShot(shot: ApiWorkspaceShot): Shot {
         {
           id: shot.activeVersion.id,
           label: shot.activeVersion.label,
-          modelId: inferPreferredModel(),
+          modelId: inferPreferredModel(shot),
           status: mapVersionStatus(shot.activeVersion.status),
           mediaKind: shot.activeVersion.mediaKind,
           createdAt: '刚刚',
@@ -126,7 +140,7 @@ function mapWorkspaceShotToCreationShot(shot: ApiWorkspaceShot): Shot {
     narrationText: shot.narrationText,
     imagePrompt: shot.imagePrompt,
     motionPrompt: shot.motionPrompt,
-    preferredModel: inferPreferredModel(),
+    preferredModel: inferPreferredModel(shot),
     resolution: inferResolution(shot),
     durationMode: durationSeconds === 6 ? '6s' : '4s',
     durationSeconds,

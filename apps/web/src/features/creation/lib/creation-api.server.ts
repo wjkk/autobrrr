@@ -44,7 +44,7 @@ function buildStudioFixtureFromApi(project: ApiProjectDetail, workspace: ApiCrea
         narrationText: shot.narrationText,
         imagePrompt: shot.imagePrompt,
         motionPrompt: shot.motionPrompt,
-        preferredModel: 'Vision Auto',
+        preferredModel: shot.latestGenerationRun?.modelEndpoint?.slug ?? 'vision-auto',
         resolution: shot.activeVersion?.mediaKind === 'video' ? '1080P' : '720P',
         durationMode: '4s',
         durationSeconds: 4,
@@ -54,7 +54,7 @@ function buildStudioFixtureFromApi(project: ApiProjectDetail, workspace: ApiCrea
           ? [{
               id: shot.activeVersion.id,
               label: shot.activeVersion.label,
-              modelId: 'Vision Auto',
+              modelId: shot.latestGenerationRun?.modelEndpoint?.slug ?? 'vision-auto',
               status: shot.activeVersion.status === 'active' ? 'active' : 'archived',
               mediaKind: shot.activeVersion.mediaKind,
               createdAt: '刚刚',

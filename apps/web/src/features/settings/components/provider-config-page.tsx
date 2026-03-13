@@ -70,12 +70,16 @@ async function testProviderConfig(providerCode: string) {
     },
   });
 
-  const payload = (await response.json()) as { ok: boolean; data?: { message?: string }; error?: { message?: string } };
+  const payload = (await response.json()) as { ok: boolean; data?: ProviderConfigItem; error?: { message?: string } };
   if (!response.ok || !payload.ok) {
-    throw new Error(payload.error?.message ?? '连通性测试失败。');
+    const error = new Error(payload.error?.message ?? '连通性测试失败。') as Error & { providerConfig?: ProviderConfigItem };
+    if (payload.data) {
+      error.providerConfig = payload.data;
+    }
+    throw error;
   }
 
-  return payload.data?.message ?? 'Provider connectivity test succeeded.';
+  return payload.data;
 }
 
 export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }: ProviderConfigPageProps) {
@@ -182,12 +186,20 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
     }));
 
     try {
-      const message = await testProviderConfig(providerCode);
+      const updated = await testProviderConfig(providerCode);
+      if (!updated) {
+        throw new Error('测试返回为空。');
+      }
+      setConfigs((current) => current.map((item) => (item.provider.code === providerCode ? updated : item)));
       setFeedback((current) => ({
         ...current,
-        [providerCode]: { message },
+        [providerCode]: { message: updated.userConfig.lastTest.message ?? '测试成功。' },
       }));
     } catch (error) {
+      const providerConfig = error instanceof Error && 'providerConfig' in error ? (error.providerConfig as ProviderConfigItem | undefined) : undefined;
+      if (providerConfig) {
+        setConfigs((current) => current.map((item) => (item.provider.code === providerCode ? providerConfig : item)));
+      }
       setFeedback((current) => ({
         ...current,
         [providerCode]: {
@@ -444,8 +456,10 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                   }`}
                 >
                   <span className={styles.testRibbonDot} />
-                  <strong>{testStatusLabel}</strong>
-                  <span>{item.userConfig.lastTest.testedAt ? new Date(item.userConfig.lastTest.testedAt).toLocaleString('zh-CN') : '等待首次测试'}</span>
+                  <strong className={styles.testRibbonLabel}>{testStatusLabel}</strong>
+                  <span className={styles.testRibbonTime}>
+                    {item.userConfig.lastTest.testedAt ? new Date(item.userConfig.lastTest.testedAt).toLocaleString('zh-CN') : '等待首次测试'}
+                  </span>
                 </div>
                 <div className={styles.providerHead}>
                   <div>

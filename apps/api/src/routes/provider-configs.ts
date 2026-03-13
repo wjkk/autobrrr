@@ -440,6 +440,42 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       });
     }
 
+    const buildResponse = async () => {
+      const refreshedConfig = await prisma.userProviderConfig.findUnique({
+        where: {
+          userId_providerId: {
+            userId: user.id,
+            providerId: provider.id,
+          },
+        },
+        select: {
+          id: true,
+          enabled: true,
+          apiKey: true,
+          baseUrlOverride: true,
+          optionsJson: true,
+          lastTestStatus: true,
+          lastTestMessage: true,
+          lastTestAt: true,
+          lastTestEndpointSlug: true,
+          updatedAt: true,
+        },
+      });
+
+      return mapProviderConfig({
+        provider,
+        endpoints: provider.endpoints.map((endpoint) => ({
+          id: endpoint.id,
+          slug: endpoint.slug,
+          label: endpoint.label,
+          modelKind: endpoint.family.modelKind.toLowerCase(),
+          familySlug: endpoint.family.slug,
+          isDefault: endpoint.isDefault,
+        })),
+        config: refreshedConfig,
+      });
+    };
+
     const config = provider.userConfigs[0] ?? null;
     if (!config?.enabled || !config.apiKey) {
       await prisma.userProviderConfig.updateMany({
@@ -460,6 +496,7 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
           code: 'PROVIDER_NOT_CONFIGURED',
           message: 'This provider is not configured for the current user.',
         },
+        data: await buildResponse(),
       });
     }
 
@@ -521,6 +558,7 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
           code: 'BASE_URL_REQUIRED',
           message: 'This provider requires a base URL to be configured.',
         },
+        data: await buildResponse(),
       });
     }
 
@@ -567,6 +605,7 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
           code: 'PROVIDER_TEST_FAILED',
           message: error instanceof Error ? error.message : 'Provider test failed.',
         },
+        data: await buildResponse(),
       });
     }
 
@@ -585,12 +624,7 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
 
     return reply.send({
       ok: true,
-      data: {
-        providerCode: provider.code,
-        endpointSlug: testEndpoint.slug,
-        modelKind: testEndpoint.modelKind,
-        message: 'Provider connectivity test succeeded.',
-      },
+      data: await buildResponse(),
     });
   });
 }

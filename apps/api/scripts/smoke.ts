@@ -168,7 +168,7 @@ async function main() {
   await request('/api/model-endpoints?familySlug=seko-image', { cookie });
   console.log('[smoke] model endpoints ok');
 
-  await request('/api/model-endpoints?familySlug=deepseek-text', { cookie });
+  await request('/api/model-endpoints?familySlug=doubao-text', { cookie });
   console.log('[smoke] text model endpoints ok');
 
   await request('/api/model-resolution/resolve', {
@@ -190,8 +190,8 @@ async function main() {
       body: JSON.stringify({
         episodeId,
         prompt: '请为这个机械猫雨夜短片生成一份三段式策划文档，包含故事梗概、视觉风格和分镜方向。',
-        modelFamily: 'deepseek-text',
-        modelEndpoint: 'aicso-deepseek-v3',
+        modelFamily: 'doubao-text',
+        modelEndpoint: 'ark-doubao-seed-1-8-251228',
         idempotencyKey: `smoke-planner-${Date.now()}`,
       }),
     },

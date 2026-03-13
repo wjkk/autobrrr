@@ -328,8 +328,8 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
         body: JSON.stringify({
           episodeId: runtimeApi.episodeId,
           prompt: instruction,
-          modelFamily: 'deepseek-text',
-          modelEndpoint: 'aicso-deepseek-v3',
+          modelFamily: 'doubao-text',
+          modelEndpoint: 'ark-doubao-seed-1-8-251228',
         }),
       },
     );

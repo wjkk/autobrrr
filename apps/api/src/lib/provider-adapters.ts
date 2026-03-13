@@ -5,11 +5,10 @@ import type { Run } from '@prisma/client';
 import {
   isAicsoConfigured,
   queryAicsoVideoGeneration,
-  resolveAicsoTextFallbackModels,
   submitAicsoImageGeneration,
-  submitAicsoTextGenerationWithFallback,
   submitAicsoVideoGeneration,
 } from './aicso-client.js';
+import { isArkConfigured, submitArkTextResponse } from './ark-client.js';
 import { env } from './env.js';
 
 export interface ProviderCallbackPayload {
@@ -230,6 +229,68 @@ const mockProxyAdapter: ProviderAdapter = {
   },
 };
 
+const arkAdapter: ProviderAdapter = {
+  async submit(run) {
+    const prompt = getPrompt(run);
+    if (!prompt) {
+      return {
+        type: 'failed',
+        providerStatus: 'failed',
+        errorCode: 'PROVIDER_PROMPT_REQUIRED',
+        errorMessage: 'Run prompt is required for provider submission.',
+      };
+    }
+
+    if (getModelKind(run) !== 'text') {
+      return {
+        type: 'failed',
+        providerStatus: 'failed',
+        errorCode: 'PROVIDER_RUN_KIND_UNSUPPORTED',
+        errorMessage: 'ARK provider currently supports text runs only.',
+      };
+    }
+
+    if (!isArkConfigured()) {
+      return {
+        type: 'completed',
+        providerStatus: 'succeeded',
+        providerOutput: {
+          mocked: true,
+          provider: 'ark',
+          modelUsed: getEndpointModelKey(run) ?? env.ARK_TEXT_MODEL,
+        },
+      };
+    }
+
+    const model = getEndpointModelKey(run) ?? env.ARK_TEXT_MODEL;
+    const response = await submitArkTextResponse({ model, prompt });
+    return {
+      type: 'completed',
+      providerStatus: 'succeeded',
+      providerOutput: {
+        ...response,
+        modelUsed: model,
+      },
+    };
+  },
+  async poll() {
+    return {
+      type: 'failed',
+      providerStatus: 'failed',
+      errorCode: 'PROVIDER_POLL_UNSUPPORTED',
+      errorMessage: 'ARK provider does not support polling for text runs.',
+    };
+  },
+  async handleCallback() {
+    return {
+      type: 'failed',
+      providerStatus: 'failed',
+      errorCode: 'PROVIDER_CALLBACK_UNSUPPORTED',
+      errorMessage: 'ARK provider does not support callbacks.',
+    };
+  },
+};
+
 const aicsoAdapter: ProviderAdapter = {
   async submit(run) {
     if (!isAicsoConfigured()) {
@@ -241,7 +302,7 @@ const aicsoAdapter: ProviderAdapter = {
         ? env.AICSO_IMAGE_MODEL
         : getModelKind(run) === 'video'
           ? env.AICSO_VIDEO_MODEL
-          : env.AICSO_TEXT_MODEL);
+          : env.ARK_TEXT_MODEL);
     const prompt = getPrompt(run);
 
     if (!prompt) {
@@ -259,23 +320,6 @@ const aicsoAdapter: ProviderAdapter = {
         type: 'completed',
         providerStatus: 'succeeded',
         providerOutput: response,
-      };
-    }
-
-    if (getModelKind(run) === 'text') {
-      const response = await submitAicsoTextGenerationWithFallback({
-        primaryModel: model,
-        fallbackModels: resolveAicsoTextFallbackModels(),
-        prompt,
-      });
-      return {
-        type: 'completed',
-        providerStatus: 'succeeded',
-        providerOutput: {
-          ...response.response,
-          modelUsed: response.modelUsed,
-          attemptedModels: response.attemptedModels,
-        },
       };
     }
 
@@ -349,6 +393,9 @@ const aicsoAdapter: ProviderAdapter = {
 
 export function resolveProviderAdapter(run: Run): ProviderAdapter {
   const providerCode = getProviderCode(run);
+  if (providerCode === 'ark') {
+    return arkAdapter;
+  }
   if (providerCode === 'aicso') {
     return aicsoAdapter;
   }

@@ -120,6 +120,22 @@ function resolveDimensions(mediaKind: SupportedMediaKind, run: Run) {
 function extractPlannerText(providerData: unknown, fallbackPrompt: string) {
   const record = readObject(providerData);
 
+  if (typeof record.output_text === 'string' && record.output_text.trim()) {
+    return record.output_text.trim();
+  }
+
+  const outputs = Array.isArray(record.output) ? record.output : [];
+  for (const output of outputs) {
+    const content = Array.isArray(readObject(output).content) ? (readObject(output).content as unknown[]) : [];
+    for (const item of content) {
+      const candidate = readObject(item);
+      const text = typeof candidate.text === 'string' ? candidate.text.trim() : '';
+      if (text) {
+        return text;
+      }
+    }
+  }
+
   const choices = Array.isArray(record.choices) ? record.choices : [];
   for (const choice of choices) {
     const message = readObject(readObject(choice).message);

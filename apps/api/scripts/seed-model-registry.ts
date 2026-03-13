@@ -84,9 +84,9 @@ async function main() {
     model: 'gemini-3.1-flash-image-preview',
     aspectRatios: ['1:1', '9:16', '16:9'],
   });
-  const deepseekText = await upsertFamily('deepseek-text', 'DeepSeek Text', 'TEXT', {
-    provider: 'aicso',
-    model: 'deepseek-v3',
+  const doubaoText = await upsertFamily('doubao-text', 'Doubao Text', 'TEXT', {
+    provider: 'ark',
+    model: 'doubao-seed-1-8-251228',
     modalities: ['text'],
   });
   const veoVideo = await upsertFamily('veo-video', 'Veo Video', 'VIDEO', {
@@ -99,6 +99,7 @@ async function main() {
   const officialSeko = await upsertProvider('official-seko', 'Seko Official', 'OFFICIAL', 'https://api.seko.local');
   const proxyA = await upsertProvider('proxy-hub-a', 'Proxy Hub A', 'PROXY', 'https://proxy-hub-a.local');
   const aicso = await upsertProvider('aicso', 'AICSO', 'PROXY', 'https://api.aicso.top');
+  const ark = await upsertProvider('ark', 'Volcengine Ark', 'OFFICIAL', 'https://ark.cn-beijing.volces.com/api/v3');
 
   await upsertEndpoint({
     slug: 'official-seko-image-v1',
@@ -140,11 +141,11 @@ async function main() {
   });
 
   await upsertEndpoint({
-    slug: 'aicso-deepseek-v3',
-    familyId: deepseekText.id,
-    providerId: aicso.id,
-    remoteModelKey: 'deepseek-v3',
-    label: 'DeepSeek V3',
+    slug: 'ark-doubao-seed-1-8-251228',
+    familyId: doubaoText.id,
+    providerId: ark.id,
+    remoteModelKey: 'doubao-seed-1-8-251228',
+    label: 'Doubao Seed 1.8',
     priority: 5,
     isDefault: true,
     defaultParamsJson: {},

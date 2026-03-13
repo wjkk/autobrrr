@@ -17,6 +17,7 @@ interface DraftState {
   apiKey: string;
   baseUrlOverride: string;
   enabled: boolean;
+  testKind: 'text' | 'image' | 'video';
   defaults: {
     textEndpointSlug: string;
     imageEndpointSlug: string;
@@ -29,6 +30,11 @@ function makeDraft(config: ProviderConfigItem): DraftState {
     apiKey: '',
     baseUrlOverride: config.userConfig.baseUrlOverride ?? config.provider.baseUrl ?? '',
     enabled: config.userConfig.enabled,
+    testKind: config.endpoints.some((endpoint) => endpoint.modelKind === 'text')
+      ? 'text'
+      : config.endpoints.some((endpoint) => endpoint.modelKind === 'image')
+        ? 'image'
+        : 'video',
     defaults: {
       textEndpointSlug: config.userConfig.defaults.textEndpointSlug ?? '',
       imageEndpointSlug: config.userConfig.defaults.imageEndpointSlug ?? '',
@@ -64,12 +70,14 @@ async function updateProviderConfig(providerCode: string, draft: DraftState) {
   return payload.data;
 }
 
-async function testProviderConfig(providerCode: string) {
+async function testProviderConfig(providerCode: string, testKind: 'text' | 'image' | 'video') {
   const response = await fetch(`/api/provider-configs/${encodeURIComponent(providerCode)}/test`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
+      'Content-Type': 'application/json',
     },
+    body: JSON.stringify({ testKind }),
   });
 
   const payload = (await response.json()) as { ok: boolean; data?: ProviderConfigItem; error?: { message?: string } };
@@ -152,7 +160,7 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
       }));
       setTestingCode(providerCode);
       try {
-        const message = await testProviderConfig(providerCode);
+        const message = await testProviderConfig(providerCode, draft.testKind);
         setFeedback((current) => ({
           ...current,
           [providerCode]: { message: `配置已保存，${message}` },
@@ -182,6 +190,11 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
   };
 
   const onTest = async (providerCode: string) => {
+    const draft = drafts[providerCode];
+    if (!draft) {
+      return;
+    }
+
     setTestingCode(providerCode);
     setFeedback((current) => ({
       ...current,
@@ -189,7 +202,7 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
     }));
 
     try {
-      const updated = await testProviderConfig(providerCode);
+      const updated = await testProviderConfig(providerCode, draft.testKind);
       if (!updated) {
         throw new Error('测试返回为空。');
       }
@@ -439,6 +452,11 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
             const textEndpoints = item.endpoints.filter((endpoint) => endpoint.modelKind === 'text');
             const imageEndpoints = item.endpoints.filter((endpoint) => endpoint.modelKind === 'image');
             const videoEndpoints = item.endpoints.filter((endpoint) => endpoint.modelKind === 'video');
+            const testKinds = [
+              ...(textEndpoints.length ? (['text'] as const) : []),
+              ...(imageEndpoints.length ? (['image'] as const) : []),
+              ...(videoEndpoints.length ? (['video'] as const) : []),
+            ];
             const testStatus = item.userConfig.lastTest.status;
             const testStatusLabel =
               testStatus === 'passed'
@@ -541,6 +559,30 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                         onChange={(event) => onDraftChange(item.provider.code, { apiKey: event.target.value })}
                       />
                     </label>
+
+                    {testKinds.length > 1 ? (
+                      <label className={styles.field}>
+                        <div className={styles.fieldLabel}>
+                          <span>测试类型</span>
+                          <span className={styles.fieldHint}>决定“测试连接”时实际验证的模型类别</span>
+                        </div>
+                        <select
+                          className={styles.input}
+                          value={draft.testKind}
+                          onChange={(event) =>
+                            onDraftChange(item.provider.code, {
+                              testKind: event.target.value as 'text' | 'image' | 'video',
+                            })
+                          }
+                        >
+                          {testKinds.map((kind) => (
+                            <option key={kind} value={kind}>
+                              {kind === 'text' ? '测文本' : kind === 'image' ? '测图片' : '测视频'}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
 
                     <label className={styles.field}>
                       <div className={styles.fieldLabel}>

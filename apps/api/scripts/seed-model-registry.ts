@@ -84,6 +84,11 @@ async function main() {
     model: 'gemini-3.1-flash-image-preview',
     aspectRatios: ['1:1', '9:16', '16:9'],
   });
+  const deepseekText = await upsertFamily('deepseek-text', 'DeepSeek Text', 'TEXT', {
+    provider: 'aicso',
+    model: 'deepseek-v3',
+    modalities: ['text'],
+  });
   const doubaoText = await upsertFamily('doubao-text', 'Doubao Text', 'TEXT', {
     provider: 'ark',
     model: 'doubao-seed-1-8-251228',
@@ -138,6 +143,17 @@ async function main() {
     defaultParamsJson: {
       aspectRatio: '9:16',
     },
+  });
+
+  await upsertEndpoint({
+    slug: 'aicso-deepseek-v3',
+    familyId: deepseekText.id,
+    providerId: aicso.id,
+    remoteModelKey: 'deepseek-v3',
+    label: 'DeepSeek V3',
+    priority: 12,
+    isDefault: false,
+    defaultParamsJson: {},
   });
 
   await upsertEndpoint({

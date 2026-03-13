@@ -23,6 +23,10 @@ const updateProviderConfigSchema = z.object({
     .optional(),
 });
 
+const testProviderConfigSchema = z.object({
+  testKind: z.enum(['text', 'image', 'video']).optional(),
+});
+
 function mapProviderConfig(args: {
   provider: {
     id: string;
@@ -115,6 +119,7 @@ function mapProviderConfig(args: {
 
 function pickTestEndpoint(args: {
   providerCode: string;
+  requestedKind?: 'text' | 'image' | 'video';
   endpoints: Array<{
     id: string;
     slug: string;
@@ -131,10 +136,17 @@ function pickTestEndpoint(args: {
   };
 }) {
   const bySlug = new Map(args.endpoints.map((endpoint) => [endpoint.slug, endpoint]));
+  const candidates = args.requestedKind
+    ? args.endpoints.filter((endpoint) => endpoint.modelKind === args.requestedKind)
+    : args.endpoints;
   const requested = [
-    args.defaults.textEndpointSlug,
-    args.defaults.imageEndpointSlug,
-    args.defaults.videoEndpointSlug,
+    args.requestedKind === 'text'
+      ? args.defaults.textEndpointSlug
+      : args.requestedKind === 'image'
+        ? args.defaults.imageEndpointSlug
+        : args.requestedKind === 'video'
+          ? args.defaults.videoEndpointSlug
+          : args.defaults.textEndpointSlug,
   ]
     .filter((value): value is string => !!value)
     .map((slug) => bySlug.get(slug))
@@ -142,6 +154,10 @@ function pickTestEndpoint(args: {
 
   if (requested.length > 0) {
     return requested[0];
+  }
+
+  if (args.requestedKind) {
+    return candidates[0] ?? null;
   }
 
   if (args.providerCode === 'ark') {
@@ -398,12 +414,13 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
     }
 
     const params = providerCodeParamsSchema.safeParse(request.params);
-    if (!params.success) {
+    const payload = testProviderConfigSchema.safeParse(request.body ?? {});
+    if (!params.success || !payload.success) {
       return reply.code(400).send({
         ok: false,
         error: {
           code: 'INVALID_ARGUMENT',
-          message: 'Invalid provider code.',
+          message: 'Invalid provider test request.',
         },
       });
     }
@@ -524,6 +541,7 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
 
     const testEndpoint = pickTestEndpoint({
       providerCode: provider.code,
+      requestedKind: payload.data.testKind,
       endpoints,
       defaults,
     });
@@ -571,12 +589,41 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
           prompt: '请只返回 ok',
         });
       } else if (provider.code === 'aicso') {
-        await submitAicsoImageGeneration({
-          baseUrl,
-          apiKey: config.apiKey,
-          model: testEndpoint.remoteModelKey,
-          prompt: '一张简洁的测试图，纯色背景即可。',
-        });
+        if (testEndpoint.modelKind === 'image') {
+          await submitAicsoImageGeneration({
+            baseUrl,
+            apiKey: config.apiKey,
+            model: testEndpoint.remoteModelKey,
+            prompt: '一张简洁的测试图，纯色背景即可。',
+          });
+        } else if (testEndpoint.modelKind === 'video') {
+          const { submitAicsoVideoGeneration } = await import('../lib/aicso-client.js');
+          await submitAicsoVideoGeneration({
+            baseUrl,
+            apiKey: config.apiKey,
+            model: testEndpoint.remoteModelKey,
+            prompt: 'A simple short test video of moving light.',
+          });
+        } else if (testEndpoint.modelKind === 'text') {
+          const response = await fetch(`${baseUrl.replace(/\/$/, '')}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${config.apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: testEndpoint.remoteModelKey,
+              messages: [{ role: 'user', content: 'reply with ok' }],
+            }),
+          });
+          if (!response.ok) {
+            const body = await response.text();
+            throw new Error(body || 'AICSO text test failed.');
+          }
+        } else {
+          throw new Error('Unsupported AICSO test kind.');
+        }
       } else {
         return reply.code(400).send({
           ok: false,

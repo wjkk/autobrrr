@@ -6,6 +6,7 @@ import { registerAssetRoutes } from './routes/assets.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerCreationCommandRoutes } from './routes/creation-commands.js';
 import { registerModelRegistryRoutes } from './routes/model-registry.js';
+import { registerProviderCallbackRoutes } from './routes/provider-callbacks.js';
 import { registerRunRoutes } from './routes/runs.js';
 import { registerShotRoutes } from './routes/shots.js';
 import { registerStudioProjectRoutes } from './routes/studio-projects.js';
@@ -27,6 +28,7 @@ await registerShotRoutes(app);
 await registerModelRegistryRoutes(app);
 await registerCreationCommandRoutes(app);
 await registerRunRoutes(app);
+await registerProviderCallbackRoutes(app);
 
 app.setErrorHandler((error, _request, reply) => {
   app.log.error(error);

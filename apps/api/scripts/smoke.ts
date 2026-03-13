@@ -1,3 +1,4 @@
+import { prisma } from '../src/lib/prisma.js';
 import { processNextQueuedRun } from '../src/lib/run-worker.js';
 
 const apiBaseUrl = (process.env.API_BASE_URL ?? 'http://127.0.0.1:8787').replace(/\/$/, '');
@@ -49,6 +50,22 @@ function requireCookie(setCookieHeader: string | null) {
   }
 
   return setCookieHeader.split(';', 1)[0] ?? '';
+}
+
+async function readProviderCallbackState(runId: string) {
+  const run = await prisma.run.findUnique({
+    where: { id: runId },
+    select: {
+      providerJobId: true,
+      providerCallbackToken: true,
+    },
+  });
+
+  if (!run?.providerJobId || !run.providerCallbackToken) {
+    throw new Error(`Run ${runId} is missing provider callback state.`);
+  }
+
+  return run;
 }
 
 async function processUntilRun(runId: string, maxAttempts = 10) {
@@ -309,12 +326,64 @@ async function main() {
   }
   console.log('[smoke] async video run completed with expected snapshot');
 
+  const callbackVideoRun = await request<{ run: { id: string; status: string } }>(
+    `/api/projects/${createdProject.data.projectId}/shots/${createdShot.data.id}/generate-video`,
+    {
+      method: 'POST',
+      cookie,
+      body: JSON.stringify({
+        prompt: '雨夜中的机械猫望向镜头外，反光玻璃带出城市层次',
+        modelFamily: 'seko-video',
+        modelEndpoint: 'proxy-seko-video-v1',
+        referenceAssetIds: [createdAsset.data.id],
+        idempotencyKey: `smoke-video-callback-${Date.now()}`,
+        durationSeconds: 6,
+        aspectRatio: '16:9',
+        resolution: '1080p',
+      }),
+    },
+  );
+  console.log(`[smoke] callback video run created: ${callbackVideoRun.data.run.id}`);
+
+  const callbackSubmitStep = await processUntilMatch(
+    (processed) => !!processed && processed.runId === callbackVideoRun.data.run.id && processed.action === 'submitted',
+    10,
+    200,
+  );
+  if (!callbackSubmitStep) {
+    throw new Error('Expected async provider submission step for callback video run.');
+  }
+  console.log('[smoke] callback video submission ok');
+
+  const callbackState = await readProviderCallbackState(callbackVideoRun.data.run.id);
+  const callbackResult = await request<{ status: string; providerStatus: string | null; output: { dimensions?: { durationMs: number } } | null }>(
+    `/api/internal/provider-callbacks/${callbackState.providerCallbackToken}`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        providerJobId: callbackState.providerJobId,
+        providerStatus: 'succeeded',
+      }),
+    },
+  );
+  if (callbackResult.data.status !== 'completed' || callbackResult.data.providerStatus !== 'succeeded') {
+    throw new Error('Expected callback video run to complete through callback.');
+  }
+  if (callbackResult.data.output?.dimensions?.durationMs !== 6000) {
+    throw new Error('Expected callback video duration snapshot to be 6000ms.');
+  }
+  console.log('[smoke] callback video completion ok');
+
   const projectList = await request<Array<{ id: string; title: string }>>('/api/studio/projects', { cookie });
   console.log(`[smoke] project list ok (${projectList.data.length} projects)`);
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`[smoke] failed: ${message}`);
-  process.exit(1);
-});
+main()
+  .catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[smoke] failed: ${message}`);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

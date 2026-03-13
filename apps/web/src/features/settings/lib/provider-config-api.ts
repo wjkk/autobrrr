@@ -27,6 +27,11 @@ export interface ProviderConfigItem {
       imageEndpointSlug: string | null;
       videoEndpointSlug: string | null;
     };
+    enabledModels: {
+      textEndpointSlugs: string[];
+      imageEndpointSlugs: string[];
+      videoEndpointSlugs: string[];
+    };
     lastTest: {
       status: string | null;
       message: string | null;

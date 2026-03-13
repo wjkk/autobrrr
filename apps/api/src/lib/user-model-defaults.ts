@@ -20,6 +20,16 @@ function defaultKeyForModelKind(modelKind: 'IMAGE' | 'VIDEO' | 'TEXT') {
   return 'textEndpointSlug';
 }
 
+function enabledKeyForModelKind(modelKind: 'IMAGE' | 'VIDEO' | 'TEXT') {
+  if (modelKind === 'IMAGE') {
+    return 'imageEndpointSlugs';
+  }
+  if (modelKind === 'VIDEO') {
+    return 'videoEndpointSlugs';
+  }
+  return 'textEndpointSlugs';
+}
+
 export async function resolveUserDefaultModelSelection(userId: string, modelKind: 'IMAGE' | 'VIDEO' | 'TEXT') {
   const configs = await prisma.userProviderConfig.findMany({
     where: {
@@ -36,11 +46,18 @@ export async function resolveUserDefaultModelSelection(userId: string, modelKind
   });
 
   const key = defaultKeyForModelKind(modelKind);
+  const enabledKey = enabledKeyForModelKind(modelKind);
 
   for (const config of configs) {
     const options = readObject(config.optionsJson);
     const endpointSlug = readString(options[key]);
+    const enabledSlugs = Array.isArray(options[enabledKey])
+      ? (options[enabledKey] as unknown[]).filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      : [];
     if (!endpointSlug) {
+      continue;
+    }
+    if (enabledSlugs.length > 0 && !enabledSlugs.includes(endpointSlug)) {
       continue;
     }
 

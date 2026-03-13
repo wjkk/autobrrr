@@ -18,6 +18,11 @@ interface DraftState {
   baseUrlOverride: string;
   enabled: boolean;
   testKind: 'text' | 'image' | 'video';
+  enabledModels: {
+    textEndpointSlugs: string[];
+    imageEndpointSlugs: string[];
+    videoEndpointSlugs: string[];
+  };
   defaults: {
     textEndpointSlug: string;
     imageEndpointSlug: string;
@@ -35,6 +40,11 @@ function makeDraft(config: ProviderConfigItem): DraftState {
       : config.endpoints.some((endpoint) => endpoint.modelKind === 'image')
         ? 'image'
         : 'video',
+    enabledModels: {
+      textEndpointSlugs: config.userConfig.enabledModels.textEndpointSlugs,
+      imageEndpointSlugs: config.userConfig.enabledModels.imageEndpointSlugs,
+      videoEndpointSlugs: config.userConfig.enabledModels.videoEndpointSlugs,
+    },
     defaults: {
       textEndpointSlug: config.userConfig.defaults.textEndpointSlug ?? '',
       imageEndpointSlug: config.userConfig.defaults.imageEndpointSlug ?? '',
@@ -58,6 +68,11 @@ async function updateProviderConfig(providerCode: string, draft: DraftState) {
         textEndpointSlug: draft.defaults.textEndpointSlug || null,
         imageEndpointSlug: draft.defaults.imageEndpointSlug || null,
         videoEndpointSlug: draft.defaults.videoEndpointSlug || null,
+      },
+      enabledModels: {
+        textEndpointSlugs: draft.enabledModels.textEndpointSlugs,
+        imageEndpointSlugs: draft.enabledModels.imageEndpointSlugs,
+        videoEndpointSlugs: draft.enabledModels.videoEndpointSlugs,
       },
     }),
   });
@@ -151,6 +166,11 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
             textEndpointSlug: updated.userConfig.defaults.textEndpointSlug ?? '',
             imageEndpointSlug: updated.userConfig.defaults.imageEndpointSlug ?? '',
             videoEndpointSlug: updated.userConfig.defaults.videoEndpointSlug ?? '',
+          },
+          enabledModels: {
+            textEndpointSlugs: updated.userConfig.enabledModels.textEndpointSlugs,
+            imageEndpointSlugs: updated.userConfig.enabledModels.imageEndpointSlugs,
+            videoEndpointSlugs: updated.userConfig.enabledModels.videoEndpointSlugs,
           },
         },
       }));
@@ -602,7 +622,32 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                     </label>
 
                     {textEndpoints.length ? (
-                      <label className={styles.field}>
+                      <div className={styles.field}>
+                        <div className={styles.fieldLabel}>
+                          <span>启用文本模型</span>
+                          <span className={styles.fieldHint}>当前 provider 下可参与文本任务的模型</span>
+                        </div>
+                        <div className={styles.endpointChecklist}>
+                          {textEndpoints.map((endpoint) => (
+                            <label key={endpoint.id} className={styles.endpointCheck}>
+                              <input
+                                type="checkbox"
+                                checked={draft.enabledModels.textEndpointSlugs.includes(endpoint.slug)}
+                                onChange={(event) =>
+                                  onDraftChange(item.provider.code, {
+                                    enabledModels: {
+                                      ...draft.enabledModels,
+                                      textEndpointSlugs: event.target.checked
+                                        ? [...draft.enabledModels.textEndpointSlugs, endpoint.slug]
+                                        : draft.enabledModels.textEndpointSlugs.filter((slug) => slug !== endpoint.slug),
+                                    },
+                                  })
+                                }
+                              />
+                              <span>{endpoint.label}</span>
+                            </label>
+                          ))}
+                        </div>
                         <div className={styles.fieldLabel}>
                           <span>默认文本模型</span>
                           <span className={styles.fieldHint}>planner / 文本任务未显式指定模型时使用</span>
@@ -620,17 +665,44 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                           }
                         >
                           <option value="">不设置</option>
-                          {textEndpoints.map((endpoint) => (
-                            <option key={endpoint.id} value={endpoint.slug}>
-                              {endpoint.label}
-                            </option>
-                          ))}
+                          {textEndpoints
+                            .filter((endpoint) => draft.enabledModels.textEndpointSlugs.length === 0 || draft.enabledModels.textEndpointSlugs.includes(endpoint.slug))
+                            .map((endpoint) => (
+                              <option key={endpoint.id} value={endpoint.slug}>
+                                {endpoint.label}
+                              </option>
+                            ))}
                         </select>
-                      </label>
+                      </div>
                     ) : null}
 
                     {imageEndpoints.length ? (
-                      <label className={styles.field}>
+                      <div className={styles.field}>
+                        <div className={styles.fieldLabel}>
+                          <span>启用图片模型</span>
+                          <span className={styles.fieldHint}>当前 provider 下可参与图片任务的模型</span>
+                        </div>
+                        <div className={styles.endpointChecklist}>
+                          {imageEndpoints.map((endpoint) => (
+                            <label key={endpoint.id} className={styles.endpointCheck}>
+                              <input
+                                type="checkbox"
+                                checked={draft.enabledModels.imageEndpointSlugs.includes(endpoint.slug)}
+                                onChange={(event) =>
+                                  onDraftChange(item.provider.code, {
+                                    enabledModels: {
+                                      ...draft.enabledModels,
+                                      imageEndpointSlugs: event.target.checked
+                                        ? [...draft.enabledModels.imageEndpointSlugs, endpoint.slug]
+                                        : draft.enabledModels.imageEndpointSlugs.filter((slug) => slug !== endpoint.slug),
+                                    },
+                                  })
+                                }
+                              />
+                              <span>{endpoint.label}</span>
+                            </label>
+                          ))}
+                        </div>
                         <div className={styles.fieldLabel}>
                           <span>默认图片模型</span>
                           <span className={styles.fieldHint}>图片生成未显式指定模型时使用</span>
@@ -648,17 +720,44 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                           }
                         >
                           <option value="">不设置</option>
-                          {imageEndpoints.map((endpoint) => (
-                            <option key={endpoint.id} value={endpoint.slug}>
-                              {endpoint.label}
-                            </option>
-                          ))}
+                          {imageEndpoints
+                            .filter((endpoint) => draft.enabledModels.imageEndpointSlugs.length === 0 || draft.enabledModels.imageEndpointSlugs.includes(endpoint.slug))
+                            .map((endpoint) => (
+                              <option key={endpoint.id} value={endpoint.slug}>
+                                {endpoint.label}
+                              </option>
+                            ))}
                         </select>
-                      </label>
+                      </div>
                     ) : null}
 
                     {videoEndpoints.length ? (
-                      <label className={styles.field}>
+                      <div className={styles.field}>
+                        <div className={styles.fieldLabel}>
+                          <span>启用视频模型</span>
+                          <span className={styles.fieldHint}>当前 provider 下可参与视频任务的模型</span>
+                        </div>
+                        <div className={styles.endpointChecklist}>
+                          {videoEndpoints.map((endpoint) => (
+                            <label key={endpoint.id} className={styles.endpointCheck}>
+                              <input
+                                type="checkbox"
+                                checked={draft.enabledModels.videoEndpointSlugs.includes(endpoint.slug)}
+                                onChange={(event) =>
+                                  onDraftChange(item.provider.code, {
+                                    enabledModels: {
+                                      ...draft.enabledModels,
+                                      videoEndpointSlugs: event.target.checked
+                                        ? [...draft.enabledModels.videoEndpointSlugs, endpoint.slug]
+                                        : draft.enabledModels.videoEndpointSlugs.filter((slug) => slug !== endpoint.slug),
+                                    },
+                                  })
+                                }
+                              />
+                              <span>{endpoint.label}</span>
+                            </label>
+                          ))}
+                        </div>
                         <div className={styles.fieldLabel}>
                           <span>默认视频模型</span>
                           <span className={styles.fieldHint}>视频生成未显式指定模型时使用</span>
@@ -676,13 +775,15 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                           }
                         >
                           <option value="">不设置</option>
-                          {videoEndpoints.map((endpoint) => (
-                            <option key={endpoint.id} value={endpoint.slug}>
-                              {endpoint.label}
-                            </option>
-                          ))}
+                          {videoEndpoints
+                            .filter((endpoint) => draft.enabledModels.videoEndpointSlugs.length === 0 || draft.enabledModels.videoEndpointSlugs.includes(endpoint.slug))
+                            .map((endpoint) => (
+                              <option key={endpoint.id} value={endpoint.slug}>
+                                {endpoint.label}
+                              </option>
+                            ))}
                         </select>
-                      </label>
+                      </div>
                     ) : null}
 
                     <div className={styles.toggleRow}>

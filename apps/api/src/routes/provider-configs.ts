@@ -22,6 +22,13 @@ const updateProviderConfigSchema = z.object({
       videoEndpointSlug: z.string().trim().min(1).nullable().optional(),
     })
     .optional(),
+  enabledModels: z
+    .object({
+      textEndpointSlugs: z.array(z.string().trim().min(1)).optional().default([]),
+      imageEndpointSlugs: z.array(z.string().trim().min(1)).optional().default([]),
+      videoEndpointSlugs: z.array(z.string().trim().min(1)).optional().default([]),
+    })
+    .optional(),
 });
 
 const testProviderConfigSchema = z.object({
@@ -95,6 +102,11 @@ function mapProviderConfig(args: {
             imageEndpointSlug: typeof options.imageEndpointSlug === 'string' ? options.imageEndpointSlug : null,
             videoEndpointSlug: typeof options.videoEndpointSlug === 'string' ? options.videoEndpointSlug : null,
           },
+          enabledModels: {
+            textEndpointSlugs: Array.isArray(options.textEndpointSlugs) ? options.textEndpointSlugs.filter((value): value is string => typeof value === 'string') : [],
+            imageEndpointSlugs: Array.isArray(options.imageEndpointSlugs) ? options.imageEndpointSlugs.filter((value): value is string => typeof value === 'string') : [],
+            videoEndpointSlugs: Array.isArray(options.videoEndpointSlugs) ? options.videoEndpointSlugs.filter((value): value is string => typeof value === 'string') : [],
+          },
           lastTest: {
             status: args.config.lastTestStatus ?? null,
             message: args.config.lastTestMessage ?? null,
@@ -114,6 +126,11 @@ function mapProviderConfig(args: {
             textEndpointSlug: null,
             imageEndpointSlug: null,
             videoEndpointSlug: null,
+          },
+          enabledModels: {
+            textEndpointSlugs: [],
+            imageEndpointSlugs: [],
+            videoEndpointSlugs: [],
           },
           lastTest: {
             status: null,
@@ -322,26 +339,46 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       });
     }
 
-    if (payload.data.defaults) {
-      const requestedSlugs = Object.values(payload.data.defaults).filter((value): value is string => !!value);
-      if (requestedSlugs.length > 0) {
-        const endpoints = await prisma.modelEndpoint.findMany({
-          where: {
-            providerId: provider.id,
-            slug: { in: requestedSlugs },
-            status: 'ACTIVE',
+    const requestedSlugs = [
+      ...Object.values(payload.data.defaults ?? {}).filter((value): value is string => !!value),
+      ...(payload.data.enabledModels?.textEndpointSlugs ?? []),
+      ...(payload.data.enabledModels?.imageEndpointSlugs ?? []),
+      ...(payload.data.enabledModels?.videoEndpointSlugs ?? []),
+    ];
+    if (requestedSlugs.length > 0) {
+      const uniqueRequestedSlugs = [...new Set(requestedSlugs)];
+      const endpoints = await prisma.modelEndpoint.findMany({
+        where: {
+          providerId: provider.id,
+          slug: { in: uniqueRequestedSlugs },
+          status: 'ACTIVE',
+        },
+        select: { slug: true },
+      });
+      if (endpoints.length !== uniqueRequestedSlugs.length) {
+        return reply.code(400).send({
+          ok: false,
+          error: {
+            code: 'INVALID_ARGUMENT',
+            message: 'One or more endpoint selections are invalid for this provider.',
           },
-          select: { slug: true },
         });
-        if (endpoints.length !== requestedSlugs.length) {
-          return reply.code(400).send({
-            ok: false,
-            error: {
-              code: 'INVALID_ARGUMENT',
-              message: 'One or more default endpoint selections are invalid for this provider.',
-            },
-          });
-        }
+      }
+    }
+
+    if (payload.data.defaults && payload.data.enabledModels) {
+      const mismatchedDefault =
+        (payload.data.defaults.textEndpointSlug && payload.data.enabledModels.textEndpointSlugs.length > 0 && !payload.data.enabledModels.textEndpointSlugs.includes(payload.data.defaults.textEndpointSlug))
+        || (payload.data.defaults.imageEndpointSlug && payload.data.enabledModels.imageEndpointSlugs.length > 0 && !payload.data.enabledModels.imageEndpointSlugs.includes(payload.data.defaults.imageEndpointSlug))
+        || (payload.data.defaults.videoEndpointSlug && payload.data.enabledModels.videoEndpointSlugs.length > 0 && !payload.data.enabledModels.videoEndpointSlugs.includes(payload.data.defaults.videoEndpointSlug));
+      if (mismatchedDefault) {
+        return reply.code(400).send({
+          ok: false,
+          error: {
+            code: 'INVALID_ARGUMENT',
+            message: 'Default endpoint must be included in enabled model selections.',
+          },
+        });
       }
     }
 
@@ -356,12 +393,15 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
         ...(payload.data.apiKey !== undefined ? { apiKey: payload.data.apiKey || null } : {}),
         ...(payload.data.baseUrlOverride !== undefined ? { baseUrlOverride: payload.data.baseUrlOverride || null } : {}),
         ...(payload.data.enabled !== undefined ? { enabled: payload.data.enabled } : {}),
-        ...(payload.data.defaults !== undefined
+        ...((payload.data.defaults !== undefined || payload.data.enabledModels !== undefined)
           ? {
               optionsJson: {
-                textEndpointSlug: payload.data.defaults.textEndpointSlug || null,
-                imageEndpointSlug: payload.data.defaults.imageEndpointSlug || null,
-                videoEndpointSlug: payload.data.defaults.videoEndpointSlug || null,
+                textEndpointSlug: payload.data.defaults?.textEndpointSlug || null,
+                imageEndpointSlug: payload.data.defaults?.imageEndpointSlug || null,
+                videoEndpointSlug: payload.data.defaults?.videoEndpointSlug || null,
+                textEndpointSlugs: payload.data.enabledModels?.textEndpointSlugs ?? [],
+                imageEndpointSlugs: payload.data.enabledModels?.imageEndpointSlugs ?? [],
+                videoEndpointSlugs: payload.data.enabledModels?.videoEndpointSlugs ?? [],
               },
             }
           : {}),
@@ -372,11 +412,14 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
         apiKey: payload.data.apiKey || null,
         baseUrlOverride: payload.data.baseUrlOverride || null,
         enabled: payload.data.enabled ?? true,
-        optionsJson: payload.data.defaults
+        optionsJson: payload.data.defaults || payload.data.enabledModels
           ? {
-              textEndpointSlug: payload.data.defaults.textEndpointSlug || null,
-              imageEndpointSlug: payload.data.defaults.imageEndpointSlug || null,
-              videoEndpointSlug: payload.data.defaults.videoEndpointSlug || null,
+              textEndpointSlug: payload.data.defaults?.textEndpointSlug || null,
+              imageEndpointSlug: payload.data.defaults?.imageEndpointSlug || null,
+              videoEndpointSlug: payload.data.defaults?.videoEndpointSlug || null,
+              textEndpointSlugs: payload.data.enabledModels?.textEndpointSlugs ?? [],
+              imageEndpointSlugs: payload.data.enabledModels?.imageEndpointSlugs ?? [],
+              videoEndpointSlugs: payload.data.enabledModels?.videoEndpointSlugs ?? [],
             }
           : undefined,
       },

@@ -511,6 +511,29 @@
   gap: 8px;
 }
 
+.endpointChecklist {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.endpointCheck {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.endpointCheck input {
+  width: 16px;
+  height: 16px;
+}
+
 .fieldLabel {
   display: flex;
   align-items: center;

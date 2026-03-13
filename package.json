@@ -4,7 +4,10 @@
   "packageManager": "pnpm@10.25.0",
   "scripts": {
     "dev": "pnpm --filter @aiv/web dev",
+    "dev:api": "pnpm --filter @aiv/api dev",
     "build": "pnpm --filter @aiv/web build",
-    "typecheck": "pnpm --filter @aiv/web typecheck"
+    "build:api": "pnpm --filter @aiv/api build",
+    "typecheck": "pnpm --filter @aiv/web typecheck",
+    "typecheck:api": "pnpm --filter @aiv/api typecheck"
   }
 }

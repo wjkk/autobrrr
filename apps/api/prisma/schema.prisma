@@ -1,0 +1,429 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum ProjectContentMode {
+  SINGLE
+  SERIES
+}
+
+enum ProjectStatus {
+  DRAFT
+  PLANNING
+  READY_FOR_STORYBOARD
+  CREATING
+  EXPORT_READY
+  EXPORTED
+  PUBLISHED
+  FAILED
+  ARCHIVED
+}
+
+enum EpisodeStatus {
+  DRAFT
+  PLANNING
+  READY_FOR_STORYBOARD
+  CREATING
+  EXPORT_READY
+  EXPORTED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum PlannerStatus {
+  IDLE
+  UPDATING
+  READY
+}
+
+enum ShotStatus {
+  PENDING
+  QUEUED
+  GENERATING
+  SUCCESS
+  FAILED
+}
+
+enum ShotVersionStatus {
+  PENDING_APPLY
+  ACTIVE
+  ARCHIVED
+}
+
+enum MediaKind {
+  IMAGE
+  VIDEO
+}
+
+enum AssetSourceKind {
+  UPLOAD
+  GENERATED
+  IMPORTED
+  REFERENCE
+}
+
+enum ModelKind {
+  IMAGE
+  VIDEO
+  AUDIO
+  LIPSYNC
+}
+
+enum ProviderType {
+  OFFICIAL
+  PROXY
+  INTERNAL
+}
+
+enum ModelEndpointStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum RunType {
+  PLANNER_DOC_UPDATE
+  STORYBOARD_GENERATION
+  IMAGE_GENERATION
+  VIDEO_GENERATION
+  MUSIC_GENERATION
+  VOICE_PROCESSING
+  LIPSYNC_GENERATION
+  EXPORT
+  PUBLISH
+  RECIPE_EXECUTION
+}
+
+enum RunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELED
+  TIMED_OUT
+}
+
+enum ExecutorType {
+  SYSTEM_WORKER
+  PROVIDER_WORKER
+  MANUAL
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique @db.VarChar(255)
+  passwordHash String        @map("password_hash") @db.VarChar(255)
+  displayName  String?       @map("display_name") @db.VarChar(64)
+  status       UserStatus    @default(ACTIVE)
+  lastLoginAt  DateTime?     @map("last_login_at")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  sessions     UserSession[]
+  projects     Project[]
+  plannerSessions PlannerSession[]
+  assets       Asset[]
+
+  @@map("users")
+}
+
+model UserSession {
+  id               String    @id @default(cuid())
+  userId           String    @map("user_id")
+  sessionTokenHash String    @unique @map("session_token_hash") @db.VarChar(64)
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  lastSeenAt       DateTime? @map("last_seen_at")
+  ipAddress        String?   @map("ip_address") @db.VarChar(64)
+  userAgent        String?   @map("user_agent") @db.VarChar(512)
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("user_sessions")
+}
+
+model Project {
+  id               String             @id @default(cuid())
+  title            String             @db.VarChar(255)
+  brief            String?            @db.Text
+  contentMode      ProjectContentMode @map("content_mode") @default(SINGLE)
+  status           ProjectStatus      @default(DRAFT)
+  currentEpisodeId String?            @map("current_episode_id")
+  createdById      String             @map("created_by_id")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  archivedAt       DateTime?          @map("archived_at")
+  createdBy        User               @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  currentEpisode   Episode?           @relation("ProjectCurrentEpisode", fields: [currentEpisodeId], references: [id], onDelete: SetNull)
+  episodes         Episode[]
+  plannerSessions  PlannerSession[]
+  shots            Shot[]
+  shotVersions     ShotVersion[]
+  assets           Asset[]
+  runs             Run[]
+  recipes          GenerationRecipe[]
+  recipeExecutions RecipeExecution[]
+
+  @@index([status, updatedAt])
+  @@index([createdById, updatedAt])
+  @@map("projects")
+}
+
+model Episode {
+  id                     String         @id @default(cuid())
+  projectId              String         @map("project_id")
+  episodeNo              Int            @map("episode_no")
+  title                  String         @db.VarChar(255)
+  summary                String?        @db.Text
+  status                 EpisodeStatus  @default(DRAFT)
+  activePlannerSessionId String?        @map("active_planner_session_id")
+  createdAt              DateTime       @default(now()) @map("created_at")
+  updatedAt              DateTime       @updatedAt @map("updated_at")
+  project                Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  currentForProjects     Project[]      @relation("ProjectCurrentEpisode")
+  plannerSessions        PlannerSession[]
+  activePlannerSession   PlannerSession? @relation("EpisodeActivePlannerSession", fields: [activePlannerSessionId], references: [id], onDelete: SetNull)
+  shots                  Shot[]
+  shotVersions           ShotVersion[]
+  assets                 Asset[]
+  runs                   Run[]
+
+  @@unique([projectId, episodeNo])
+  @@index([projectId, status, updatedAt])
+  @@map("episodes")
+}
+
+model PlannerSession {
+  id              String        @id @default(cuid())
+  projectId       String        @map("project_id")
+  episodeId       String        @map("episode_id")
+  status          PlannerStatus @default(IDLE)
+  isActive        Boolean       @map("is_active") @default(false)
+  outlineConfirmedAt DateTime?  @map("outline_confirmed_at")
+  createdById     String        @map("created_by_id")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  episode         Episode       @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  activeForEpisodes Episode[]   @relation("EpisodeActivePlannerSession")
+  createdBy       User          @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([projectId, episodeId, createdAt])
+  @@index([episodeId, isActive])
+  @@map("planner_sessions")
+}
+
+model Shot {
+  id              String      @id @default(cuid())
+  projectId       String      @map("project_id")
+  episodeId       String      @map("episode_id")
+  sequenceNo      Int         @map("sequence_no")
+  title           String      @db.VarChar(255)
+  subtitleText    String      @map("subtitle_text") @db.Text
+  narrationText   String      @map("narration_text") @db.Text
+  imagePrompt     String      @map("image_prompt") @db.Text
+  motionPrompt    String      @map("motion_prompt") @db.Text
+  status          ShotStatus  @default(PENDING)
+  activeVersionId String?     @map("active_version_id")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  project         Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  episode         Episode     @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  versions        ShotVersion[] @relation("ShotVersions")
+  activeVersion   ShotVersion?  @relation("ShotActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+
+  @@unique([episodeId, sequenceNo])
+  @@map("shots")
+}
+
+model ShotVersion {
+  id            String            @id @default(cuid())
+  shotId        String            @map("shot_id")
+  projectId     String            @map("project_id")
+  episodeId     String            @map("episode_id")
+  versionNumber Int               @map("version_number")
+  label         String            @db.VarChar(120)
+  mediaKind     MediaKind         @map("media_kind")
+  status        ShotVersionStatus @default(PENDING_APPLY)
+  outputAssetId String?           @map("output_asset_id")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  shot          Shot              @relation("ShotVersions", fields: [shotId], references: [id], onDelete: Cascade)
+  activeForShots Shot[]           @relation("ShotActiveVersion")
+  project       Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  episode       Episode           @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  outputAsset   Asset?            @relation(fields: [outputAssetId], references: [id], onDelete: SetNull)
+
+  @@unique([shotId, versionNumber])
+  @@index([shotId, createdAt])
+  @@map("shot_versions")
+}
+
+model Asset {
+  id             String          @id @default(cuid())
+  ownerUserId    String          @map("owner_user_id")
+  projectId      String          @map("project_id")
+  episodeId      String?         @map("episode_id")
+  mediaKind      MediaKind       @map("media_kind")
+  sourceKind     AssetSourceKind @map("source_kind")
+  fileName       String          @map("file_name") @db.VarChar(255)
+  mimeType       String?         @map("mime_type") @db.VarChar(120)
+  fileSizeBytes  Int?            @map("file_size_bytes")
+  width          Int?
+  height         Int?
+  durationMs     Int?            @map("duration_ms")
+  storageKey     String?         @map("storage_key") @db.VarChar(255)
+  sourceUrl      String?         @map("source_url") @db.VarChar(2048)
+  metadataJson   Json?           @map("metadata_json")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  ownerUser      User            @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  episode        Episode?        @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  outputVersions ShotVersion[]
+
+  @@index([ownerUserId, createdAt])
+  @@index([projectId, episodeId, mediaKind, createdAt])
+  @@map("assets")
+}
+
+model ModelFamily {
+  id              String          @id @default(cuid())
+  slug            String          @unique @db.VarChar(120)
+  name            String          @db.VarChar(120)
+  modelKind       ModelKind       @map("model_kind")
+  capabilityJson  Json?           @map("capability_json")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  endpoints       ModelEndpoint[]
+  runs            Run[]
+
+  @@index([modelKind, slug])
+  @@map("model_families")
+}
+
+model ModelProvider {
+  id              String          @id @default(cuid())
+  code            String          @unique @db.VarChar(120)
+  name            String          @db.VarChar(120)
+  providerType    ProviderType    @map("provider_type")
+  baseUrl         String?         @map("base_url") @db.VarChar(2048)
+  enabled         Boolean         @default(true)
+  credentialRef   String?         @map("credential_ref") @db.VarChar(255)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  endpoints       ModelEndpoint[]
+  runs            Run[]
+
+  @@index([enabled, providerType])
+  @@map("model_providers")
+}
+
+model ModelEndpoint {
+  id                  String              @id @default(cuid())
+  familyId            String              @map("family_id")
+  providerId          String              @map("provider_id")
+  slug                String              @unique @db.VarChar(120)
+  remoteModelKey      String              @map("remote_model_key") @db.VarChar(191)
+  label               String              @db.VarChar(120)
+  status              ModelEndpointStatus @default(ACTIVE)
+  priority            Int                 @default(100)
+  isDefault           Boolean             @map("is_default") @default(false)
+  costConfigJson      Json?               @map("cost_config_json")
+  rateLimitConfigJson Json?               @map("rate_limit_config_json")
+  defaultParamsJson   Json?               @map("default_params_json")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+  family              ModelFamily         @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  provider            ModelProvider       @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  runs                Run[]
+
+  @@index([familyId, status, priority])
+  @@index([providerId, status, priority])
+  @@map("model_endpoints")
+}
+
+model GenerationRecipe {
+  id               String              @id @default(cuid())
+  projectId        String              @map("project_id")
+  sourceRunId      String?             @map("source_run_id")
+  name             String              @db.VarChar(255)
+  recipeKind       String              @map("recipe_kind") @db.VarChar(64)
+  definitionJson   Json                @map("definition_json")
+  version          Int                 @default(1)
+  isTemplate       Boolean             @map("is_template") @default(false)
+  createdByUserId  String              @map("created_by_user_id")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+  project          Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  executions       RecipeExecution[]
+
+  @@index([projectId, createdAt])
+  @@map("generation_recipes")
+}
+
+model RecipeExecution {
+  id                 String      @id @default(cuid())
+  recipeId           String      @map("recipe_id")
+  projectId          String      @map("project_id")
+  status             RunStatus   @default(QUEUED)
+  inputAssetBundleJson Json?     @map("input_asset_bundle_json")
+  resolvedConfigJson Json?       @map("resolved_config_json")
+  outputProjectId    String?     @map("output_project_id")
+  runGroupKey        String?     @map("run_group_key") @db.VarChar(191)
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+  recipe             GenerationRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  project            Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([recipeId, createdAt])
+  @@index([projectId, status, createdAt])
+  @@map("recipe_executions")
+}
+
+model Run {
+  id               String       @id @default(cuid())
+  projectId        String?      @map("project_id")
+  episodeId        String?      @map("episode_id")
+  modelFamilyId    String?      @map("model_family_id")
+  modelProviderId  String?      @map("model_provider_id")
+  modelEndpointId  String?      @map("model_endpoint_id")
+  runType          RunType      @map("run_type")
+  resourceType     String?      @map("resource_type") @db.VarChar(64)
+  resourceId       String?      @map("resource_id") @db.VarChar(64)
+  status           RunStatus    @default(QUEUED)
+  executorType     ExecutorType @map("executor_type") @default(SYSTEM_WORKER)
+  inputJson        Json?        @map("input_json")
+  outputJson       Json?        @map("output_json")
+  errorCode        String?      @map("error_code") @db.VarChar(120)
+  errorMessage     String?      @map("error_message") @db.Text
+  idempotencyKey   String?      @unique @map("idempotency_key") @db.VarChar(191)
+  providerJobId    String?      @map("provider_job_id") @db.VarChar(191)
+  providerStatus   String?      @map("provider_status") @db.VarChar(120)
+  providerCallbackToken String? @map("provider_callback_token") @db.VarChar(191)
+  nextPollAt       DateTime?    @map("next_poll_at")
+  lastPolledAt     DateTime?    @map("last_polled_at")
+  pollAttemptCount Int          @default(0) @map("poll_attempt_count")
+  startedAt        DateTime?    @map("started_at")
+  finishedAt       DateTime?    @map("finished_at")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  project          Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  episode          Episode?     @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  modelFamily      ModelFamily?   @relation(fields: [modelFamilyId], references: [id], onDelete: SetNull)
+  modelProvider    ModelProvider? @relation(fields: [modelProviderId], references: [id], onDelete: SetNull)
+  modelEndpoint    ModelEndpoint? @relation(fields: [modelEndpointId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, runType, status, createdAt])
+  @@index([episodeId, status, createdAt])
+  @@index([modelFamilyId, modelEndpointId, createdAt])
+  @@index([status, nextPollAt])
+  @@map("runs")
+}

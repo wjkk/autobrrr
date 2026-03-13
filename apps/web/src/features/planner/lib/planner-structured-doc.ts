@@ -72,3 +72,39 @@ export function toPlannerSeedData(doc: PlannerStructuredDoc, fallback: SekoPlanD
     acts: normalizeActs(doc.acts.length ? doc.acts : fallback.acts),
   };
 }
+
+export function toStructuredPlannerDoc(seed: SekoPlanData): PlannerStructuredDoc {
+  return {
+    projectTitle: seed.projectTitle,
+    episodeTitle: seed.episodeTitle,
+    episodeCount: seed.episodeCount,
+    pointCost: seed.pointCost,
+    summaryBullets: seed.summaryBullets,
+    highlights: seed.highlights,
+    styleBullets: seed.styleBullets,
+    subjectBullets: seed.subjectBullets,
+    subjects: seed.subjects.map((item) => ({
+      title: item.title,
+      prompt: item.prompt,
+    })),
+    sceneBullets: seed.sceneBullets,
+    scenes: seed.scenes.map((item) => ({
+      title: item.title,
+      prompt: item.prompt,
+    })),
+    scriptSummary: seed.scriptSummary,
+    acts: seed.acts.map((act) => ({
+      title: act.title,
+      time: act.time,
+      location: act.location,
+      shots: act.shots.map((shot) => ({
+        title: shot.title,
+        visual: shot.visual,
+        composition: shot.composition,
+        motion: shot.motion,
+        voice: shot.voice,
+        line: shot.line,
+      })),
+    })),
+  };
+}

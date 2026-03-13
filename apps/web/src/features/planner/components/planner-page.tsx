@@ -12,7 +12,7 @@ import type { PlannerRuntimeApiContext } from '../lib/planner-api';
 import type { PlannerStructuredDoc } from '../lib/planner-structured-doc';
 import { usePlannerRefinement } from '../hooks/use-planner-refinement';
 import { sekoPlanData, type SekoActDraft, type SekoImageCard } from '../lib/seko-plan-data';
-import { toPlannerSeedData } from '../lib/planner-structured-doc';
+import { toPlannerSeedData, toStructuredPlannerDoc } from '../lib/planner-structured-doc';
 import { sekoPlanThreadData } from '../lib/seko-plan-thread-data';
 import { PlannerHistoryMenu } from './internal/planner-history-menu';
 import styles from './planner-page.module.css';
@@ -241,6 +241,36 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
   const [plannerSubmitting, setPlannerSubmitting] = useState(false);
 
   const plannerDoc = useMemo(() => (structuredPlannerDoc ? toPlannerSeedData(structuredPlannerDoc, sekoPlanData) : sekoPlanData), [structuredPlannerDoc]);
+
+  const persistPlannerDoc = async (nextDoc: PlannerStructuredDoc, successMessage: string) => {
+    setStructuredPlannerDoc(nextDoc);
+
+    if (!runtimeApi) {
+      setNotice(successMessage);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/planner/projects/${encodeURIComponent(runtimeApi.projectId)}/document`, {
+        method: 'PUT',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          episodeId: runtimeApi.episodeId,
+          structuredDoc: nextDoc,
+        }),
+      });
+      const payload = (await response.json()) as { ok: boolean; error?: { message?: string } };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error?.message ?? '保存策划文档失败。');
+      }
+      setNotice(successMessage);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '保存策划文档失败。');
+    }
+  };
 
   const plannerEpisodes = useMemo(() => buildPlannerEpisodes(studio.project.title, plannerMode, studio.project.brief, plannerDoc.episodeCount, plannerDoc.acts.reduce((sum, item) => sum + item.shots.length, 0)), [plannerDoc.acts, plannerDoc.episodeCount, plannerMode, studio.project.title, studio.project.brief]);
 
@@ -501,6 +531,17 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
       return;
     }
 
+    const nextSubjects = subjectCards.map((item) =>
+      item.id === subjectDialogCardId
+        ? {
+            ...item,
+            title: subjectNameDraft.trim() || item.title,
+            prompt: subjectPromptDraft.trim() || item.prompt,
+            image: subjectImageDraft || item.image,
+          }
+        : item,
+    );
+
     updateSubject(subjectDialogCardId, (item) => ({
       ...item,
       title: subjectNameDraft.trim() || item.title,
@@ -508,7 +549,13 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
       image: subjectImageDraft || item.image,
     }));
 
-    setNotice('主体图片已更新。');
+    void persistPlannerDoc(
+      toStructuredPlannerDoc({
+        ...plannerDoc,
+        subjects: nextSubjects,
+      }),
+      '主体图片已更新。',
+    );
     closeSubjectAdjustDialog();
   };
 
@@ -538,6 +585,17 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
       return;
     }
 
+    const nextScenes = sceneCards.map((item) =>
+      item.id === sceneDialogCardId
+        ? {
+            ...item,
+            title: sceneNameDraft.trim() || item.title,
+            prompt: scenePromptDraft.trim() || item.prompt,
+            image: sceneImageDraft || item.image,
+          }
+        : item,
+    );
+
     updateScene(sceneDialogCardId, (item) => ({
       ...item,
       title: sceneNameDraft.trim() || item.title,
@@ -545,7 +603,13 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
       image: sceneImageDraft || item.image,
     }));
 
-    setNotice('场景图片已更新。');
+    void persistPlannerDoc(
+      toStructuredPlannerDoc({
+        ...plannerDoc,
+        scenes: nextScenes,
+      }),
+      '场景图片已更新。',
+    );
     closeSceneAdjustDialog();
   };
 
@@ -576,12 +640,34 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
       return;
     }
 
+    const nextActs = scriptActs.map((act) =>
+      act.id !== editingShot.actId
+        ? act
+        : {
+            ...act,
+            shots: act.shots.map((shot) =>
+              shot.id === editingShot.shotId
+                ? {
+                    ...shot,
+                    ...shotDraft,
+                  }
+                : shot,
+            ),
+          },
+    );
+
     updateShot(editingShot.actId, editingShot.shotId, (shot) => ({
       ...shot,
       ...shotDraft,
     }));
 
-    setNotice('分镜内容已更新。');
+    void persistPlannerDoc(
+      toStructuredPlannerDoc({
+        ...plannerDoc,
+        acts: nextActs,
+      }),
+      '分镜内容已更新。',
+    );
     cancelShotInlineEditor();
   };
 
@@ -602,8 +688,25 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
       cancelShotInlineEditor();
     }
 
+    const nextActs = scriptActs
+      .map((act) =>
+        act.id !== shotDeleteDialog.actId
+          ? act
+          : {
+              ...act,
+              shots: act.shots.filter((shot) => shot.id !== shotDeleteDialog.shotId),
+            },
+      )
+      .filter((act) => act.shots.length > 0);
+
     deleteShot(shotDeleteDialog.actId, shotDeleteDialog.shotId);
-    setNotice('分镜已删除。');
+    void persistPlannerDoc(
+      toStructuredPlannerDoc({
+        ...plannerDoc,
+        acts: nextActs,
+      }),
+      '分镜已删除。',
+    );
     closeShotDeleteDialog();
   };
 

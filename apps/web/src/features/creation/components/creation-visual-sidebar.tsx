@@ -408,7 +408,7 @@ export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps
                   {videoThreadVisible ? (
                     <div className={styles.smartChip}>
                       <CreationIcon name="magic" className={styles.smallIcon} />
-                      <span>智能选择</span>
+                      <span>{controller.resolveModelDisplayName(generateDraft.model)}</span>
                     </div>
                   ) : null}
 

@@ -198,8 +198,8 @@ export function CreationDialogs({ controller }: CreationDialogsProps) {
                 <small>{`${generateShotCount}个分镜`}</small>
               </div>
               <div className={dialogStyles.videoTaskValue}>
-                <strong>智能选择</strong>
-                <small>智能 | 镜切</small>
+                <strong>{controller.resolveModelDisplayName(generateDraft.model)}</strong>
+                <small>当前选中模型</small>
               </div>
             </div>
             <div className={dialogStyles.videoTaskCostRow}>
@@ -255,8 +255,8 @@ export function CreationDialogs({ controller }: CreationDialogsProps) {
                 <small>{`${batchShotCount}个分镜`}</small>
               </div>
               <div className={dialogStyles.videoTaskValue}>
-                <strong>{dialog.type === 'batch' && dialog.target === 'missing' ? '补齐缺失' : '智能选择'}</strong>
-                <small>智能 | 镜切</small>
+                <strong>{controller.resolveModelDisplayName(generateDraft.model)}</strong>
+                <small>{dialog.type === 'batch' && dialog.target === 'missing' ? '补齐缺失分镜沿用此模型' : '全部分镜沿用此模型'}</small>
               </div>
             </div>
             <div className={dialogStyles.videoTaskModeRow}>

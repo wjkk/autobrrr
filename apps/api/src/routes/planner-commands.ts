@@ -8,6 +8,7 @@ import { resolveModelSelection } from '../lib/model-registry.js';
 import { buildPlannerGenerationPrompt } from '../lib/planner-doc.js';
 import { findOwnedEpisode } from '../lib/ownership.js';
 import { prisma } from '../lib/prisma.js';
+import { resolveUserDefaultModelSelection } from '../lib/user-model-defaults.js';
 
 const paramsSchema = z.object({
   projectId: z.string().min(1),
@@ -86,10 +87,14 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
       });
     }
 
+    const userDefaultModel = !payload.data.modelFamily && !payload.data.modelEndpoint
+      ? await resolveUserDefaultModelSelection(user.id, 'TEXT')
+      : null;
+
     const resolvedModel = await resolveModelSelection({
       modelKind: 'TEXT',
-      familySlug: payload.data.modelFamily,
-      endpointSlug: payload.data.modelEndpoint,
+      familySlug: payload.data.modelFamily ?? userDefaultModel?.familySlug,
+      endpointSlug: payload.data.modelEndpoint ?? userDefaultModel?.endpointSlug,
       strategy: 'default',
     });
     if (!resolvedModel) {

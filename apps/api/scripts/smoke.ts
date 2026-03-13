@@ -102,7 +102,16 @@ async function processUntilMatch(
   return null;
 }
 
-async function configureProviderIfPresent(args: { cookie: string; providerCode: string; apiKey: string }) {
+async function configureProviderIfPresent(args: {
+  cookie: string;
+  providerCode: string;
+  apiKey: string;
+  defaults?: {
+    textEndpointSlug?: string | null;
+    imageEndpointSlug?: string | null;
+    videoEndpointSlug?: string | null;
+  };
+}) {
   if (!args.apiKey.trim()) {
     return false;
   }
@@ -113,6 +122,7 @@ async function configureProviderIfPresent(args: { cookie: string; providerCode: 
     body: JSON.stringify({
       apiKey: args.apiKey.trim(),
       enabled: true,
+      defaults: args.defaults,
     }),
   });
 
@@ -150,6 +160,9 @@ async function main() {
     cookie,
     providerCode: 'ark',
     apiKey: smokeArkApiKey,
+    defaults: {
+      textEndpointSlug: 'ark-doubao-seed-1-8-251228',
+    },
   });
   if (arkConfigured) {
     console.log('[smoke] ark provider configured');
@@ -159,6 +172,10 @@ async function main() {
     cookie,
     providerCode: 'aicso',
     apiKey: smokeAicsoApiToken,
+    defaults: {
+      imageEndpointSlug: 'aicso-gemini-image-preview',
+      videoEndpointSlug: 'aicso-veo-fast-4k',
+    },
   });
   if (aicsoConfigured) {
     console.log('[smoke] aicso provider configured');
@@ -227,8 +244,6 @@ async function main() {
       body: JSON.stringify({
         episodeId,
         prompt: '请为这个机械猫雨夜短片生成一份三段式策划文档，包含故事梗概、视觉风格和分镜方向。',
-        modelFamily: 'doubao-text',
-        modelEndpoint: 'ark-doubao-seed-1-8-251228',
         idempotencyKey: `smoke-planner-${Date.now()}`,
       }),
     },

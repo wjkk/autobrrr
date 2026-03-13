@@ -14,6 +14,11 @@ interface DraftState {
   apiKey: string;
   baseUrlOverride: string;
   enabled: boolean;
+  defaults: {
+    textEndpointSlug: string;
+    imageEndpointSlug: string;
+    videoEndpointSlug: string;
+  };
 }
 
 function makeDraft(config: ProviderConfigItem): DraftState {
@@ -21,6 +26,11 @@ function makeDraft(config: ProviderConfigItem): DraftState {
     apiKey: '',
     baseUrlOverride: config.userConfig.baseUrlOverride ?? config.provider.baseUrl ?? '',
     enabled: config.userConfig.enabled,
+    defaults: {
+      textEndpointSlug: config.userConfig.defaults.textEndpointSlug ?? '',
+      imageEndpointSlug: config.userConfig.defaults.imageEndpointSlug ?? '',
+      videoEndpointSlug: config.userConfig.defaults.videoEndpointSlug ?? '',
+    },
   };
 }
 
@@ -35,6 +45,11 @@ async function updateProviderConfig(providerCode: string, draft: DraftState) {
       apiKey: draft.apiKey.trim() ? draft.apiKey.trim() : undefined,
       baseUrlOverride: draft.baseUrlOverride.trim() ? draft.baseUrlOverride.trim() : null,
       enabled: draft.enabled,
+      defaults: {
+        textEndpointSlug: draft.defaults.textEndpointSlug || null,
+        imageEndpointSlug: draft.defaults.imageEndpointSlug || null,
+        videoEndpointSlug: draft.defaults.videoEndpointSlug || null,
+      },
     }),
   });
 
@@ -89,6 +104,11 @@ export function ProviderConfigPage({ initialConfigs }: ProviderConfigPageProps) 
           apiKey: '',
           baseUrlOverride: updated.userConfig.baseUrlOverride ?? updated.provider.baseUrl ?? '',
           enabled: updated.userConfig.enabled,
+          defaults: {
+            textEndpointSlug: updated.userConfig.defaults.textEndpointSlug ?? '',
+            imageEndpointSlug: updated.userConfig.defaults.imageEndpointSlug ?? '',
+            videoEndpointSlug: updated.userConfig.defaults.videoEndpointSlug ?? '',
+          },
         },
       }));
       setFeedback((current) => ({
@@ -168,6 +188,9 @@ export function ProviderConfigPage({ initialConfigs }: ProviderConfigPageProps) 
           {configs.map((item) => {
             const draft = drafts[item.provider.code] ?? makeDraft(item);
             const currentFeedback = feedback[item.provider.code];
+            const textEndpoints = item.endpoints.filter((endpoint) => endpoint.modelKind === 'text');
+            const imageEndpoints = item.endpoints.filter((endpoint) => endpoint.modelKind === 'image');
+            const videoEndpoints = item.endpoints.filter((endpoint) => endpoint.modelKind === 'video');
 
             return (
               <section key={item.provider.id} className={styles.providerCard}>
@@ -227,6 +250,90 @@ export function ProviderConfigPage({ initialConfigs }: ProviderConfigPageProps) 
                         onChange={(event) => onDraftChange(item.provider.code, { baseUrlOverride: event.target.value })}
                       />
                     </label>
+
+                    {textEndpoints.length ? (
+                      <label className={styles.field}>
+                        <div className={styles.fieldLabel}>
+                          <span>默认文本模型</span>
+                          <span className={styles.fieldHint}>planner / 文本任务未显式指定模型时使用</span>
+                        </div>
+                        <select
+                          className={styles.input}
+                          value={draft.defaults.textEndpointSlug}
+                          onChange={(event) =>
+                            onDraftChange(item.provider.code, {
+                              defaults: {
+                                ...draft.defaults,
+                                textEndpointSlug: event.target.value,
+                              },
+                            })
+                          }
+                        >
+                          <option value="">不设置</option>
+                          {textEndpoints.map((endpoint) => (
+                            <option key={endpoint.id} value={endpoint.slug}>
+                              {endpoint.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+
+                    {imageEndpoints.length ? (
+                      <label className={styles.field}>
+                        <div className={styles.fieldLabel}>
+                          <span>默认图片模型</span>
+                          <span className={styles.fieldHint}>图片生成未显式指定模型时使用</span>
+                        </div>
+                        <select
+                          className={styles.input}
+                          value={draft.defaults.imageEndpointSlug}
+                          onChange={(event) =>
+                            onDraftChange(item.provider.code, {
+                              defaults: {
+                                ...draft.defaults,
+                                imageEndpointSlug: event.target.value,
+                              },
+                            })
+                          }
+                        >
+                          <option value="">不设置</option>
+                          {imageEndpoints.map((endpoint) => (
+                            <option key={endpoint.id} value={endpoint.slug}>
+                              {endpoint.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+
+                    {videoEndpoints.length ? (
+                      <label className={styles.field}>
+                        <div className={styles.fieldLabel}>
+                          <span>默认视频模型</span>
+                          <span className={styles.fieldHint}>视频生成未显式指定模型时使用</span>
+                        </div>
+                        <select
+                          className={styles.input}
+                          value={draft.defaults.videoEndpointSlug}
+                          onChange={(event) =>
+                            onDraftChange(item.provider.code, {
+                              defaults: {
+                                ...draft.defaults,
+                                videoEndpointSlug: event.target.value,
+                              },
+                            })
+                          }
+                        >
+                          <option value="">不设置</option>
+                          {videoEndpoints.map((endpoint) => (
+                            <option key={endpoint.id} value={endpoint.slug}>
+                              {endpoint.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
 
                     <div className={styles.toggleRow}>
                       <div className={styles.toggleCopy}>

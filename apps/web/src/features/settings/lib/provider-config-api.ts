@@ -7,12 +7,25 @@ export interface ProviderConfigItem {
     baseUrl: string | null;
     enabled: boolean;
   };
+  endpoints: Array<{
+    id: string;
+    slug: string;
+    label: string;
+    modelKind: string;
+    familySlug: string;
+    isDefault: boolean;
+  }>;
   userConfig: {
     id: string | null;
     configured: boolean;
     hasApiKey: boolean;
     enabled: boolean;
     baseUrlOverride: string | null;
+    defaults: {
+      textEndpointSlug: string | null;
+      imageEndpointSlug: string | null;
+      videoEndpointSlug: string | null;
+    };
     updatedAt: string | null;
   };
 }

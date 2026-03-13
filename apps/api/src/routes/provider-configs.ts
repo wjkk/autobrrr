@@ -12,6 +12,13 @@ const updateProviderConfigSchema = z.object({
   apiKey: z.string().trim().max(4096).nullable().optional(),
   baseUrlOverride: z.string().trim().url().nullable().optional(),
   enabled: z.boolean().optional(),
+  defaults: z
+    .object({
+      textEndpointSlug: z.string().trim().min(1).nullable().optional(),
+      imageEndpointSlug: z.string().trim().min(1).nullable().optional(),
+      videoEndpointSlug: z.string().trim().min(1).nullable().optional(),
+    })
+    .optional(),
 });
 
 function mapProviderConfig(args: {
@@ -23,14 +30,24 @@ function mapProviderConfig(args: {
     baseUrl: string | null;
     enabled: boolean;
   };
+  endpoints?: Array<{
+    id: string;
+    slug: string;
+    label: string;
+    modelKind: string;
+    familySlug: string;
+    isDefault: boolean;
+  }>;
   config?: {
     id: string;
     enabled: boolean;
     apiKey: string | null;
     baseUrlOverride: string | null;
+    optionsJson: unknown;
     updatedAt: Date;
   } | null;
 }) {
+  const options = args.config ? ((args.config.optionsJson && typeof args.config.optionsJson === 'object' && !Array.isArray(args.config.optionsJson) ? args.config.optionsJson : {}) as Record<string, unknown>) : {};
   return {
     provider: {
       id: args.provider.id,
@@ -40,6 +57,14 @@ function mapProviderConfig(args: {
       baseUrl: args.provider.baseUrl,
       enabled: args.provider.enabled,
     },
+    endpoints: (args.endpoints ?? []).map((endpoint) => ({
+      id: endpoint.id,
+      slug: endpoint.slug,
+      label: endpoint.label,
+      modelKind: endpoint.modelKind,
+      familySlug: endpoint.familySlug,
+      isDefault: endpoint.isDefault,
+    })),
     userConfig: args.config
       ? {
           id: args.config.id,
@@ -47,6 +72,11 @@ function mapProviderConfig(args: {
           hasApiKey: !!args.config.apiKey,
           enabled: args.config.enabled,
           baseUrlOverride: args.config.baseUrlOverride,
+          defaults: {
+            textEndpointSlug: typeof options.textEndpointSlug === 'string' ? options.textEndpointSlug : null,
+            imageEndpointSlug: typeof options.imageEndpointSlug === 'string' ? options.imageEndpointSlug : null,
+            videoEndpointSlug: typeof options.videoEndpointSlug === 'string' ? options.videoEndpointSlug : null,
+          },
           updatedAt: args.config.updatedAt.toISOString(),
         }
       : {
@@ -55,6 +85,11 @@ function mapProviderConfig(args: {
           hasApiKey: false,
           enabled: true,
           baseUrlOverride: null,
+          defaults: {
+            textEndpointSlug: null,
+            imageEndpointSlug: null,
+            videoEndpointSlug: null,
+          },
           updatedAt: null,
         },
   };
@@ -70,6 +105,20 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
     const providers = await prisma.modelProvider.findMany({
       orderBy: [{ providerType: 'asc' }, { code: 'asc' }],
       include: {
+        endpoints: {
+          where: {
+            status: 'ACTIVE',
+          },
+          include: {
+            family: {
+              select: {
+                slug: true,
+                modelKind: true,
+              },
+            },
+          },
+          orderBy: [{ family: { modelKind: 'asc' } }, { priority: 'asc' }, { createdAt: 'asc' }],
+        },
         userConfigs: {
           where: { userId: user.id },
           take: 1,
@@ -82,6 +131,14 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       data: providers.map((provider) =>
         mapProviderConfig({
           provider,
+          endpoints: provider.endpoints.map((endpoint) => ({
+            id: endpoint.id,
+            slug: endpoint.slug,
+            label: endpoint.label,
+            modelKind: endpoint.family.modelKind.toLowerCase(),
+            familySlug: endpoint.family.slug,
+            isDefault: endpoint.isDefault,
+          })),
           config: provider.userConfigs[0] ?? null,
         }),
       ),
@@ -129,6 +186,29 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       });
     }
 
+    if (payload.data.defaults) {
+      const requestedSlugs = Object.values(payload.data.defaults).filter((value): value is string => !!value);
+      if (requestedSlugs.length > 0) {
+        const endpoints = await prisma.modelEndpoint.findMany({
+          where: {
+            providerId: provider.id,
+            slug: { in: requestedSlugs },
+            status: 'ACTIVE',
+          },
+          select: { slug: true },
+        });
+        if (endpoints.length !== requestedSlugs.length) {
+          return reply.code(400).send({
+            ok: false,
+            error: {
+              code: 'INVALID_ARGUMENT',
+              message: 'One or more default endpoint selections are invalid for this provider.',
+            },
+          });
+        }
+      }
+    }
+
     const config = await prisma.userProviderConfig.upsert({
       where: {
         userId_providerId: {
@@ -140,6 +220,15 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
         ...(payload.data.apiKey !== undefined ? { apiKey: payload.data.apiKey || null } : {}),
         ...(payload.data.baseUrlOverride !== undefined ? { baseUrlOverride: payload.data.baseUrlOverride || null } : {}),
         ...(payload.data.enabled !== undefined ? { enabled: payload.data.enabled } : {}),
+        ...(payload.data.defaults !== undefined
+          ? {
+              optionsJson: {
+                textEndpointSlug: payload.data.defaults.textEndpointSlug || null,
+                imageEndpointSlug: payload.data.defaults.imageEndpointSlug || null,
+                videoEndpointSlug: payload.data.defaults.videoEndpointSlug || null,
+              },
+            }
+          : {}),
       },
       create: {
         userId: user.id,
@@ -147,20 +236,52 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
         apiKey: payload.data.apiKey || null,
         baseUrlOverride: payload.data.baseUrlOverride || null,
         enabled: payload.data.enabled ?? true,
+        optionsJson: payload.data.defaults
+          ? {
+              textEndpointSlug: payload.data.defaults.textEndpointSlug || null,
+              imageEndpointSlug: payload.data.defaults.imageEndpointSlug || null,
+              videoEndpointSlug: payload.data.defaults.videoEndpointSlug || null,
+            }
+          : undefined,
       },
       select: {
         id: true,
         enabled: true,
         apiKey: true,
         baseUrlOverride: true,
+        optionsJson: true,
         updatedAt: true,
       },
+    });
+
+    const endpoints = await prisma.modelEndpoint.findMany({
+      where: {
+        providerId: provider.id,
+        status: 'ACTIVE',
+      },
+      include: {
+        family: {
+          select: {
+            slug: true,
+            modelKind: true,
+          },
+        },
+      },
+      orderBy: [{ family: { modelKind: 'asc' } }, { priority: 'asc' }, { createdAt: 'asc' }],
     });
 
     return reply.send({
       ok: true,
       data: mapProviderConfig({
         provider,
+        endpoints: endpoints.map((endpoint) => ({
+          id: endpoint.id,
+          slug: endpoint.slug,
+          label: endpoint.label,
+          modelKind: endpoint.family.modelKind.toLowerCase(),
+          familySlug: endpoint.family.slug,
+          isDefault: endpoint.isDefault,
+        })),
         config,
       }),
     });

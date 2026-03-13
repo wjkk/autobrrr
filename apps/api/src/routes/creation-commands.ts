@@ -7,6 +7,7 @@ import { requireUser } from '../lib/auth.js';
 import { resolveModelSelection } from '../lib/model-registry.js';
 import { findOwnedShot } from '../lib/ownership.js';
 import { prisma } from '../lib/prisma.js';
+import { resolveUserDefaultModelSelection } from '../lib/user-model-defaults.js';
 
 const paramsSchema = z.object({
   projectId: z.string().min(1),
@@ -47,10 +48,14 @@ async function createGenerationRun(args: {
     return { error: 'NOT_FOUND' as const };
   }
 
+  const userDefaultModel = !args.modelFamily && !args.modelEndpoint
+    ? await resolveUserDefaultModelSelection(args.userId, args.modelKind)
+    : null;
+
   const resolvedModel = await resolveModelSelection({
     modelKind: args.modelKind,
-    familySlug: args.modelFamily,
-    endpointSlug: args.modelEndpoint,
+    familySlug: args.modelFamily ?? userDefaultModel?.familySlug,
+    endpointSlug: args.modelEndpoint ?? userDefaultModel?.endpointSlug,
     strategy: 'default',
   });
   if (!resolvedModel) {

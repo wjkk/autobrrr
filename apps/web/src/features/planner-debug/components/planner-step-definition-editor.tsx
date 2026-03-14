@@ -68,7 +68,7 @@ export function PlannerStepDefinitionEditor({ value, onChange }: PlannerStepDefi
 
           <div className={styles.twoCol}>
             <div className={styles.fieldGroup}>
-              <label className={styles.fieldLabel}>Title</label>
+              <label className={styles.fieldLabel}>标题</label>
               <input
                 className={styles.input}
                 placeholder="例如：设计对白驱动的冲突推进"
@@ -77,7 +77,7 @@ export function PlannerStepDefinitionEditor({ value, onChange }: PlannerStepDefi
               />
             </div>
             <div className={styles.fieldGroup}>
-              <label className={styles.fieldLabel}>Status</label>
+              <label className={styles.fieldLabel}>状态</label>
               <select
                 className={styles.select}
                 value={step.status}
@@ -88,17 +88,17 @@ export function PlannerStepDefinitionEditor({ value, onChange }: PlannerStepDefi
                   }))
                 }
               >
-                <option value="pending">pending</option>
-                <option value="running">running</option>
-                <option value="done">done</option>
-                <option value="failed">failed</option>
+                <option value="pending">待处理</option>
+                <option value="running">执行中</option>
+                <option value="done">已完成</option>
+                <option value="failed">失败</option>
               </select>
             </div>
           </div>
 
           <div className={styles.fieldGroup}>
             <div className={styles.fieldLabelRow}>
-              <label className={styles.fieldLabel}>Details</label>
+              <label className={styles.fieldLabel}>步骤细项</label>
               <button
                 type="button"
                 className={styles.inlineButton}
@@ -109,7 +109,7 @@ export function PlannerStepDefinitionEditor({ value, onChange }: PlannerStepDefi
                   }))
                 }
               >
-                添加 detail
+                添加细项
               </button>
             </div>
             <div className={styles.detailList}>

@@ -35,23 +35,40 @@ type PlannerAgentSeed = {
 const baseInputSchema = {
   required: ['projectTitle', 'episodeTitle', 'userPrompt'],
   optional: [
+    'contentMode',
     'scriptContent',
     'selectedSubjectName',
     'selectedStyleName',
     'selectedImageModelLabel',
     'priorMessages',
+    'currentOutlineDoc',
     'currentStructuredDoc',
+    'partialRerunScope',
+    'targetEntity',
+    'plannerAssets',
   ],
   constraints: {
     userPromptMaxLength: 20000,
     priorMessagesMaxLength: 12,
     language: 'zh-CN',
+    plannerAssetsMaxLength: 48,
+    stages: ['outline', 'refinement'],
+    partialRerunScopes: ['none', 'subject_only', 'scene_only', 'shots_only'],
   },
 };
 
 const baseOutputSchema = {
   type: 'plannerAssistantPackage',
-  required: ['assistantMessage', 'stepAnalysis', 'structuredDoc', 'operations'],
+  stages: {
+    outline: {
+      required: ['stage', 'assistantMessage', 'documentTitle', 'outlineDoc', 'operations'],
+      stageValue: 'outline',
+    },
+    refinement: {
+      required: ['stage', 'assistantMessage', 'stepAnalysis', 'documentTitle', 'structuredDoc', 'operations'],
+      stageValue: 'refinement',
+    },
+  },
   structuredDoc: {
     required: [
       'projectTitle',
@@ -71,8 +88,10 @@ const baseOutputSchema = {
   rules: [
     '必须输出 JSON 对象，不要输出 markdown，不要输出代码块，不要输出解释性前言。',
     'assistantMessage 用 1 段中文确认当前策划动作，避免泛泛表扬。',
+    'outline 阶段输出 outlineDoc，refinement 阶段输出 structuredDoc 和 stepAnalysis。',
     'stepAnalysis 至少 3 步，每步必须与当前子类型的处理逻辑强相关。',
-    'operations.replaceDocument 固定为 true，generateStoryboard 默认 false，除非用户明确要求立即生成分镜。',
+    'operations.replaceDocument 仅在 refinement 阶段固定为 true；outline 阶段用于确认大纲。',
+    '如果是局部重跑场景，输出内容必须尽量收敛到目标实体，不要无关扩散。',
   ],
 };
 
@@ -147,6 +166,19 @@ function createToolPolicy(mode: 'story' | 'mv' | 'knowledge', emphasis: string) 
   return {
     mode,
     emphasis,
+    allowedStages: ['outline', 'refinement'],
+    partialRerunScopes: ['subject_only', 'scene_only', 'shots_only'],
+    assetStrategy: {
+      allowPlannerAssetContext: true,
+      preferGeneratedAssetAsPrimary: true,
+      allowReferenceAssetBinding: true,
+      allowImageDraftGeneration: true,
+    },
+    constraints: {
+      preserveUnrelatedEntitiesDuringPartialRerun: true,
+      requireStructuredJsonOutput: true,
+      requireStepAnalysisOnRefinement: true,
+    },
     allowSubjectAssetPlanning: true,
     allowSceneAssetPlanning: true,
     allowDocumentRewrite: true,
@@ -157,10 +189,28 @@ function createToolPolicy(mode: 'story' | 'mv' | 'knowledge', emphasis: string) 
 
 function createGenerationConfig(args: { temperature: number; maxOutputTokens: number; topP: number }) {
   return {
-    temperature: args.temperature,
-    maxOutputTokens: args.maxOutputTokens,
-    topP: args.topP,
+    stageProfiles: {
+      outline: {
+        temperature: Math.max(0.18, Math.min(args.temperature, 0.45)),
+        maxOutputTokens: Math.min(args.maxOutputTokens, 2200),
+        topP: Math.min(args.topP, 0.9),
+      },
+      refinement: {
+        temperature: args.temperature,
+        maxOutputTokens: args.maxOutputTokens,
+        topP: args.topP,
+      },
+    },
     responseFormat: 'json_object',
+    retryPolicy: {
+      maxAttempts: 2,
+      allowFallback: true,
+    },
+    qualityGuards: {
+      requireDocumentTitle: true,
+      requireOperationsBlock: true,
+      requireEntityPrompts: true,
+    },
   };
 }
 
@@ -671,4 +721,3 @@ export const plannerAgentSeedProfiles: PlannerAgentSeed[] = [
     ],
   },
 ];
-

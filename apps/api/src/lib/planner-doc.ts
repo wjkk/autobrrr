@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+const plannerAssetIdListSchema = z.array(z.string().trim().min(1).max(191)).max(16).default([]);
+
 const plannerShotSchema = z.object({
   title: z.string().trim().min(1).max(120),
   visual: z.string().trim().min(1).max(2000),
@@ -7,6 +9,8 @@ const plannerShotSchema = z.object({
   motion: z.string().trim().min(1).max(1000),
   voice: z.string().trim().min(1).max(120),
   line: z.string().trim().min(1).max(1000),
+  referenceAssetIds: plannerAssetIdListSchema.optional(),
+  generatedAssetIds: plannerAssetIdListSchema.optional(),
 });
 
 const plannerActSchema = z.object({
@@ -19,6 +23,8 @@ const plannerActSchema = z.object({
 const plannerAssetSchema = z.object({
   title: z.string().trim().min(1).max(120),
   prompt: z.string().trim().min(1).max(2000),
+  referenceAssetIds: plannerAssetIdListSchema.optional(),
+  generatedAssetIds: plannerAssetIdListSchema.optional(),
 });
 
 export const plannerStructuredDocSchema = z.object({

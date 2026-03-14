@@ -22,6 +22,17 @@ interface EnvelopeFailure {
 
 type Envelope<T> = EnvelopeSuccess<T> | EnvelopeFailure;
 
+function executionModeLabel(mode: string) {
+  switch (mode) {
+    case 'compare':
+      return '对比';
+    case 'replay':
+      return '回放';
+    default:
+      return '单次调试';
+  }
+}
+
 async function requestJson<T>(path: string) {
   const response = await fetch(path, {
     headers: {
@@ -98,7 +109,7 @@ export function PlannerDebugRunBrowser({ initialRunId }: PlannerDebugRunBrowserP
       <div className={styles.shell}>
         <section className={styles.hero}>
           <div>
-            <div className={styles.eyebrow}>Planner Debug Replay</div>
+            <div className={styles.eyebrow}>策划调试回放</div>
             <h1 className={styles.title}>策划 Agent 调试回放</h1>
             <p className={styles.subtitle}>这里只看调试历史与详情回放，不进入主流程，也不直接编辑配置。</p>
           </div>
@@ -123,8 +134,8 @@ export function PlannerDebugRunBrowser({ initialRunId }: PlannerDebugRunBrowserP
                 {runs.map((run) => (
                   <button key={run.id} type="button" className={styles.historyRunItem} onClick={() => handleSelect(run.id)}>
                     <div className={styles.catalogTitle}>
-                      <span>{run.compareLabel ? `${run.compareLabel} · ` : ''}{run.subAgentProfile?.displayName ?? 'Unknown'}</span>
-                      <span className={styles.status}>{run.executionMode}</span>
+                      <span>{run.compareLabel ? `${run.compareLabel} · ` : ''}{run.subAgentProfile?.displayName ?? '未知子 Agent'}</span>
+                      <span className={styles.status}>{executionModeLabel(run.executionMode)}</span>
                     </div>
                     <div className={styles.catalogMeta}>
                       <div>{new Date(run.createdAt).toLocaleString('zh-CN')}</div>
@@ -162,15 +173,15 @@ export function PlannerDebugRunBrowser({ initialRunId }: PlannerDebugRunBrowserP
                     }, null, 2)}</pre>
                   </div>
                   <div className={styles.resultBlock}>
-                    <h3 className={styles.resultTitle}>Final Prompt</h3>
+                    <h3 className={styles.resultTitle}>最终提示词</h3>
                     <pre className={styles.pre}>{selectedRun.finalPrompt}</pre>
                   </div>
                   <div className={styles.resultBlock}>
-                    <h3 className={styles.resultTitle}>Raw Output</h3>
+                    <h3 className={styles.resultTitle}>原始输出</h3>
                     <pre className={styles.pre}>{selectedRun.rawText ?? '(empty)'}</pre>
                   </div>
                   <div className={styles.resultBlock}>
-                    <h3 className={styles.resultTitle}>Assistant Package</h3>
+                    <h3 className={styles.resultTitle}>结构化输出包</h3>
                     <pre className={styles.pre}>{JSON.stringify(selectedRun.assistantPackage, null, 2)}</pre>
                   </div>
                   <div className={styles.linkRow}>

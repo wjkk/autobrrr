@@ -9,6 +9,8 @@ export interface PlannerAgentProfileDebugItem {
   defaultSystemPrompt: string;
   defaultDeveloperPrompt: string | null;
   defaultStepDefinitionsJson: unknown;
+  defaultInputSchemaJson: unknown;
+  defaultOutputSchemaJson: unknown;
   subAgentProfiles: PlannerSubAgentProfileDebugItem[];
 }
 
@@ -23,6 +25,10 @@ export interface PlannerSubAgentProfileDebugItem {
   systemPromptOverride: string | null;
   developerPromptOverride: string | null;
   stepDefinitionsJson: unknown;
+  inputSchemaJson: unknown;
+  outputSchemaJson: unknown;
+  toolPolicyJson: unknown;
+  defaultGenerationConfigJson: unknown;
 }
 
 export interface PlannerSubAgentCatalogEntry {
@@ -42,6 +48,13 @@ export interface PlannerSubAgentReleaseItem {
   releaseVersion: number;
   displayName: string;
   description: string | null;
+  systemPromptOverride: string | null;
+  developerPromptOverride: string | null;
+  stepDefinitionsJson: unknown;
+  inputSchemaJson: unknown;
+  outputSchemaJson: unknown;
+  toolPolicyJson: unknown;
+  defaultGenerationConfigJson: unknown;
   publishedAt: string;
 }
 
@@ -49,6 +62,9 @@ export interface PlannerDebugRunResponse {
   debugRunId: string;
   createdAt: string;
   executionMode: 'live' | 'fallback';
+  configSource: 'draft' | 'published';
+  releaseVersion: number | null;
+  input: Record<string, unknown>;
   agentProfile: {
     id: string;
     slug: string;
@@ -82,6 +98,7 @@ export interface PlannerDebugRunResponse {
   rawText: string | null;
   providerOutput: Record<string, unknown> | null;
   assistantPackage: Record<string, unknown>;
+  diffSummary?: string[];
   errorMessage?: string | null;
 }
 
@@ -112,6 +129,7 @@ export interface PlannerDebugRunDetail extends PlannerDebugRunListItem {
   rawText: string | null;
   providerOutput: Record<string, unknown> | null;
   assistantPackage: Record<string, unknown> | null;
+  diffSummary?: string[];
 }
 
 export interface PlannerDebugCompareResponse {

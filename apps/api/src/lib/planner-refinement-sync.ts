@@ -4,6 +4,37 @@ import type { PlannerStructuredDoc } from './planner-doc.js';
 
 type PlannerDbClient = Prisma.TransactionClient;
 
+interface PreviousPlannerAssetProjection {
+  subjects?: Array<{
+    title?: string;
+    prompt?: string;
+    referenceAssetIds?: string[];
+    generatedAssetIds?: string[];
+  }>;
+  scenes?: Array<{
+    title?: string;
+    prompt?: string;
+    referenceAssetIds?: string[];
+    generatedAssetIds?: string[];
+  }>;
+  acts?: Array<{
+    shots?: Array<{
+      title?: string;
+      visual?: string;
+      referenceAssetIds?: string[];
+      generatedAssetIds?: string[];
+    }>;
+  }>;
+}
+
+function normalizeKey(value: string) {
+  return value.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function toAssetIdList(value: string[] | undefined) {
+  return (value ?? []).filter((assetId) => typeof assetId === 'string' && assetId.trim().length > 0);
+}
+
 function inferSceneTime(doc: PlannerStructuredDoc, sceneTitle: string) {
   const matchedAct = doc.acts.find((act) => act.title.includes(sceneTitle) || act.location.includes(sceneTitle));
   return matchedAct?.time || '未设定';
@@ -25,8 +56,37 @@ export async function syncPlannerRefinementDerivedData(args: {
   db: PlannerDbClient;
   refinementVersionId: string;
   structuredDoc: PlannerStructuredDoc;
+  previousProjection?: PreviousPlannerAssetProjection | null;
 }) {
-  const { db, refinementVersionId, structuredDoc } = args;
+  const { db, refinementVersionId, structuredDoc, previousProjection } = args;
+
+  const previousSubjectAssets = new Map(
+    (previousProjection?.subjects ?? []).map((subject) => [
+      normalizeKey(subject.title ?? subject.prompt ?? ''),
+      {
+        referenceAssetIds: toAssetIdList(subject.referenceAssetIds),
+        generatedAssetIds: toAssetIdList(subject.generatedAssetIds),
+      },
+    ]),
+  );
+  const previousSceneAssets = new Map(
+    (previousProjection?.scenes ?? []).map((scene) => [
+      normalizeKey(scene.title ?? scene.prompt ?? ''),
+      {
+        referenceAssetIds: toAssetIdList(scene.referenceAssetIds),
+        generatedAssetIds: toAssetIdList(scene.generatedAssetIds),
+      },
+    ]),
+  );
+  const previousShotAssets = new Map(
+    (previousProjection?.acts ?? []).flatMap((act) => (act.shots ?? []).map((shot) => [
+      normalizeKey(`${shot.title ?? ''}::${shot.visual ?? ''}`),
+      {
+        referenceAssetIds: toAssetIdList(shot.referenceAssetIds),
+        generatedAssetIds: toAssetIdList(shot.generatedAssetIds),
+      },
+    ] as const)),
+  );
 
   await db.plannerShotScript.deleteMany({
     where: { refinementVersionId },
@@ -47,6 +107,16 @@ export async function syncPlannerRefinementDerivedData(args: {
           role: index === 0 ? '主角' : '配角',
           appearance: subject.prompt,
           prompt: subject.prompt,
+          referenceAssetIdsJson: (
+            subject.referenceAssetIds?.length
+              ? subject.referenceAssetIds
+              : previousSubjectAssets.get(normalizeKey(subject.title || subject.prompt))?.referenceAssetIds ?? []
+          ) as Prisma.InputJsonValue,
+          generatedAssetIdsJson: (
+            subject.generatedAssetIds?.length
+              ? subject.generatedAssetIds
+              : previousSubjectAssets.get(normalizeKey(subject.title || subject.prompt))?.generatedAssetIds ?? []
+          ) as Prisma.InputJsonValue,
           sortOrder: index + 1,
           editable: true,
         },
@@ -64,6 +134,16 @@ export async function syncPlannerRefinementDerivedData(args: {
           locationType: inferLocationType(scene.prompt),
           description: scene.prompt,
           prompt: scene.prompt,
+          referenceAssetIdsJson: (
+            scene.referenceAssetIds?.length
+              ? scene.referenceAssetIds
+              : previousSceneAssets.get(normalizeKey(scene.title || scene.prompt))?.referenceAssetIds ?? []
+          ) as Prisma.InputJsonValue,
+          generatedAssetIdsJson: (
+            scene.generatedAssetIds?.length
+              ? scene.generatedAssetIds
+              : previousSceneAssets.get(normalizeKey(scene.title || scene.prompt))?.generatedAssetIds ?? []
+          ) as Prisma.InputJsonValue,
           sortOrder: index + 1,
           editable: true,
         },
@@ -89,6 +169,16 @@ export async function syncPlannerRefinementDerivedData(args: {
           voiceRole: shot.voice,
           dialogue: shot.line,
           subjectBindingsJson: subjects.map((subject: { id: string }) => subject.id),
+          referenceAssetIdsJson: (
+            shot.referenceAssetIds?.length
+              ? shot.referenceAssetIds
+              : previousShotAssets.get(normalizeKey(`${shot.title}::${shot.visual}`))?.referenceAssetIds ?? []
+          ) as Prisma.InputJsonValue,
+          generatedAssetIdsJson: (
+            shot.generatedAssetIds?.length
+              ? shot.generatedAssetIds
+              : previousShotAssets.get(normalizeKey(`${shot.title}::${shot.visual}`))?.generatedAssetIds ?? []
+          ) as Prisma.InputJsonValue,
           sortOrder: shotSort,
         },
       });

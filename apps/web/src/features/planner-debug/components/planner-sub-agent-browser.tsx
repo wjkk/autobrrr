@@ -32,6 +32,21 @@ function statusClass(status: string) {
   }
 }
 
+function statusLabel(status: string) {
+  switch (status) {
+    case 'active':
+      return '已生效';
+    case 'draft':
+      return '草稿';
+    case 'deprecated':
+      return '已弃用';
+    case 'archived':
+      return '已归档';
+    default:
+      return status;
+  }
+}
+
 export function PlannerSubAgentBrowser({
   mode,
   loading,
@@ -61,7 +76,7 @@ export function PlannerSubAgentBrowser({
               <label className={styles.fieldLabel}>搜索</label>
               <input
                 className={styles.input}
-                placeholder="名称 / subtype / slug"
+                placeholder="名称 / 子类型 / 标识"
                 value={searchTerm}
                 onChange={(event) => onSearchTermChange(event.target.value)}
               />
@@ -81,10 +96,10 @@ export function PlannerSubAgentBrowser({
               <label className={styles.fieldLabel}>状态</label>
               <select className={styles.select} value={statusFilter} onChange={(event) => onStatusFilterChange(event.target.value)}>
                 <option value="all">全部</option>
-                <option value="active">active</option>
-                <option value="draft">draft</option>
-                <option value="deprecated">deprecated</option>
-                <option value="archived">archived</option>
+                <option value="active">已生效</option>
+                <option value="draft">草稿</option>
+                <option value="deprecated">已弃用</option>
+                <option value="archived">已归档</option>
               </select>
             </div>
           </div>
@@ -114,7 +129,7 @@ export function PlannerSubAgentBrowser({
               >
                 <div className={styles.catalogTitle}>
                   <span>{subAgent.displayName}</span>
-                  <span className={statusClass(subAgent.status)}>{subAgent.status}</span>
+                  <span className={statusClass(subAgent.status)}>{statusLabel(subAgent.status)}</span>
                 </div>
                 <div className={styles.catalogMeta}>
                   <div>{profile.contentType} / {subAgent.subtype}</div>

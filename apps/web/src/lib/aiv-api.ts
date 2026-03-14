@@ -30,6 +30,15 @@ function resolveBaseUrl() {
   return rawBaseUrl.endsWith('/') ? rawBaseUrl.slice(0, -1) : rawBaseUrl;
 }
 
+function buildApiUnavailableMessage(path: string) {
+  return `AIV API is unavailable at ${resolveBaseUrl()} while requesting ${path}. Start \`pnpm dev:api\` or use the root \`pnpm dev\` script.`;
+}
+
+function toApiUnavailableError(path: string, error: unknown) {
+  const message = error instanceof Error && error.message ? `${buildApiUnavailableMessage(path)} (${error.message})` : buildApiUnavailableMessage(path);
+  return new AivApiError(message, 'AIV_API_UNAVAILABLE', 503);
+}
+
 function resolveErrorMessage(payload: unknown, fallback: string) {
   if (payload && typeof payload === 'object' && 'message' in payload) {
     const message = (payload as { message?: unknown }).message;
@@ -52,17 +61,23 @@ export async function getServerCookieHeader() {
 }
 
 export async function requestAivApi<T>(path: string, init?: RequestInit & { allowNotFound?: boolean; cookieHeader?: string | null }): Promise<T | null> {
-  const response = await fetch(`${resolveBaseUrl()}${path}`, {
-    method: init?.method ?? 'GET',
-    headers: {
-      Accept: 'application/json',
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(init?.headers ?? {}),
-      ...(init?.cookieHeader ? { Cookie: init.cookieHeader } : {}),
-    },
-    body: init?.body,
-    cache: 'no-store',
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${resolveBaseUrl()}${path}`, {
+      method: init?.method ?? 'GET',
+      headers: {
+        Accept: 'application/json',
+        ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(init?.headers ?? {}),
+        ...(init?.cookieHeader ? { Cookie: init.cookieHeader } : {}),
+      },
+      body: init?.body,
+      cache: 'no-store',
+    });
+  } catch (error) {
+    throw toApiUnavailableError(path, error);
+  }
 
   if (response.status === 404 && init?.allowNotFound) {
     return null;
@@ -112,23 +127,37 @@ export async function proxyAivApiRoute(request: Request, path: string) {
   const method = request.method.toUpperCase();
   const body = method === 'GET' || method === 'HEAD' ? undefined : await request.text();
 
-  const response = await fetch(`${resolveBaseUrl()}${path}`, {
-    method,
-    headers: {
-      Accept: 'application/json',
-      ...(body ? { 'Content-Type': request.headers.get('content-type') ?? 'application/json' } : {}),
-      ...(request.headers.get('cookie') ? { Cookie: request.headers.get('cookie') as string } : {}),
-    },
-    body,
-    cache: 'no-store',
-  });
+  try {
+    const response = await fetch(`${resolveBaseUrl()}${path}`, {
+      method,
+      headers: {
+        Accept: 'application/json',
+        ...(body ? { 'Content-Type': request.headers.get('content-type') ?? 'application/json' } : {}),
+        ...(request.headers.get('cookie') ? { Cookie: request.headers.get('cookie') as string } : {}),
+      },
+      body,
+      cache: 'no-store',
+    });
 
-  const text = await response.text();
-  return new NextResponse(text, {
-    status: response.status,
-    headers: {
-      'Content-Type': response.headers.get('content-type') ?? 'application/json',
-      ...(response.headers.get('set-cookie') ? { 'set-cookie': response.headers.get('set-cookie') as string } : {}),
-    },
-  });
+    const text = await response.text();
+    return new NextResponse(text, {
+      status: response.status,
+      headers: {
+        'Content-Type': response.headers.get('content-type') ?? 'application/json',
+        ...(response.headers.get('set-cookie') ? { 'set-cookie': response.headers.get('set-cookie') as string } : {}),
+      },
+    });
+  } catch (error) {
+    const apiError = toApiUnavailableError(path, error);
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: apiError.code,
+          message: apiError.message,
+        },
+      },
+      { status: apiError.status ?? 503 },
+    );
+  }
 }

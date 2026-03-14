@@ -507,6 +507,18 @@
   line-height: 1.5;
 }
 
+.threadNoticeList {
+  margin: 2px 0 0;
+  padding-left: 18px;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.threadNoticeList li {
+  margin: 0;
+}
+
 .confirmOutlineButton {
   justify-self: start;
   margin-top: 6px;
@@ -1251,7 +1263,9 @@
 }
 
 .shotCancelButton,
-.shotSaveButton {
+.shotSaveButton,
+.shotRerunButton,
+.shotSketchButton {
   border: 0;
   border-radius: 999px;
   font-size: 11px;
@@ -1265,9 +1279,32 @@
   color: #334155;
 }
 
+.shotRerunButton {
+  background: rgba(59, 130, 246, 0.14);
+  color: #1d4ed8;
+}
+
+.shotSketchButton {
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
+}
+
 .shotSaveButton {
   background: #111827;
   color: #ffffff;
+}
+
+.shotPreviewImageWrap {
+  margin-bottom: 10px;
+}
+
+.shotPreviewImage {
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .assetModalBackdrop {
@@ -1508,6 +1545,38 @@
   color: rgba(226, 232, 240, 0.45);
 }
 
+.assetUploadBox {
+  display: grid;
+  gap: 8px;
+}
+
+.assetUploadInput {
+  display: none;
+}
+
+.assetUploadButton {
+  min-height: 40px;
+  border-radius: 12px;
+  border: 1px dashed rgba(148, 163, 184, 0.38);
+  background: rgba(15, 23, 42, 0.48);
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.assetUploadButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.assetUploadHint {
+  margin: 0;
+  color: rgba(226, 232, 240, 0.56);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .assetPromptSend {
   justify-self: end;
   width: 32px;
@@ -1519,6 +1588,11 @@
   display: grid;
   place-items: center;
   cursor: pointer;
+}
+
+.assetPromptSend:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .assetPromptSend svg {
@@ -1546,7 +1620,8 @@
 }
 
 .assetGhostButton,
-.assetPrimaryButton {
+.assetPrimaryButton,
+.assetSecondaryButton {
   border: 0;
   border-radius: 999px;
   font-size: 12px;
@@ -1564,6 +1639,11 @@
   background: #f8fafc;
   color: #0f172a;
   font-weight: 600;
+}
+
+.assetSecondaryButton {
+  background: rgba(59, 130, 246, 0.18);
+  color: #dbeafe;
 }
 
 .deleteShotHint {

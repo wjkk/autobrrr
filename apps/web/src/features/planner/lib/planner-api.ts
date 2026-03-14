@@ -9,6 +9,14 @@ export interface PlannerRuntimeApiContext {
 }
 
 export interface ApiPlannerWorkspace {
+  availableAssets?: Array<{
+    id: string;
+    sourceUrl: string | null;
+    fileName: string;
+    mediaKind: string;
+    sourceKind: string;
+    createdAt: string;
+  }>;
   project: {
     id: string;
     title: string;
@@ -102,8 +110,24 @@ export interface ApiPlannerWorkspace {
       personality: string | null;
       prompt: string;
       negativePrompt: string | null;
-      referenceAssetIds: unknown[];
-      generatedAssetIds: unknown[];
+      referenceAssetIds: string[];
+      generatedAssetIds: string[];
+      referenceAssets: Array<{
+        id: string;
+        sourceUrl: string | null;
+        fileName: string;
+        mediaKind: string;
+        sourceKind: string;
+        createdAt: string;
+      }>;
+      generatedAssets: Array<{
+        id: string;
+        sourceUrl: string | null;
+        fileName: string;
+        mediaKind: string;
+        sourceKind: string;
+        createdAt: string;
+      }>;
       sortOrder: number;
       editable: boolean;
     }>;
@@ -115,8 +139,24 @@ export interface ApiPlannerWorkspace {
       description: string;
       prompt: string;
       negativePrompt: string | null;
-      referenceAssetIds: unknown[];
-      generatedAssetIds: unknown[];
+      referenceAssetIds: string[];
+      generatedAssetIds: string[];
+      referenceAssets: Array<{
+        id: string;
+        sourceUrl: string | null;
+        fileName: string;
+        mediaKind: string;
+        sourceKind: string;
+        createdAt: string;
+      }>;
+      generatedAssets: Array<{
+        id: string;
+        sourceUrl: string | null;
+        fileName: string;
+        mediaKind: string;
+        sourceKind: string;
+        createdAt: string;
+      }>;
       sortOrder: number;
       editable: boolean;
     }>;
@@ -134,6 +174,24 @@ export interface ApiPlannerWorkspace {
       voiceRole: string;
       dialogue: string;
       subjectBindings: unknown[];
+      referenceAssetIds: string[];
+      generatedAssetIds: string[];
+      referenceAssets: Array<{
+        id: string;
+        sourceUrl: string | null;
+        fileName: string;
+        mediaKind: string;
+        sourceKind: string;
+        createdAt: string;
+      }>;
+      generatedAssets: Array<{
+        id: string;
+        sourceUrl: string | null;
+        fileName: string;
+        mediaKind: string;
+        sourceKind: string;
+        createdAt: string;
+      }>;
       sortOrder: number;
     }>;
     stepAnalysis: Array<{
@@ -163,8 +221,24 @@ export interface ApiPlannerWorkspace {
     personality: string | null;
     prompt: string;
     negativePrompt: string | null;
-    referenceAssetIds: unknown[];
-    generatedAssetIds: unknown[];
+    referenceAssetIds: string[];
+    generatedAssetIds: string[];
+    referenceAssets: Array<{
+      id: string;
+      sourceUrl: string | null;
+      fileName: string;
+      mediaKind: string;
+      sourceKind: string;
+      createdAt: string;
+    }>;
+    generatedAssets: Array<{
+      id: string;
+      sourceUrl: string | null;
+      fileName: string;
+      mediaKind: string;
+      sourceKind: string;
+      createdAt: string;
+    }>;
     sortOrder: number;
     editable: boolean;
   }>;
@@ -176,8 +250,24 @@ export interface ApiPlannerWorkspace {
     description: string;
     prompt: string;
     negativePrompt: string | null;
-    referenceAssetIds: unknown[];
-    generatedAssetIds: unknown[];
+    referenceAssetIds: string[];
+    generatedAssetIds: string[];
+    referenceAssets: Array<{
+      id: string;
+      sourceUrl: string | null;
+      fileName: string;
+      mediaKind: string;
+      sourceKind: string;
+      createdAt: string;
+    }>;
+    generatedAssets: Array<{
+      id: string;
+      sourceUrl: string | null;
+      fileName: string;
+      mediaKind: string;
+      sourceKind: string;
+      createdAt: string;
+    }>;
     sortOrder: number;
     editable: boolean;
   }>;
@@ -195,6 +285,24 @@ export interface ApiPlannerWorkspace {
     voiceRole: string;
     dialogue: string;
     subjectBindings: unknown[];
+    referenceAssetIds: string[];
+    generatedAssetIds: string[];
+    referenceAssets: Array<{
+      id: string;
+      sourceUrl: string | null;
+      fileName: string;
+      mediaKind: string;
+      sourceKind: string;
+      createdAt: string;
+    }>;
+    generatedAssets: Array<{
+      id: string;
+      sourceUrl: string | null;
+      fileName: string;
+      mediaKind: string;
+      sourceKind: string;
+      createdAt: string;
+    }>;
     sortOrder: number;
   }>;
 }

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { requireUser } from '../lib/auth.js';
@@ -48,6 +49,11 @@ const shotPayloadSchema = scopedPayloadSchema.extend({
   cameraMotion: z.string().trim().min(1).max(1000).optional(),
   voiceRole: z.string().trim().min(1).max(120).optional(),
   dialogue: z.string().trim().min(1).max(1000).optional(),
+});
+
+const assetBindingPayloadSchema = scopedPayloadSchema.extend({
+  referenceAssetIds: z.array(z.string().min(1)).max(16).optional(),
+  generatedAssetIds: z.array(z.string().min(1)).max(16).optional(),
 });
 
 async function findOwnedActiveRefinement(projectId: string, episodeId: string, userId: string) {
@@ -234,6 +240,198 @@ export async function registerPlannerRefinementEntityRoutes(app: FastifyInstance
         description: updated.description,
         prompt: updated.prompt,
         negativePrompt: updated.negativePrompt,
+      },
+    });
+  });
+
+  app.put('/api/projects/:projectId/planner/subjects/:subjectId/assets', async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) {
+      return;
+    }
+
+    const params = subjectParamsSchema.safeParse(request.params);
+    const payload = assetBindingPayloadSchema.safeParse(request.body);
+    if (!params.success || !payload.success) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'INVALID_ARGUMENT',
+          message: 'Invalid planner subject asset payload.',
+          details: payload.success ? undefined : payload.error.flatten(),
+        },
+      });
+    }
+
+    const activeRefinement = await findOwnedActiveRefinement(params.data.projectId, payload.data.episodeId, user.id);
+    if (!activeRefinement) {
+      return reply.code(409).send({
+        ok: false,
+        error: {
+          code: 'PLANNER_REFINEMENT_REQUIRED',
+          message: 'No active refinement version found.',
+        },
+      });
+    }
+
+    const subject = await prisma.plannerSubject.findFirst({
+      where: {
+        id: params.data.subjectId,
+        refinementVersionId: activeRefinement.id,
+      },
+      select: { id: true },
+    });
+    if (!subject) {
+      return reply.code(404).send({
+        ok: false,
+        error: {
+          code: 'PLANNER_SUBJECT_NOT_FOUND',
+          message: 'Planner subject not found.',
+        },
+      });
+    }
+
+    const allAssetIds = [...(payload.data.referenceAssetIds ?? []), ...(payload.data.generatedAssetIds ?? [])];
+    if (allAssetIds.length > 0) {
+      const ownedAssets = await prisma.asset.findMany({
+        where: {
+          id: { in: allAssetIds },
+          projectId: params.data.projectId,
+          ownerUserId: user.id,
+          mediaKind: 'IMAGE',
+        },
+        select: { id: true },
+      });
+      if (ownedAssets.length !== new Set(allAssetIds).size) {
+        return reply.code(400).send({
+          ok: false,
+          error: {
+            code: 'PLANNER_ASSET_NOT_OWNED',
+            message: 'One or more subject assets are invalid or not owned by the current user.',
+          },
+        });
+      }
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const nextSubject = await tx.plannerSubject.update({
+        where: { id: subject.id },
+        data: {
+          ...(payload.data.referenceAssetIds ? { referenceAssetIdsJson: payload.data.referenceAssetIds as Prisma.InputJsonValue } : {}),
+          ...(payload.data.generatedAssetIds ? { generatedAssetIdsJson: payload.data.generatedAssetIds as Prisma.InputJsonValue } : {}),
+        },
+      });
+
+      await syncPlannerRefinementProjection({
+        db: tx,
+        refinementVersionId: activeRefinement.id,
+      });
+
+      return nextSubject;
+    });
+
+    return reply.send({
+      ok: true,
+      data: {
+        id: updated.id,
+        referenceAssetIds: Array.isArray(updated.referenceAssetIdsJson) ? updated.referenceAssetIdsJson : [],
+        generatedAssetIds: Array.isArray(updated.generatedAssetIdsJson) ? updated.generatedAssetIdsJson : [],
+      },
+    });
+  });
+
+  app.put('/api/projects/:projectId/planner/scenes/:sceneId/assets', async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) {
+      return;
+    }
+
+    const params = sceneParamsSchema.safeParse(request.params);
+    const payload = assetBindingPayloadSchema.safeParse(request.body);
+    if (!params.success || !payload.success) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'INVALID_ARGUMENT',
+          message: 'Invalid planner scene asset payload.',
+          details: payload.success ? undefined : payload.error.flatten(),
+        },
+      });
+    }
+
+    const activeRefinement = await findOwnedActiveRefinement(params.data.projectId, payload.data.episodeId, user.id);
+    if (!activeRefinement) {
+      return reply.code(409).send({
+        ok: false,
+        error: {
+          code: 'PLANNER_REFINEMENT_REQUIRED',
+          message: 'No active refinement version found.',
+        },
+      });
+    }
+
+    const scene = await prisma.plannerScene.findFirst({
+      where: {
+        id: params.data.sceneId,
+        refinementVersionId: activeRefinement.id,
+      },
+      select: { id: true },
+    });
+    if (!scene) {
+      return reply.code(404).send({
+        ok: false,
+        error: {
+          code: 'PLANNER_SCENE_NOT_FOUND',
+          message: 'Planner scene not found.',
+        },
+      });
+    }
+
+    const allAssetIds = [...(payload.data.referenceAssetIds ?? []), ...(payload.data.generatedAssetIds ?? [])];
+    if (allAssetIds.length > 0) {
+      const ownedAssets = await prisma.asset.findMany({
+        where: {
+          id: { in: allAssetIds },
+          projectId: params.data.projectId,
+          ownerUserId: user.id,
+          mediaKind: 'IMAGE',
+        },
+        select: { id: true },
+      });
+      if (ownedAssets.length !== new Set(allAssetIds).size) {
+        return reply.code(400).send({
+          ok: false,
+          error: {
+            code: 'PLANNER_ASSET_NOT_OWNED',
+            message: 'One or more scene assets are invalid or not owned by the current user.',
+          },
+        });
+      }
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const nextScene = await tx.plannerScene.update({
+        where: { id: scene.id },
+        data: {
+          ...(payload.data.referenceAssetIds ? { referenceAssetIdsJson: payload.data.referenceAssetIds as Prisma.InputJsonValue } : {}),
+          ...(payload.data.generatedAssetIds ? { generatedAssetIdsJson: payload.data.generatedAssetIds as Prisma.InputJsonValue } : {}),
+        },
+      });
+
+      await syncPlannerRefinementProjection({
+        db: tx,
+        refinementVersionId: activeRefinement.id,
+      });
+
+      return nextScene;
+    });
+
+    return reply.send({
+      ok: true,
+      data: {
+        id: updated.id,
+        referenceAssetIds: Array.isArray(updated.referenceAssetIdsJson) ? updated.referenceAssetIdsJson : [],
+        generatedAssetIds: Array.isArray(updated.generatedAssetIdsJson) ? updated.generatedAssetIdsJson : [],
       },
     });
   });

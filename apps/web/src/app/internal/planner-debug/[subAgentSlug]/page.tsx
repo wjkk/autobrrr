@@ -2,7 +2,7 @@ import { PlannerAgentDebugPage } from '@/features/planner-debug/components/plann
 
 interface PageProps {
   params: Promise<{ subAgentSlug: string }>;
-  searchParams?: Promise<{ replayRunId?: string }>;
+  searchParams?: Promise<{ replayRunId?: string; autoRun?: string }>;
 }
 
 export default async function InternalPlannerDebugDetailPage({ params, searchParams }: PageProps) {
@@ -13,6 +13,7 @@ export default async function InternalPlannerDebugDetailPage({ params, searchPar
       initialSubAgentSlug={decodeURIComponent(subAgentSlug)}
       mode="debug"
       initialReplayRunId={nextSearchParams?.replayRunId}
+      initialAutoRun={nextSearchParams?.autoRun === '1'}
     />
   );
 }

@@ -5,9 +5,11 @@ import { z } from 'zod';
 
 import { requireUser } from '../lib/auth.js';
 import { resolveModelSelection } from '../lib/model-registry.js';
-import { resolvePlannerAgentSelection } from '../lib/planner-agent-registry.js';
+import { resolvePlannerAgentSelection, type ResolvedPlannerAgentSelection } from '../lib/planner-agent-registry.js';
 import { parsePlannerAssistantPackage } from '../lib/planner-agent-schemas.js';
 import { buildPlannerGenerationPrompt } from '../lib/planner-orchestrator.js';
+import type { PlannerStructuredDoc } from '../lib/planner-doc.js';
+import { applyPartialRerunScope, buildPartialDiffSummary } from '../lib/planner-refinement-partial.js';
 import { extractPlannerText } from '../lib/planner-text-extraction.js';
 import { prisma } from '../lib/prisma.js';
 import { resolveProviderRuntimeConfigForUser } from '../lib/provider-runtime-config.js';
@@ -15,11 +17,21 @@ import { submitArkTextResponse } from '../lib/ark-client.js';
 import { submitPlatouChatCompletion } from '../lib/platou-client.js';
 
 const detailJsonSchema = z.record(z.string(), z.unknown());
+const plannerAssetSchema = z.object({
+  id: z.string().trim().min(1).max(191),
+  fileName: z.string().trim().max(255).optional(),
+  sourceUrl: z.string().trim().max(2000).nullable().optional(),
+  sourceKind: z.string().trim().max(64).optional(),
+  createdAt: z.string().trim().max(64).optional(),
+});
 
 const debugRunSchema = z.object({
   contentType: z.string().trim().min(1).max(64),
   subtype: z.string().trim().min(1).max(64),
+  subAgentId: z.string().trim().min(1).max(191).optional(),
+  configSource: z.enum(['draft', 'published']).default('draft'),
   targetStage: z.enum(['outline', 'refinement']).default('refinement'),
+  partialRerunScope: z.enum(['none', 'subject_only', 'scene_only', 'shots_only']).default('none'),
   projectTitle: z.string().trim().min(1).max(255).default('调试项目'),
   episodeTitle: z.string().trim().min(1).max(255).default('第1集'),
   userPrompt: z.string().trim().min(1).max(20000),
@@ -31,7 +43,10 @@ const debugRunSchema = z.object({
     role: z.enum(['user', 'assistant']),
     text: z.string().trim().min(1).max(4000),
   })).max(12).default([]),
+  currentOutlineDoc: detailJsonSchema.optional(),
   currentStructuredDoc: detailJsonSchema.optional(),
+  targetEntity: detailJsonSchema.optional(),
+  plannerAssets: z.array(plannerAssetSchema).max(48).default([]),
   modelFamily: z.string().trim().max(120).optional(),
   modelEndpoint: z.string().trim().max(120).optional(),
 });
@@ -58,6 +73,10 @@ const subAgentPatchSchema = z.object({
     status: z.enum(['pending', 'running', 'done', 'failed']).default('done'),
     details: z.array(z.string().trim().min(1).max(500)).max(8).default([]),
   })).max(12).optional(),
+  inputSchemaJson: detailJsonSchema.optional(),
+  outputSchemaJson: detailJsonSchema.optional(),
+  toolPolicyJson: detailJsonSchema.optional(),
+  defaultGenerationConfigJson: detailJsonSchema.optional(),
   status: z.enum(['DRAFT', 'ACTIVE', 'DEPRECATED', 'ARCHIVED']).optional(),
 });
 
@@ -105,11 +124,162 @@ function toPrismaJsonInput(value: Prisma.JsonValue | null | undefined) {
   return value as Prisma.InputJsonValue;
 }
 
+function readObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function readStructuredDoc(value: unknown): PlannerStructuredDoc | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as PlannerStructuredDoc) : null;
+}
+
+function deriveDiffSummary(args: {
+  targetStage: 'outline' | 'refinement';
+  partialRerunScope?: 'none' | 'subject_only' | 'scene_only' | 'shots_only';
+  currentStructuredDoc?: Record<string, unknown>;
+  targetEntity?: Record<string, unknown>;
+  assistantPackage: Record<string, unknown>;
+}) {
+  if (args.targetStage !== 'refinement' || !args.partialRerunScope || args.partialRerunScope === 'none') {
+    return [] as string[];
+  }
+
+  const nextDoc = readStructuredDoc(args.assistantPackage.structuredDoc);
+  if (!nextDoc) {
+    return [];
+  }
+
+  return buildPartialDiffSummary({
+    previousDoc: readStructuredDoc(args.currentStructuredDoc),
+    nextDoc,
+    input: {
+      scope: args.partialRerunScope,
+      targetEntity: args.targetEntity ?? {},
+    },
+  });
+}
+
+interface PlannerDebugSelection extends ResolvedPlannerAgentSelection {
+  sourceMetadata: {
+    configSource: 'draft' | 'published';
+    releaseVersion: number | null;
+  };
+}
+
+async function resolvePlannerDebugSelection(args: {
+  contentType: string;
+  subtype: string;
+  subAgentId?: string;
+  configSource: 'draft' | 'published';
+}): Promise<PlannerDebugSelection | null> {
+  if (args.configSource === 'draft') {
+    if (!args.subAgentId) {
+      const selection = await resolvePlannerAgentSelection({
+        contentType: args.contentType,
+        subtype: args.subtype,
+      });
+      if (!selection) {
+        return null;
+      }
+
+      return {
+        ...selection,
+        sourceMetadata: {
+          configSource: 'draft',
+          releaseVersion: null,
+        },
+      };
+    }
+
+    const subAgent = await prisma.plannerSubAgentProfile.findUnique({
+      where: { id: args.subAgentId },
+      include: {
+        agentProfile: true,
+      },
+    });
+    if (!subAgent || !subAgent.agentProfile) {
+      return null;
+    }
+
+    return {
+      contentType: subAgent.agentProfile.contentType,
+      subtype: subAgent.subtype,
+      agentProfile: {
+        id: subAgent.agentProfile.id,
+        slug: subAgent.agentProfile.slug,
+        displayName: subAgent.agentProfile.displayName,
+        defaultSystemPrompt: subAgent.agentProfile.defaultSystemPrompt,
+        defaultDeveloperPrompt: subAgent.agentProfile.defaultDeveloperPrompt,
+        defaultStepDefinitionsJson: subAgent.agentProfile.defaultStepDefinitionsJson,
+      },
+      subAgentProfile: {
+        id: subAgent.id,
+        slug: subAgent.slug,
+        displayName: subAgent.displayName,
+        systemPromptOverride: subAgent.systemPromptOverride,
+        developerPromptOverride: subAgent.developerPromptOverride,
+        stepDefinitionsJson: subAgent.stepDefinitionsJson,
+      },
+      sourceMetadata: {
+        configSource: 'draft' as const,
+        releaseVersion: null,
+      },
+    };
+  }
+
+  const draftSelection: PlannerDebugSelection | ResolvedPlannerAgentSelection | null = args.subAgentId
+    ? await resolvePlannerDebugSelection({
+        contentType: args.contentType,
+        subtype: args.subtype,
+        subAgentId: args.subAgentId,
+        configSource: 'draft',
+      })
+    : await resolvePlannerAgentSelection({
+        contentType: args.contentType,
+        subtype: args.subtype,
+      });
+
+  if (!draftSelection) {
+    return null;
+  }
+
+  const latestRelease = await prisma.plannerSubAgentProfileRelease.findFirst({
+    where: {
+      subAgentProfileId: draftSelection.subAgentProfile.id,
+    },
+    orderBy: [{ releaseVersion: 'desc' }],
+  });
+
+  if (!latestRelease) {
+    throw new Error('当前子 agent 还没有已发布快照，无法使用“已发布配置试跑”。');
+  }
+
+  return {
+    contentType: draftSelection.contentType,
+    subtype: draftSelection.subtype,
+    agentProfile: draftSelection.agentProfile,
+    subAgentProfile: {
+      id: draftSelection.subAgentProfile.id,
+      slug: draftSelection.subAgentProfile.slug,
+      displayName: latestRelease.displayName,
+      systemPromptOverride: latestRelease.systemPromptOverride,
+      developerPromptOverride: latestRelease.developerPromptOverride,
+      stepDefinitionsJson: latestRelease.stepDefinitionsJson,
+    },
+    sourceMetadata: {
+      configSource: 'published' as const,
+      releaseVersion: latestRelease.releaseVersion,
+    },
+  };
+}
+
 async function executePlannerDebugRun(args: {
   userId: string;
   contentType: string;
   subtype: string;
+  subAgentId?: string;
+  configSource: 'draft' | 'published';
   targetStage: 'outline' | 'refinement';
+  partialRerunScope?: 'none' | 'subject_only' | 'scene_only' | 'shots_only';
   projectTitle: string;
   episodeTitle: string;
   userPrompt: string;
@@ -118,15 +288,26 @@ async function executePlannerDebugRun(args: {
   selectedStyleName?: string;
   selectedImageModelLabel?: string;
   priorMessages?: Array<{ role: 'user' | 'assistant'; text: string }>;
+  currentOutlineDoc?: Record<string, unknown>;
   currentStructuredDoc?: Record<string, unknown>;
+  targetEntity?: Record<string, unknown>;
+  plannerAssets?: Array<{
+    id: string;
+    fileName?: string;
+    sourceUrl?: string | null;
+    sourceKind?: string;
+    createdAt?: string;
+  }>;
   modelFamily?: string;
   modelEndpoint?: string;
   compareGroupKey?: string;
   compareLabel?: string;
 }) {
-  const selection = await resolvePlannerAgentSelection({
+  const selection = await resolvePlannerDebugSelection({
     contentType: args.contentType,
     subtype: args.subtype,
+    subAgentId: args.subAgentId,
+    configSource: args.configSource,
   });
   if (!selection) {
     throw new Error('No active planner sub-agent matched the requested content type and subtype.');
@@ -153,6 +334,7 @@ async function executePlannerDebugRun(args: {
     selectedStyleName: args.selectedStyleName,
     selectedImageModelLabel: args.selectedImageModelLabel,
     priorMessages: args.priorMessages ?? [],
+    currentOutlineDoc: args.currentOutlineDoc,
     currentStructuredDoc: args.currentStructuredDoc,
   });
 
@@ -185,7 +367,7 @@ async function executePlannerDebugRun(args: {
     rawText = errorMessage;
   }
 
-  const assistantPackage = parsePlannerAssistantPackage({
+  const parsedAssistantPackage = parsePlannerAssistantPackage({
     targetStage: args.targetStage,
     rawText: rawText ?? '',
     userPrompt: args.userPrompt,
@@ -194,6 +376,30 @@ async function executePlannerDebugRun(args: {
     defaultSteps: promptPackage.stepDefinitions,
     contentType: selection.contentType,
     subtype: selection.subtype,
+  });
+  const assistantPackage =
+    args.targetStage === 'refinement' &&
+    args.partialRerunScope &&
+    args.partialRerunScope !== 'none' &&
+    parsedAssistantPackage.stage === 'refinement'
+      ? {
+          ...parsedAssistantPackage,
+          structuredDoc: applyPartialRerunScope({
+            previousDoc: readStructuredDoc(args.currentStructuredDoc),
+            nextDoc: parsedAssistantPackage.structuredDoc,
+            input: {
+              scope: args.partialRerunScope,
+              targetEntity: args.targetEntity ?? {},
+            },
+          }),
+        }
+      : parsedAssistantPackage;
+  const diffSummary = deriveDiffSummary({
+    targetStage: args.targetStage,
+    partialRerunScope: args.partialRerunScope,
+    currentStructuredDoc: args.currentStructuredDoc,
+    targetEntity: args.targetEntity,
+    assistantPackage: assistantPackage as Record<string, unknown>,
   });
 
   const debugRun = await prisma.plannerDebugRun.create({
@@ -225,7 +431,10 @@ async function executePlannerDebugRun(args: {
       inputJson: {
         contentType: args.contentType,
         subtype: args.subtype,
+        subAgentId: args.subAgentId ?? null,
+        configSource: args.configSource,
         targetStage: args.targetStage,
+        partialRerunScope: args.partialRerunScope ?? 'none',
         projectTitle: args.projectTitle,
         episodeTitle: args.episodeTitle,
         userPrompt: args.userPrompt,
@@ -234,7 +443,10 @@ async function executePlannerDebugRun(args: {
         selectedStyleName: args.selectedStyleName ?? null,
         selectedImageModelLabel: args.selectedImageModelLabel ?? null,
         priorMessages: args.priorMessages ?? [],
+        currentOutlineDoc: args.currentOutlineDoc ?? null,
         currentStructuredDoc: args.currentStructuredDoc ?? null,
+        targetEntity: args.targetEntity ?? null,
+        plannerAssets: args.plannerAssets ?? [],
       } as Prisma.InputJsonValue,
       finalPrompt: promptPackage.promptText,
       rawText,
@@ -252,6 +464,8 @@ async function executePlannerDebugRun(args: {
     debugRunId: debugRun.id,
     createdAt: debugRun.createdAt.toISOString(),
     executionMode,
+    configSource: selection.sourceMetadata.configSource,
+    releaseVersion: selection.sourceMetadata.releaseVersion,
     errorMessage,
     agentProfile: {
       id: selection.agentProfile.id,
@@ -286,6 +500,25 @@ async function executePlannerDebugRun(args: {
     rawText,
     providerOutput,
     assistantPackage,
+    input: {
+      contentType: args.contentType,
+      subtype: args.subtype,
+      targetStage: args.targetStage,
+      partialRerunScope: args.partialRerunScope ?? 'none',
+      projectTitle: args.projectTitle,
+      episodeTitle: args.episodeTitle,
+      userPrompt: args.userPrompt,
+      scriptContent: args.scriptContent ?? null,
+      selectedSubjectName: args.selectedSubjectName ?? null,
+      selectedStyleName: args.selectedStyleName ?? null,
+      selectedImageModelLabel: args.selectedImageModelLabel ?? null,
+      priorMessages: args.priorMessages ?? [],
+      currentOutlineDoc: args.currentOutlineDoc ?? null,
+      currentStructuredDoc: args.currentStructuredDoc ?? null,
+      targetEntity: args.targetEntity ?? null,
+      plannerAssets: args.plannerAssets ?? [],
+    },
+    diffSummary,
   };
 }
 
@@ -424,6 +657,18 @@ export async function registerPlannerDebugRoutes(app: FastifyInstance) {
         rawText: run.rawText,
         providerOutput: run.providerOutputJson,
         assistantPackage: run.assistantPackageJson,
+        diffSummary: deriveDiffSummary({
+          targetStage: readObject(run.inputJson).targetStage === 'outline' ? 'outline' : 'refinement',
+          partialRerunScope:
+            readObject(run.inputJson).partialRerunScope === 'subject_only' ||
+            readObject(run.inputJson).partialRerunScope === 'scene_only' ||
+            readObject(run.inputJson).partialRerunScope === 'shots_only'
+              ? (readObject(run.inputJson).partialRerunScope as 'subject_only' | 'scene_only' | 'shots_only')
+              : 'none',
+          currentStructuredDoc: readObject(run.inputJson).currentStructuredDoc as Record<string, unknown> | undefined,
+          targetEntity: readObject(run.inputJson).targetEntity as Record<string, unknown> | undefined,
+          assistantPackage: readObject(run.assistantPackageJson),
+        }),
       },
     });
   });
@@ -515,6 +760,8 @@ export async function registerPlannerDebugRoutes(app: FastifyInstance) {
           userId: user.id,
           contentType: leftSubAgent.agentProfile.contentType,
           subtype: leftSubAgent.subtype,
+          subAgentId: leftSubAgent.id,
+          configSource: payload.data.configSource,
           targetStage: payload.data.targetStage,
           projectTitle: payload.data.projectTitle,
           episodeTitle: payload.data.episodeTitle,
@@ -524,7 +771,11 @@ export async function registerPlannerDebugRoutes(app: FastifyInstance) {
           selectedStyleName: payload.data.selectedStyleName,
           selectedImageModelLabel: payload.data.selectedImageModelLabel,
           priorMessages: payload.data.priorMessages,
+          currentOutlineDoc: payload.data.currentOutlineDoc,
           currentStructuredDoc: payload.data.currentStructuredDoc,
+          partialRerunScope: payload.data.partialRerunScope,
+          targetEntity: payload.data.targetEntity,
+          plannerAssets: payload.data.plannerAssets,
           modelFamily: payload.data.modelFamily,
           modelEndpoint: payload.data.modelEndpoint,
           compareGroupKey,
@@ -534,6 +785,8 @@ export async function registerPlannerDebugRoutes(app: FastifyInstance) {
           userId: user.id,
           contentType: rightSubAgent.agentProfile.contentType,
           subtype: rightSubAgent.subtype,
+          subAgentId: rightSubAgent.id,
+          configSource: payload.data.configSource,
           targetStage: payload.data.targetStage,
           projectTitle: payload.data.projectTitle,
           episodeTitle: payload.data.episodeTitle,
@@ -543,7 +796,11 @@ export async function registerPlannerDebugRoutes(app: FastifyInstance) {
           selectedStyleName: payload.data.selectedStyleName,
           selectedImageModelLabel: payload.data.selectedImageModelLabel,
           priorMessages: payload.data.priorMessages,
+          currentOutlineDoc: payload.data.currentOutlineDoc,
           currentStructuredDoc: payload.data.currentStructuredDoc,
+          partialRerunScope: payload.data.partialRerunScope,
+          targetEntity: payload.data.targetEntity,
+          plannerAssets: payload.data.plannerAssets,
           modelFamily: payload.data.modelFamily,
           modelEndpoint: payload.data.modelEndpoint,
           compareGroupKey,
@@ -597,6 +854,12 @@ export async function registerPlannerDebugRoutes(app: FastifyInstance) {
         ...(payload.data.systemPromptOverride !== undefined ? { systemPromptOverride: payload.data.systemPromptOverride } : {}),
         ...(payload.data.developerPromptOverride !== undefined ? { developerPromptOverride: payload.data.developerPromptOverride } : {}),
         ...(payload.data.stepDefinitionsJson !== undefined ? { stepDefinitionsJson: payload.data.stepDefinitionsJson } : {}),
+        ...(payload.data.inputSchemaJson !== undefined ? { inputSchemaJson: payload.data.inputSchemaJson as Prisma.InputJsonValue } : {}),
+        ...(payload.data.outputSchemaJson !== undefined ? { outputSchemaJson: payload.data.outputSchemaJson as Prisma.InputJsonValue } : {}),
+        ...(payload.data.toolPolicyJson !== undefined ? { toolPolicyJson: payload.data.toolPolicyJson as Prisma.InputJsonValue } : {}),
+        ...(payload.data.defaultGenerationConfigJson !== undefined
+          ? { defaultGenerationConfigJson: payload.data.defaultGenerationConfigJson as Prisma.InputJsonValue }
+          : {}),
         ...(payload.data.status !== undefined
           ? {
               status: payload.data.status,
@@ -654,6 +917,13 @@ export async function registerPlannerDebugRoutes(app: FastifyInstance) {
         releaseVersion: true,
         displayName: true,
         description: true,
+        systemPromptOverride: true,
+        developerPromptOverride: true,
+        stepDefinitionsJson: true,
+        inputSchemaJson: true,
+        outputSchemaJson: true,
+        toolPolicyJson: true,
+        defaultGenerationConfigJson: true,
         publishedAt: true,
       },
     });

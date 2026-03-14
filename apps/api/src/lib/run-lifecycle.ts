@@ -3,6 +3,7 @@ import type { Run } from '@prisma/client';
 
 import { finalizePlannerConversation } from './planner-orchestrator.js';
 import { extractPlannerText, findStringDeep } from './planner-text-extraction.js';
+import { syncPlannerRefinementProjection } from './planner-refinement-projection.js';
 import { prisma } from './prisma.js';
 
 export type SupportedMediaKind = 'IMAGE' | 'VIDEO';
@@ -146,8 +147,175 @@ export async function failRun(runId: string, errorCode: string, errorMessage: st
 }
 
 export async function finalizeGeneratedRun(run: Run, mediaKind: SupportedMediaKind): Promise<RunLifecycleAction> {
-  if (run.resourceType !== 'shot' || !run.resourceId || !run.projectId || !run.episodeId) {
-    return failRun(run.id, 'RUN_RESOURCE_INVALID', 'Run is missing shot/project/episode linkage.');
+  if (!run.resourceType || !run.resourceId || !run.projectId || !run.episodeId) {
+    return failRun(run.id, 'RUN_RESOURCE_INVALID', 'Run is missing resource/project/episode linkage.');
+  }
+
+  const projectId = run.projectId;
+  const episodeId = run.episodeId;
+  const resourceId = run.resourceId;
+
+  if (run.resourceType !== 'shot' && mediaKind !== 'IMAGE') {
+    return failRun(run.id, 'RUN_RESOURCE_INVALID', 'Planner entities currently only support image generation.');
+  }
+
+  if (run.resourceType === 'planner_subject' || run.resourceType === 'planner_scene' || run.resourceType === 'planner_shot_script') {
+    const input = readObject(run.inputJson);
+    const prompt = typeof input.prompt === 'string' ? input.prompt : 'planner-generated-image';
+    const dimensions = resolveDimensions('IMAGE', run);
+
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+      const project = await tx.project.findUniqueOrThrow({
+        where: { id: projectId },
+        select: { createdById: true },
+      });
+
+      const asset = await tx.asset.create({
+        data: {
+          ownerUserId: project.createdById,
+          projectId,
+          episodeId,
+          mediaKind: 'IMAGE',
+          sourceKind: 'GENERATED',
+          fileName: buildGeneratedFileName(run.id, 'IMAGE'),
+          mimeType: buildGeneratedMimeType('IMAGE'),
+          width: dimensions.width,
+          height: dimensions.height,
+          durationMs: null,
+          sourceUrl: resolveProviderSourceUrl(run, 'IMAGE'),
+          metadataJson: {
+            runId: run.id,
+            prompt,
+            providerJobId: run.providerJobId,
+            providerStatus: run.providerStatus,
+            generatedAt: new Date().toISOString(),
+            options: readObject(input.options),
+            plannerResourceType: run.resourceType,
+            plannerResourceId: resourceId,
+          } as Prisma.InputJsonValue,
+        },
+      });
+
+      let refinementVersionId: string | null = null;
+
+      if (run.resourceType === 'planner_subject') {
+        const subject = await tx.plannerSubject.findUnique({
+          where: { id: resourceId },
+          select: { id: true, refinementVersionId: true, generatedAssetIdsJson: true },
+        });
+        if (!subject) {
+          throw new Error('Planner subject not found for generated image run.');
+        }
+        refinementVersionId = subject.refinementVersionId;
+        const nextGeneratedIds = [
+          asset.id,
+          ...(
+            Array.isArray(subject.generatedAssetIdsJson)
+              ? subject.generatedAssetIdsJson.filter((assetId): assetId is string => typeof assetId === 'string' && assetId.length > 0)
+              : []
+          ),
+        ];
+        await tx.plannerSubject.update({
+          where: { id: subject.id },
+          data: {
+            generatedAssetIdsJson: Array.from(new Set(nextGeneratedIds)).slice(0, 16) as Prisma.InputJsonValue,
+          },
+        });
+      }
+
+      if (run.resourceType === 'planner_scene') {
+        const scene = await tx.plannerScene.findUnique({
+          where: { id: resourceId },
+          select: { id: true, refinementVersionId: true, generatedAssetIdsJson: true },
+        });
+        if (!scene) {
+          throw new Error('Planner scene not found for generated image run.');
+        }
+        refinementVersionId = scene.refinementVersionId;
+        const nextGeneratedIds = [
+          asset.id,
+          ...(
+            Array.isArray(scene.generatedAssetIdsJson)
+              ? scene.generatedAssetIdsJson.filter((assetId): assetId is string => typeof assetId === 'string' && assetId.length > 0)
+              : []
+          ),
+        ];
+        await tx.plannerScene.update({
+          where: { id: scene.id },
+          data: {
+            generatedAssetIdsJson: Array.from(new Set(nextGeneratedIds)).slice(0, 16) as Prisma.InputJsonValue,
+          },
+        });
+      }
+
+      if (run.resourceType === 'planner_shot_script') {
+        const shotScript = await tx.plannerShotScript.findUnique({
+          where: { id: resourceId },
+          select: { id: true, refinementVersionId: true, generatedAssetIdsJson: true },
+        });
+        if (!shotScript) {
+          throw new Error('Planner shot script not found for generated image run.');
+        }
+        refinementVersionId = shotScript.refinementVersionId;
+        const nextGeneratedIds = [
+          asset.id,
+          ...(
+            Array.isArray(shotScript.generatedAssetIdsJson)
+              ? shotScript.generatedAssetIdsJson.filter((assetId): assetId is string => typeof assetId === 'string' && assetId.length > 0)
+              : []
+          ),
+        ];
+        await tx.plannerShotScript.update({
+          where: { id: shotScript.id },
+          data: {
+            generatedAssetIdsJson: Array.from(new Set(nextGeneratedIds)).slice(0, 16) as Prisma.InputJsonValue,
+          },
+        });
+      }
+
+      if (refinementVersionId) {
+        await syncPlannerRefinementProjection({
+          db: tx,
+          refinementVersionId,
+        });
+      }
+
+      await tx.run.update({
+        where: { id: run.id },
+        data: {
+          status: 'COMPLETED',
+          providerStatus: run.providerStatus ?? (run.providerJobId ? 'succeeded' : null),
+          outputJson: {
+            ...readObject(run.outputJson),
+            assetId: asset.id,
+            plannerResourceType: run.resourceType,
+            plannerResourceId: run.resourceId,
+            dimensions,
+          },
+          finishedAt: new Date(),
+          nextPollAt: null,
+        },
+      });
+
+      return { assetId: asset.id };
+      return { assetId: asset.id };
+      });
+
+      return {
+        runId: run.id,
+        status: 'completed',
+        action: 'processed',
+        assetId: result.assetId,
+      };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Planner entity image finalization failed.';
+      return failRun(run.id, 'PLANNER_ENTITY_IMAGE_FINALIZE_FAILED', message);
+    }
+  }
+
+  if (run.resourceType !== 'shot') {
+    return failRun(run.id, 'RUN_RESOURCE_INVALID', 'Unsupported generated run resource type.');
   }
 
   const shot = await prisma.shot.findUnique({

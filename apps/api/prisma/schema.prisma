@@ -528,6 +528,8 @@ model PlannerShotScript {
   voiceRole           String                   @map("voice_role") @db.VarChar(120)
   dialogue            String                   @db.Text
   subjectBindingsJson Json?                    @map("subject_bindings_json")
+  referenceAssetIdsJson Json?                  @map("reference_asset_ids_json")
+  generatedAssetIdsJson Json?                  @map("generated_asset_ids_json")
   sortOrder           Int                      @map("sort_order") @default(100)
   createdAt           DateTime                 @default(now()) @map("created_at")
   updatedAt           DateTime                 @updatedAt @map("updated_at")

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { requireUser } from '../lib/auth.js';
+import { mapAsset } from '../lib/api-mappers.js';
 import { prisma } from '../lib/prisma.js';
 
 const workspaceParamsSchema = z.object({
@@ -215,6 +216,63 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
     const refinementSubjects = activeRefinement?.subjects ?? [];
     const refinementScenes = activeRefinement?.scenes ?? [];
     const refinementShotScripts = activeRefinement?.shotScripts ?? [];
+    const plannerAssetIds = new Set<string>();
+
+    for (const subject of refinementSubjects) {
+      for (const assetId of Array.isArray(subject.referenceAssetIdsJson) ? subject.referenceAssetIdsJson : []) {
+        if (typeof assetId === 'string' && assetId) {
+          plannerAssetIds.add(assetId);
+        }
+      }
+      for (const assetId of Array.isArray(subject.generatedAssetIdsJson) ? subject.generatedAssetIdsJson : []) {
+        if (typeof assetId === 'string' && assetId) {
+          plannerAssetIds.add(assetId);
+        }
+      }
+    }
+
+    for (const scene of refinementScenes) {
+      for (const assetId of Array.isArray(scene.referenceAssetIdsJson) ? scene.referenceAssetIdsJson : []) {
+        if (typeof assetId === 'string' && assetId) {
+          plannerAssetIds.add(assetId);
+        }
+      }
+      for (const assetId of Array.isArray(scene.generatedAssetIdsJson) ? scene.generatedAssetIdsJson : []) {
+        if (typeof assetId === 'string' && assetId) {
+          plannerAssetIds.add(assetId);
+        }
+      }
+    }
+
+    for (const shot of refinementShotScripts) {
+      for (const assetId of Array.isArray(shot.referenceAssetIdsJson) ? shot.referenceAssetIdsJson : []) {
+        if (typeof assetId === 'string' && assetId) {
+          plannerAssetIds.add(assetId);
+        }
+      }
+      for (const assetId of Array.isArray(shot.generatedAssetIdsJson) ? shot.generatedAssetIdsJson : []) {
+        if (typeof assetId === 'string' && assetId) {
+          plannerAssetIds.add(assetId);
+        }
+      }
+    }
+
+    const plannerAssets = plannerAssetIds.size
+      ? await prisma.asset.findMany({
+          where: {
+            id: { in: Array.from(plannerAssetIds) },
+          },
+          orderBy: { createdAt: 'desc' },
+        })
+      : [];
+    const plannerAssetMap = new Map(plannerAssets.map((asset) => [asset.id, mapAsset(asset)]));
+
+    function resolveAssets(ids: unknown[]) {
+      return ids
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+        .map((id) => plannerAssetMap.get(id))
+        .filter((asset): asset is NonNullable<ReturnType<typeof mapAsset>> => Boolean(asset));
+    }
 
     return reply.send({
       ok: true,
@@ -331,6 +389,8 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
                 negativePrompt: subject.negativePrompt,
                 referenceAssetIds: Array.isArray(subject.referenceAssetIdsJson) ? subject.referenceAssetIdsJson : [],
                 generatedAssetIds: Array.isArray(subject.generatedAssetIdsJson) ? subject.generatedAssetIdsJson : [],
+                referenceAssets: resolveAssets(Array.isArray(subject.referenceAssetIdsJson) ? subject.referenceAssetIdsJson : []),
+                generatedAssets: resolveAssets(Array.isArray(subject.generatedAssetIdsJson) ? subject.generatedAssetIdsJson : []),
                 sortOrder: subject.sortOrder,
                 editable: subject.editable,
               })),
@@ -344,6 +404,8 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
                 negativePrompt: scene.negativePrompt,
                 referenceAssetIds: Array.isArray(scene.referenceAssetIdsJson) ? scene.referenceAssetIdsJson : [],
                 generatedAssetIds: Array.isArray(scene.generatedAssetIdsJson) ? scene.generatedAssetIdsJson : [],
+                referenceAssets: resolveAssets(Array.isArray(scene.referenceAssetIdsJson) ? scene.referenceAssetIdsJson : []),
+                generatedAssets: resolveAssets(Array.isArray(scene.generatedAssetIdsJson) ? scene.generatedAssetIdsJson : []),
                 sortOrder: scene.sortOrder,
                 editable: scene.editable,
               })),
@@ -361,6 +423,10 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
                 voiceRole: shot.voiceRole,
                 dialogue: shot.dialogue,
                 subjectBindings: Array.isArray(shot.subjectBindingsJson) ? shot.subjectBindingsJson : [],
+                referenceAssetIds: Array.isArray(shot.referenceAssetIdsJson) ? shot.referenceAssetIdsJson : [],
+                generatedAssetIds: Array.isArray(shot.generatedAssetIdsJson) ? shot.generatedAssetIdsJson : [],
+                referenceAssets: resolveAssets(Array.isArray(shot.referenceAssetIdsJson) ? shot.referenceAssetIdsJson : []),
+                generatedAssets: resolveAssets(Array.isArray(shot.generatedAssetIdsJson) ? shot.generatedAssetIdsJson : []),
                 sortOrder: shot.sortOrder,
               })),
               stepAnalysis: activeRefinement.stepAnalysis.map((step) => ({
@@ -384,6 +450,8 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
           negativePrompt: subject.negativePrompt,
           referenceAssetIds: Array.isArray(subject.referenceAssetIdsJson) ? subject.referenceAssetIdsJson : [],
           generatedAssetIds: Array.isArray(subject.generatedAssetIdsJson) ? subject.generatedAssetIdsJson : [],
+          referenceAssets: resolveAssets(Array.isArray(subject.referenceAssetIdsJson) ? subject.referenceAssetIdsJson : []),
+          generatedAssets: resolveAssets(Array.isArray(subject.generatedAssetIdsJson) ? subject.generatedAssetIdsJson : []),
           sortOrder: subject.sortOrder,
           editable: subject.editable,
         })),
@@ -397,6 +465,8 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
           negativePrompt: scene.negativePrompt,
           referenceAssetIds: Array.isArray(scene.referenceAssetIdsJson) ? scene.referenceAssetIdsJson : [],
           generatedAssetIds: Array.isArray(scene.generatedAssetIdsJson) ? scene.generatedAssetIdsJson : [],
+          referenceAssets: resolveAssets(Array.isArray(scene.referenceAssetIdsJson) ? scene.referenceAssetIdsJson : []),
+          generatedAssets: resolveAssets(Array.isArray(scene.generatedAssetIdsJson) ? scene.generatedAssetIdsJson : []),
           sortOrder: scene.sortOrder,
           editable: scene.editable,
         })),
@@ -414,6 +484,10 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
           voiceRole: shot.voiceRole,
           dialogue: shot.dialogue,
           subjectBindings: Array.isArray(shot.subjectBindingsJson) ? shot.subjectBindingsJson : [],
+          referenceAssetIds: Array.isArray(shot.referenceAssetIdsJson) ? shot.referenceAssetIdsJson : [],
+          generatedAssetIds: Array.isArray(shot.generatedAssetIdsJson) ? shot.generatedAssetIdsJson : [],
+          referenceAssets: resolveAssets(Array.isArray(shot.referenceAssetIdsJson) ? shot.referenceAssetIdsJson : []),
+          generatedAssets: resolveAssets(Array.isArray(shot.generatedAssetIdsJson) ? shot.generatedAssetIdsJson : []),
           sortOrder: shot.sortOrder,
         })),
         refinementVersions: refinementVersions.map((version) => ({

@@ -59,6 +59,8 @@ export async function registerPlannerAgentProfileRoutes(app: FastifyInstance) {
         defaultSystemPrompt: profile.defaultSystemPrompt,
         defaultDeveloperPrompt: profile.defaultDeveloperPrompt,
         defaultStepDefinitionsJson: profile.defaultStepDefinitionsJson,
+        defaultInputSchemaJson: profile.defaultInputSchemaJson,
+        defaultOutputSchemaJson: profile.defaultOutputSchemaJson,
         subAgentProfiles: profile.subAgentProfiles.map((subAgent) => ({
           id: subAgent.id,
           slug: subAgent.slug,
@@ -70,6 +72,10 @@ export async function registerPlannerAgentProfileRoutes(app: FastifyInstance) {
           systemPromptOverride: subAgent.systemPromptOverride,
           developerPromptOverride: subAgent.developerPromptOverride,
           stepDefinitionsJson: subAgent.stepDefinitionsJson,
+          inputSchemaJson: subAgent.inputSchemaJson,
+          outputSchemaJson: subAgent.outputSchemaJson,
+          toolPolicyJson: subAgent.toolPolicyJson,
+          defaultGenerationConfigJson: subAgent.defaultGenerationConfigJson,
         })),
       })),
     });

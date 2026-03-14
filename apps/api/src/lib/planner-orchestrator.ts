@@ -3,7 +3,9 @@ import type { PlannerSession, Run } from '@prisma/client';
 
 import type { ResolvedPlannerAgentSelection } from './planner-agent-registry.js';
 import { parsePlannerAssistantPackage, type PlannerStepAnalysisItem } from './planner-agent-schemas.js';
+import type { PlannerStructuredDoc } from './planner-doc.js';
 import { prisma } from './prisma.js';
+import { applyPartialRerunScope, buildPartialDiffSummary } from './planner-refinement-partial.js';
 import { syncPlannerRefinementDerivedData } from './planner-refinement-sync.js';
 
 type PlannerDbClient = Prisma.TransactionClient | typeof prisma;
@@ -60,6 +62,10 @@ function normalizeSteps(rawValue: unknown): PlannerStepAnalysisItem[] {
       } satisfies PlannerStepAnalysisItem;
     })
     .filter((value): value is PlannerStepAnalysisItem => value !== null);
+}
+
+function readStructuredDoc(value: unknown): PlannerStructuredDoc | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as PlannerStructuredDoc) : null;
 }
 
 export function resolvePlannerStepDefinitions(selection: ResolvedPlannerAgentSelection) {
@@ -173,7 +179,7 @@ export async function finalizePlannerConversation(args: {
   const targetStage = readString(input.targetStage) === 'outline' ? 'outline' : 'refinement';
   const triggerType = readString(input.triggerType) ?? (targetStage === 'outline' ? 'generate_outline' : 'generate_doc');
 
-  const assistantPackage = parsePlannerAssistantPackage({
+  const rawAssistantPackage = parsePlannerAssistantPackage({
     targetStage,
     rawText: args.generatedText,
     userPrompt,
@@ -184,6 +190,30 @@ export async function finalizePlannerConversation(args: {
     subtype,
     contentMode,
   });
+  const previousStructuredDoc = readStructuredDoc(
+    input.contextSnapshot && typeof input.contextSnapshot === 'object' && !Array.isArray(input.contextSnapshot)
+      ? readObject(readObject(input.contextSnapshot).activeRefinement).structuredDoc
+      : null,
+  );
+  const assistantPackage =
+    rawAssistantPackage.stage === 'refinement'
+      ? {
+          ...rawAssistantPackage,
+          structuredDoc: applyPartialRerunScope({
+            previousDoc: previousStructuredDoc,
+            nextDoc: rawAssistantPackage.structuredDoc,
+            input,
+          }),
+        }
+      : rawAssistantPackage;
+  const diffSummary =
+    assistantPackage.stage === 'refinement'
+      ? buildPartialDiffSummary({
+          previousDoc: previousStructuredDoc,
+          nextDoc: assistantPackage.structuredDoc,
+          input,
+        })
+      : [];
 
   if (assistantPackage.stage === 'outline') {
     const result = await prisma.$transaction(async (tx) => {
@@ -309,6 +339,15 @@ export async function finalizePlannerConversation(args: {
 
   const result = await prisma.$transaction(async (tx) => {
     const confirmedAt = triggerType === 'confirm_outline' ? new Date() : null;
+    const previousActiveRefinement = await tx.plannerRefinementVersion.findFirst({
+      where: {
+        plannerSessionId: args.plannerSession.id,
+        isActive: true,
+      },
+      select: {
+        structuredDocJson: true,
+      },
+    });
 
     const nextVersionNumber =
       (
@@ -369,6 +408,10 @@ export async function finalizePlannerConversation(args: {
       db: tx,
       refinementVersionId: refinementVersion.id,
       structuredDoc: assistantPackage.structuredDoc,
+      previousProjection:
+        previousActiveRefinement?.structuredDocJson && typeof previousActiveRefinement.structuredDocJson === 'object' && !Array.isArray(previousActiveRefinement.structuredDocJson)
+          ? (previousActiveRefinement.structuredDocJson as Record<string, unknown>)
+          : null,
     });
 
     await tx.plannerMessage.createMany({
@@ -401,6 +444,7 @@ export async function finalizePlannerConversation(args: {
           contentJson: {
             text: '我已按照您的要求完成策划并将内容更新到您右侧的策划文档。',
             documentTitle: refinementVersion.documentTitle,
+            diffSummary,
           } satisfies Prisma.InputJsonValue,
           createdById: args.createdById ?? null,
         },
@@ -476,6 +520,7 @@ export async function finalizePlannerConversation(args: {
           generatedText: args.generatedText,
           structuredDoc: assistantPackage.structuredDoc,
           assistantPackage,
+          diffSummary,
           plannerSessionId: args.plannerSession.id,
           refinementVersionId: refinementVersion.id,
         } satisfies Prisma.InputJsonValue,

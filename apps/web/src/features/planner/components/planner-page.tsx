@@ -81,6 +81,54 @@ interface PlannerHistoryVersionView {
   createdAt: number;
 }
 
+interface PlannerRuntimeAssetOption {
+  id: string;
+  sourceUrl: string | null;
+  fileName: string;
+  mediaKind: string;
+  sourceKind: string;
+  createdAt: string;
+}
+
+interface PlannerAssetThumbCandidate {
+  key: string;
+  image: string;
+  assetId: string | null;
+  label: string;
+  sourceKind: string | null;
+  createdAt?: string;
+}
+
+function plannerAssetSourceLabel(sourceKind: string | undefined) {
+  switch ((sourceKind ?? '').toLowerCase()) {
+    case 'generated':
+      return 'AI生成';
+    case 'reference':
+      return '参考图';
+    case 'imported':
+      return '导入素材';
+    case 'upload':
+      return '本地上传';
+    default:
+      return '项目素材';
+  }
+}
+
+function plannerAssetSortWeight(sourceKind: string | null) {
+  switch ((sourceKind ?? '').toLowerCase()) {
+    case 'generated':
+      return 0;
+    case 'upload':
+      return 1;
+    case 'reference':
+      return 2;
+    case 'imported':
+      return 3;
+    default:
+      return 4;
+  }
+}
+
 const BOOT_PROGRESS_STEPS = [28, 49, 67, 85, 100];
 
 const STYLE_LIBRARY = [
@@ -204,6 +252,133 @@ async function deletePlannerEntity<T>(path: string) {
   }
 
   return payload.data;
+}
+
+async function uploadPlannerImageAsset(args: {
+  projectId: string;
+  episodeId: string;
+  file: File;
+}) {
+  const formData = new FormData();
+  formData.set('episodeId', args.episodeId);
+  formData.set('file', args.file);
+
+  const response = await fetch(`/api/planner/projects/${encodeURIComponent(args.projectId)}/assets/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  const payload = (await response.json()) as ApiEnvelope<PlannerRuntimeAssetOption>;
+  if (!response.ok || !payload.ok) {
+    const errorPayload = payload as ApiEnvelopeFailure;
+    throw new Error(errorPayload.error?.message ?? 'Upload failed.');
+  }
+
+  return payload.data;
+}
+
+async function putPlannerEntity<T>(path: string, body: Record<string, unknown>) {
+  const response = await fetch(path, {
+    method: 'PUT',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const payload = (await response.json()) as ApiEnvelope<T>;
+  if (!response.ok || !payload.ok) {
+    const errorPayload = payload as ApiEnvelopeFailure;
+    throw new Error(errorPayload.error?.message ?? `Request failed: ${path}`);
+  }
+
+  return payload.data;
+}
+
+function buildPlannerAssetThumbCandidates(args: {
+  linkedAssets?: Array<{ id: string; sourceUrl: string | null; fileName: string; sourceKind?: string; createdAt?: string }>;
+  availableAssets: PlannerRuntimeAssetOption[];
+  fallbackImages: string[];
+  activeImage: string | null;
+  fallbackPrefix: string;
+}) {
+  const seenAssetIds = new Set<string>();
+  const seenImages = new Set<string>();
+  const items: PlannerAssetThumbCandidate[] = [];
+
+  const pushCandidate = (candidate: PlannerAssetThumbCandidate) => {
+    if (!candidate.image) {
+      return;
+    }
+    if (candidate.assetId) {
+      if (seenAssetIds.has(candidate.assetId)) {
+        return;
+      }
+      seenAssetIds.add(candidate.assetId);
+    }
+    if (seenImages.has(candidate.image)) {
+      return;
+    }
+    seenImages.add(candidate.image);
+    items.push(candidate);
+  };
+
+  for (const asset of args.linkedAssets ?? []) {
+    pushCandidate({
+      key: `linked-${asset.id}`,
+      image: asset.sourceUrl ?? '',
+      assetId: asset.id,
+      label: `${plannerAssetSourceLabel(asset.sourceKind)} · ${asset.fileName || '关联素材'}`,
+      sourceKind: asset.sourceKind ?? null,
+      createdAt: asset.createdAt,
+    });
+  }
+
+  for (const asset of args.availableAssets) {
+    pushCandidate({
+      key: `asset-${asset.id}`,
+      image: asset.sourceUrl ?? '',
+      assetId: asset.id,
+      label: `${plannerAssetSourceLabel(asset.sourceKind)} · ${asset.fileName || '项目素材'}`,
+      sourceKind: asset.sourceKind,
+      createdAt: asset.createdAt,
+    });
+  }
+
+  for (const [index, image] of args.fallbackImages.entries()) {
+    pushCandidate({
+      key: `${args.fallbackPrefix}-${index}`,
+      image,
+      assetId: null,
+      label: '本地占位图',
+      sourceKind: null,
+    });
+  }
+
+  if (args.activeImage && !seenImages.has(args.activeImage)) {
+    items.unshift({
+      key: `${args.fallbackPrefix}-active`,
+      image: args.activeImage,
+      assetId: null,
+      label: '当前预览',
+      sourceKind: null,
+    });
+  }
+
+  return items
+    .slice()
+    .sort((left, right) => {
+      const weightDiff = plannerAssetSortWeight(left.sourceKind) - plannerAssetSortWeight(right.sourceKind);
+      if (weightDiff !== 0) {
+        return weightDiff;
+      }
+
+      const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+      const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+      return rightTime - leftTime;
+    })
+    .slice(0, 10);
 }
 
 function readMessageText(content: Record<string, unknown> | null | undefined) {
@@ -389,6 +564,8 @@ function ratioCardWidth(ratio: PlannerAssetRatio) {
 export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialStructuredDoc, initialPlannerReady, initialWorkspace }: PlannerPageProps) {
   const router = useRouter();
   const timersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const subjectUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const sceneUploadInputRef = useRef<HTMLInputElement | null>(null);
 
   const plannerMode: PlannerMode = studio.project.contentMode === 'series' ? 'series' : 'single';
 
@@ -405,18 +582,22 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
   const [runtimeWorkspace, setRuntimeWorkspace] = useState<ApiPlannerWorkspace | null>(initialWorkspace ?? null);
   const [messages, setMessages] = useState<PlannerThreadMessage[]>(() => mapWorkspaceMessagesToThread(initialWorkspace?.messages));
+  const [plannerImageAssets, setPlannerImageAssets] = useState<PlannerRuntimeAssetOption[]>([]);
 
   const [subjectDialogCardId, setSubjectDialogCardId] = useState<string | null>(null);
   const [subjectNameDraft, setSubjectNameDraft] = useState('');
   const [subjectPromptDraft, setSubjectPromptDraft] = useState('');
   const [subjectImageDraft, setSubjectImageDraft] = useState('');
   const [subjectAdjustMode, setSubjectAdjustMode] = useState<'upload' | 'ai'>('ai');
+  const [subjectAssetDraftId, setSubjectAssetDraftId] = useState<string | null>(null);
+  const [assetUploadPending, setAssetUploadPending] = useState<'subject' | 'scene' | null>(null);
 
   const [sceneDialogCardId, setSceneDialogCardId] = useState<string | null>(null);
   const [sceneNameDraft, setSceneNameDraft] = useState('');
   const [scenePromptDraft, setScenePromptDraft] = useState('');
   const [sceneImageDraft, setSceneImageDraft] = useState('');
   const [sceneAdjustMode, setSceneAdjustMode] = useState<'upload' | 'ai'>('ai');
+  const [sceneAssetDraftId, setSceneAssetDraftId] = useState<string | null>(null);
 
   const [editingShot, setEditingShot] = useState<ShotPointer | null>(null);
   const [shotDraft, setShotDraft] = useState<ShotDraftState | null>(null);
@@ -532,7 +713,17 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
 
   const pollPlannerRunUntilTerminal = async (
     runId: string,
-    trigger: 'generate_outline' | 'update_outline' | 'confirm_outline' | 'rerun',
+    trigger:
+      | 'generate_outline'
+      | 'update_outline'
+      | 'confirm_outline'
+      | 'rerun'
+      | 'subject_only'
+      | 'scene_only'
+      | 'shots_only'
+      | 'subject_image'
+      | 'scene_image'
+      | 'shot_image',
     instruction: string,
   ) => {
     for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -564,6 +755,18 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
           workspace?.activeRefinement
             ? trigger === 'confirm_outline'
               ? '已完成细化并更新策划文档。'
+              : trigger === 'subject_only'
+                ? '已按要求局部重写主体并更新策划文档。'
+                : trigger === 'scene_only'
+                  ? '已按要求局部重写场景并更新策划文档。'
+                  : trigger === 'shots_only'
+                    ? '已按要求局部重写分镜并更新策划文档。'
+                    : trigger === 'subject_image'
+                      ? '已生成主体图片并回写到策划文档。'
+                      : trigger === 'scene_image'
+                        ? '已生成场景图片并回写到策划文档。'
+                        : trigger === 'shot_image'
+                          ? '已生成分镜草图并回写到策划文档。'
               : '已生成新的策划版本。'
             : trigger === 'generate_outline' || trigger === 'update_outline'
               ? '已生成新的剧本大纲版本。'
@@ -610,6 +813,57 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
     return true;
   };
 
+  const submitPartialRerunViaApi = async (
+    scope: 'subject_only' | 'scene_only' | 'shots_only',
+    targetId: string,
+    instruction: string,
+  ) => {
+    if (!runtimeApi) {
+      return false;
+    }
+
+    setPlannerSubmitting(true);
+    const result = await requestPlannerApi<{ run: { id: string; status: string } }>(
+      `/api/planner/projects/${encodeURIComponent(runtimeApi.projectId)}/partial-rerun`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          episodeId: runtimeApi.episodeId,
+          scope,
+          targetId,
+          prompt: instruction,
+        }),
+      },
+    );
+
+    await pollPlannerRunUntilTerminal(result.run.id, scope, instruction);
+    return true;
+  };
+
+  const submitPlannerImageGenerationViaApi = async (
+    scope: 'subject_image' | 'scene_image' | 'shot_image',
+    targetPath: string,
+    prompt: string,
+    referenceAssetIds: string[] = [],
+  ) => {
+    if (!runtimeApi) {
+      return false;
+    }
+
+    setPlannerSubmitting(true);
+    const result = await requestPlannerApi<{ run: { id: string; status: string } }>(targetPath, {
+      method: 'POST',
+      body: JSON.stringify({
+        episodeId: runtimeApi.episodeId,
+        prompt,
+        referenceAssetIds,
+      }),
+    });
+
+    await pollPlannerRunUntilTerminal(result.run.id, scope, prompt);
+    return true;
+  };
+
   useEffect(() => {
     if (!plannerEpisodes.some((item) => item.id === activeEpisodeId)) {
       setActiveEpisodeId(plannerEpisodes[0]?.id ?? 'episode-1');
@@ -624,8 +878,12 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
     const workspace = await requestPlannerApi<ApiPlannerWorkspace>(
       `/api/planner/projects/${encodeURIComponent(runtimeApi.projectId)}/workspace?episodeId=${encodeURIComponent(runtimeApi.episodeId)}`,
     );
+    const assets = await requestPlannerApi<PlannerRuntimeAssetOption[]>(
+      `/api/planner/projects/${encodeURIComponent(runtimeApi.projectId)}/assets?episodeId=${encodeURIComponent(runtimeApi.episodeId)}&mediaKind=image`,
+    );
 
     setRuntimeWorkspace(workspace);
+    setPlannerImageAssets(assets);
     setDisplayTitle(workspace.project.title);
     setMessages(mapWorkspaceMessagesToThread(workspace.messages));
     setServerPlannerText(workspace.latestPlannerRun?.generatedText ?? '');
@@ -746,6 +1004,13 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
     return displaySubjectCards.find((item) => item.id === subjectDialogCardId) ?? null;
   }, [displaySubjectCards, subjectDialogCardId]);
 
+  const activeRuntimeSubject = useMemo(() => {
+    if (!subjectDialogCardId) {
+      return null;
+    }
+    return runtimeWorkspace?.subjects?.find((item) => item.id === subjectDialogCardId) ?? null;
+  }, [runtimeWorkspace?.subjects, subjectDialogCardId]);
+
   const activeSceneCard = useMemo(() => {
     if (!sceneDialogCardId) {
       return null;
@@ -753,6 +1018,57 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
 
     return displaySceneCards.find((item) => item.id === sceneDialogCardId) ?? null;
   }, [displaySceneCards, sceneDialogCardId]);
+
+  const activeRuntimeScene = useMemo(() => {
+    if (!sceneDialogCardId) {
+      return null;
+    }
+    return runtimeWorkspace?.scenes?.find((item) => item.id === sceneDialogCardId) ?? null;
+  }, [runtimeWorkspace?.scenes, sceneDialogCardId]);
+
+  const subjectAssetThumbs = useMemo(
+    () =>
+      buildPlannerAssetThumbCandidates({
+        linkedAssets: [
+          ...(activeRuntimeSubject?.generatedAssets ?? []),
+          ...(activeRuntimeSubject?.referenceAssets ?? []),
+        ],
+        availableAssets: plannerImageAssets,
+        fallbackImages: SUBJECT_IMAGE_POOL,
+        activeImage: subjectImageDraft || activeSubjectCard?.image || null,
+        fallbackPrefix: 'subject-thumb',
+      }),
+    [activeRuntimeSubject?.generatedAssets, activeRuntimeSubject?.referenceAssets, activeSubjectCard?.image, plannerImageAssets, subjectImageDraft],
+  );
+
+  const sceneAssetThumbs = useMemo(
+    () =>
+      buildPlannerAssetThumbCandidates({
+        linkedAssets: [
+          ...(activeRuntimeScene?.generatedAssets ?? []),
+          ...(activeRuntimeScene?.referenceAssets ?? []),
+        ],
+        availableAssets: plannerImageAssets,
+        fallbackImages: SCENE_IMAGE_POOL,
+        activeImage: sceneImageDraft || activeSceneCard?.image || null,
+        fallbackPrefix: 'scene-thumb',
+      }),
+    [activeRuntimeScene?.generatedAssets, activeRuntimeScene?.referenceAssets, activeSceneCard?.image, plannerImageAssets, sceneImageDraft],
+  );
+
+  const activeSubjectAssetLabel = useMemo(() => {
+    const selectedThumb = subjectAssetThumbs.find((image) =>
+      image.assetId ? image.assetId === subjectAssetDraftId : !subjectAssetDraftId && (subjectImageDraft || activeSubjectCard?.image) === image.image,
+    );
+    return selectedThumb?.label ?? '可选择项目图片素材或占位图';
+  }, [activeSubjectCard?.image, subjectAssetDraftId, subjectAssetThumbs, subjectImageDraft]);
+
+  const activeSceneAssetLabel = useMemo(() => {
+    const selectedThumb = sceneAssetThumbs.find((image) =>
+      image.assetId ? image.assetId === sceneAssetDraftId : !sceneAssetDraftId && (sceneImageDraft || activeSceneCard?.image) === image.image,
+    );
+    return selectedThumb?.label ?? '可选择项目图片素材或占位图';
+  }, [activeSceneCard?.image, sceneAssetDraftId, sceneAssetThumbs, sceneImageDraft]);
 
   const deletingShot = useMemo(() => {
     if (!shotDeleteDialog) {
@@ -889,6 +1205,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
 
   const openSubjectAdjustDialog = (cardId: string) => {
     const target = displaySubjectCards.find((item) => item.id === cardId);
+    const runtimeTarget = runtimeWorkspace?.subjects?.find((item) => item.id === cardId) ?? null;
     if (!target) {
       return;
     }
@@ -897,6 +1214,11 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
     setSubjectNameDraft(target.title);
     setSubjectPromptDraft(target.prompt);
     setSubjectImageDraft(target.image);
+    setSubjectAssetDraftId(
+      runtimeTarget?.generatedAssets?.[0]?.id
+      ?? runtimeTarget?.referenceAssets?.[0]?.id
+      ?? null,
+    );
     setSubjectAdjustMode('ai');
   };
 
@@ -905,7 +1227,35 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
     setSubjectNameDraft('');
     setSubjectPromptDraft('');
     setSubjectImageDraft('');
+    setSubjectAssetDraftId(null);
     setSubjectAdjustMode('ai');
+  };
+
+  const handleSubjectUpload = async (file: File | null) => {
+    if (!file || !runtimeApi) {
+      return;
+    }
+
+    setAssetUploadPending('subject');
+    try {
+      const uploadedAsset = await uploadPlannerImageAsset({
+        projectId: runtimeApi.projectId,
+        episodeId: runtimeApi.episodeId,
+        file,
+      });
+      setPlannerImageAssets((current) => [uploadedAsset, ...current.filter((asset) => asset.id !== uploadedAsset.id)]);
+      setSubjectImageDraft(uploadedAsset.sourceUrl ?? '');
+      setSubjectAssetDraftId(uploadedAsset.id);
+      setSubjectAdjustMode('upload');
+      setNotice('主体参考图已上传。');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '主体参考图上传失败。');
+    } finally {
+      setAssetUploadPending(null);
+      if (subjectUploadInputRef.current) {
+        subjectUploadInputRef.current.value = '';
+      }
+    }
   };
 
   const applySubjectAdjust = () => {
@@ -924,8 +1274,19 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
         },
       )
         .then(async () => {
+          const isExistingGeneratedAsset = Boolean(
+            subjectAssetDraftId && activeRuntimeSubject?.generatedAssets?.some((asset) => asset.id === subjectAssetDraftId),
+          );
+          await putPlannerEntity(
+            `/api/planner/projects/${encodeURIComponent(runtimeApi.projectId)}/subjects/${encodeURIComponent(subjectDialogCardId)}/assets`,
+            {
+              episodeId: runtimeApi.episodeId,
+              referenceAssetIds: subjectAssetDraftId && !isExistingGeneratedAsset ? [subjectAssetDraftId] : [],
+              generatedAssetIds: subjectAssetDraftId && isExistingGeneratedAsset ? [subjectAssetDraftId] : [],
+            },
+          );
           await refreshPlannerWorkspace();
-          setNotice('主体设定已更新。示例图仍为本地预览。');
+          setNotice('主体设定已更新。');
         })
         .catch((error: unknown) => {
           setNotice(error instanceof Error ? error.message : '主体设定更新失败。');
@@ -964,6 +1325,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
 
   const openSceneAdjustDialog = (cardId: string) => {
     const target = displaySceneCards.find((item) => item.id === cardId);
+    const runtimeTarget = runtimeWorkspace?.scenes?.find((item) => item.id === cardId) ?? null;
     if (!target) {
       return;
     }
@@ -972,6 +1334,11 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
     setSceneNameDraft(target.title);
     setScenePromptDraft(target.prompt);
     setSceneImageDraft(target.image);
+    setSceneAssetDraftId(
+      runtimeTarget?.generatedAssets?.[0]?.id
+      ?? runtimeTarget?.referenceAssets?.[0]?.id
+      ?? null,
+    );
     setSceneAdjustMode('ai');
   };
 
@@ -980,7 +1347,35 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
     setSceneNameDraft('');
     setScenePromptDraft('');
     setSceneImageDraft('');
+    setSceneAssetDraftId(null);
     setSceneAdjustMode('ai');
+  };
+
+  const handleSceneUpload = async (file: File | null) => {
+    if (!file || !runtimeApi) {
+      return;
+    }
+
+    setAssetUploadPending('scene');
+    try {
+      const uploadedAsset = await uploadPlannerImageAsset({
+        projectId: runtimeApi.projectId,
+        episodeId: runtimeApi.episodeId,
+        file,
+      });
+      setPlannerImageAssets((current) => [uploadedAsset, ...current.filter((asset) => asset.id !== uploadedAsset.id)]);
+      setSceneImageDraft(uploadedAsset.sourceUrl ?? '');
+      setSceneAssetDraftId(uploadedAsset.id);
+      setSceneAdjustMode('upload');
+      setNotice('场景参考图已上传。');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '场景参考图上传失败。');
+    } finally {
+      setAssetUploadPending(null);
+      if (sceneUploadInputRef.current) {
+        sceneUploadInputRef.current.value = '';
+      }
+    }
   };
 
   const applySceneAdjust = () => {
@@ -999,8 +1394,19 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
         },
       )
         .then(async () => {
+          const isExistingGeneratedAsset = Boolean(
+            sceneAssetDraftId && activeRuntimeScene?.generatedAssets?.some((asset) => asset.id === sceneAssetDraftId),
+          );
+          await putPlannerEntity(
+            `/api/planner/projects/${encodeURIComponent(runtimeApi.projectId)}/scenes/${encodeURIComponent(sceneDialogCardId)}/assets`,
+            {
+              episodeId: runtimeApi.episodeId,
+              referenceAssetIds: sceneAssetDraftId && !isExistingGeneratedAsset ? [sceneAssetDraftId] : [],
+              generatedAssetIds: sceneAssetDraftId && isExistingGeneratedAsset ? [sceneAssetDraftId] : [],
+            },
+          );
           await refreshPlannerWorkspace();
-          setNotice('场景设定已更新。示例图仍为本地预览。');
+          setNotice('场景设定已更新。');
         })
         .catch((error: unknown) => {
           setNotice(error instanceof Error ? error.message : '场景设定更新失败。');
@@ -1116,6 +1522,123 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
       '分镜内容已更新。',
     );
     cancelShotInlineEditor();
+  };
+
+  const rerunSubjectAdjust = () => {
+    if (!runtimeApi || !subjectDialogCardId) {
+      return;
+    }
+
+    submitPartialRerunViaApi('subject_only', subjectDialogCardId, subjectPromptDraft.trim() || subjectNameDraft.trim())
+      .then(async () => {
+        await refreshPlannerWorkspace();
+        closeSubjectAdjustDialog();
+      })
+      .catch((error: unknown) => {
+        setPlannerSubmitting(false);
+        setNotice(error instanceof Error ? error.message : '主体局部重写失败。');
+      });
+    setNotice('已提交主体局部重写任务。');
+  };
+
+  const generateSubjectImage = () => {
+    if (!runtimeApi || !subjectDialogCardId) {
+      return;
+    }
+
+    submitPlannerImageGenerationViaApi(
+      'subject_image',
+      `/api/planner/projects/${encodeURIComponent(runtimeApi.projectId)}/subjects/${encodeURIComponent(subjectDialogCardId)}/generate-image`,
+      subjectPromptDraft.trim() || subjectNameDraft.trim(),
+      subjectAssetDraftId ? [subjectAssetDraftId] : [],
+    )
+      .then(async () => {
+        await refreshPlannerWorkspace();
+        setSubjectImageDraft('');
+      })
+      .catch((error: unknown) => {
+        setPlannerSubmitting(false);
+        setNotice(error instanceof Error ? error.message : '主体图片生成失败。');
+      });
+    setNotice('已提交主体图片生成任务。');
+  };
+
+  const rerunSceneAdjust = () => {
+    if (!runtimeApi || !sceneDialogCardId) {
+      return;
+    }
+
+    submitPartialRerunViaApi('scene_only', sceneDialogCardId, scenePromptDraft.trim() || sceneNameDraft.trim())
+      .then(async () => {
+        await refreshPlannerWorkspace();
+        closeSceneAdjustDialog();
+      })
+      .catch((error: unknown) => {
+        setPlannerSubmitting(false);
+        setNotice(error instanceof Error ? error.message : '场景局部重写失败。');
+      });
+    setNotice('已提交场景局部重写任务。');
+  };
+
+  const generateSceneImage = () => {
+    if (!runtimeApi || !sceneDialogCardId) {
+      return;
+    }
+
+    submitPlannerImageGenerationViaApi(
+      'scene_image',
+      `/api/planner/projects/${encodeURIComponent(runtimeApi.projectId)}/scenes/${encodeURIComponent(sceneDialogCardId)}/generate-image`,
+      scenePromptDraft.trim() || sceneNameDraft.trim(),
+      sceneAssetDraftId ? [sceneAssetDraftId] : [],
+    )
+      .then(async () => {
+        await refreshPlannerWorkspace();
+        setSceneImageDraft('');
+      })
+      .catch((error: unknown) => {
+        setPlannerSubmitting(false);
+        setNotice(error instanceof Error ? error.message : '场景图片生成失败。');
+      });
+    setNotice('已提交场景图片生成任务。');
+  };
+
+  const rerunShotAdjust = () => {
+    if (!runtimeApi || !editingShot || !shotDraft) {
+      return;
+    }
+
+    const shotPrompt = [shotDraft.visual, shotDraft.composition, shotDraft.motion, shotDraft.line].filter(Boolean).join('\n');
+    submitPartialRerunViaApi('shots_only', editingShot.shotId, shotPrompt)
+      .then(async () => {
+        await refreshPlannerWorkspace();
+        cancelShotInlineEditor();
+      })
+      .catch((error: unknown) => {
+        setPlannerSubmitting(false);
+        setNotice(error instanceof Error ? error.message : '分镜局部重写失败。');
+      });
+    setNotice('已提交分镜局部重写任务。');
+  };
+
+  const generateShotImage = () => {
+    if (!runtimeApi || !editingShot || !shotDraft) {
+      return;
+    }
+
+    const shotPrompt = [shotDraft.visual, shotDraft.composition, shotDraft.motion].filter(Boolean).join('\n');
+    submitPlannerImageGenerationViaApi(
+      'shot_image',
+      `/api/planner/projects/${encodeURIComponent(runtimeApi.projectId)}/shot-scripts/${encodeURIComponent(editingShot.shotId)}/generate-image`,
+      shotPrompt,
+    )
+      .then(async () => {
+        await refreshPlannerWorkspace();
+      })
+      .catch((error: unknown) => {
+        setPlannerSubmitting(false);
+        setNotice(error instanceof Error ? error.message : '分镜草图生成失败。');
+      });
+    setNotice('已提交分镜草图生成任务。');
   };
 
   const openShotDeleteDialog = (actId: string, shotId: string) => {
@@ -1366,6 +1889,10 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
                       }
 
                       if (item.messageType === 'assistant_document_receipt') {
+                        const diffSummary =
+                          Array.isArray(item.rawContent?.diffSummary)
+                            ? item.rawContent.diffSummary.filter((detail): detail is string => typeof detail === 'string' && detail.trim().length > 0)
+                            : [];
                         return (
                           <article key={item.id} className={styles.assistantThread}>
                             <header className={styles.messageAgentHeader}>
@@ -1376,6 +1903,13 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
                             <article className={styles.threadNoticeCard}>
                               <strong>{receiptTitle ? `已更新：${receiptTitle}` : '已更新右侧策划文档'}</strong>
                               <p>{item.content || '策划文档已同步完成，可继续追问或切换版本。'}</p>
+                              {diffSummary.length > 0 ? (
+                                <ul className={styles.threadNoticeList}>
+                                  {diffSummary.map((detail) => (
+                                    <li key={`${item.id}-${detail}`}>{detail}</li>
+                                  ))}
+                                </ul>
+                              ) : null}
                               {runtimeActiveRefinement ? (
                                 <p>{`当前版本：V${runtimeActiveRefinement.versionNumber} · ${runtimeActiveRefinement.subAgentProfile?.displayName ?? '未命名子 Agent'}`}</p>
                               ) : null}
@@ -1754,6 +2288,11 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
 
                               return (
                                 <article key={shot.id} className={cx(styles.scriptCard, styles.scriptShotCard, isEditingShot && styles.scriptShotCardEditing)}>
+                                  {shot.image ? (
+                                    <div className={styles.shotPreviewImageWrap}>
+                                      <img src={shot.image} alt={`${shot.title} 草图`} className={styles.shotPreviewImage} />
+                                    </div>
+                                  ) : null}
                                   <p className={styles.shotTitleLine}>
                                     <span>{shot.title}</span>
                                   </p>
@@ -1815,6 +2354,16 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
                                   <div className={cx(styles.shotActionButtons, isEditingShot && styles.shotActionButtonsEditing)}>
                                     {isEditingShot ? (
                                       <>
+                                        {runtimeApi ? (
+                                          <button type="button" className={styles.shotRerunButton} onClick={rerunShotAdjust}>
+                                            AI重写
+                                          </button>
+                                        ) : null}
+                                        {runtimeApi ? (
+                                          <button type="button" className={styles.shotSketchButton} onClick={generateShotImage}>
+                                            生成草图
+                                          </button>
+                                        ) : null}
                                         <button type="button" className={styles.shotCancelButton} onClick={cancelShotInlineEditor}>
                                           取消
                                         </button>
@@ -1924,14 +2473,23 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
               <div className={styles.assetPreviewPane}>
                 <img src={subjectImageDraft || activeSubjectCard.image} alt={activeSubjectCard.title} />
                 <div className={styles.assetThumbRow}>
-                  {SUBJECT_IMAGE_POOL.slice(0, 5).map((image) => (
+                  {subjectAssetThumbs.map((image) => (
                     <button
-                      key={`subject-thumb-${image}`}
+                      key={image.key}
                       type="button"
-                      className={cx(styles.assetThumbButton, (subjectImageDraft || activeSubjectCard.image) === image && styles.assetThumbButtonActive)}
-                      onClick={() => setSubjectImageDraft(image)}
+                      className={cx(
+                        styles.assetThumbButton,
+                        image.assetId
+                          ? subjectAssetDraftId === image.assetId && styles.assetThumbButtonActive
+                          : !subjectAssetDraftId && (subjectImageDraft || activeSubjectCard.image) === image.image && styles.assetThumbButtonActive,
+                      )}
+                      onClick={() => {
+                        setSubjectImageDraft(image.image);
+                        setSubjectAssetDraftId(image.assetId);
+                      }}
+                      title={image.label}
                     >
-                      <img src={image} alt="主体参考图" />
+                      <img src={image.image} alt={image.label} />
                     </button>
                   ))}
                 </div>
@@ -1978,19 +2536,48 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
                     <button
                       type="button"
                       className={styles.assetPromptSend}
-                      onClick={() => setSubjectImageDraft(nextImageFromPool(subjectImageDraft || activeSubjectCard.image, SUBJECT_IMAGE_POOL))}
-                      aria-label="根据描述生成"
+                      onClick={generateSubjectImage}
+                      aria-label="根据描述生成图片"
+                      disabled={!runtimeApi || !subjectPromptDraft.trim() || plannerSubmitting}
                     >
                       <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
                         <path d="M4.5 7.427 8 4.072m0 0 3.5 3.355M8 4.072v7.855" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </button>
                   </div>
+                  {subjectAdjustMode === 'upload' ? (
+                    <div className={styles.assetUploadBox}>
+                      <input
+                        ref={subjectUploadInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className={styles.assetUploadInput}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0] ?? null;
+                          void handleSubjectUpload(file);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className={styles.assetUploadButton}
+                        onClick={() => subjectUploadInputRef.current?.click()}
+                        disabled={!runtimeApi || assetUploadPending === 'subject'}
+                      >
+                        {assetUploadPending === 'subject' ? '上传中...' : '选择本地图片'}
+                      </button>
+                      <p className={styles.assetUploadHint}>支持 png / jpeg / webp，上传后会进入项目素材并自动绑定到当前主体。</p>
+                    </div>
+                  ) : null}
                 </div>
 
                 <footer className={styles.assetModalFooter}>
-                  <span>主体范例</span>
+                  <span>{activeSubjectAssetLabel}</span>
                   <div className={styles.assetModalActions}>
+                    {runtimeApi ? (
+                      <button type="button" className={styles.assetSecondaryButton} onClick={rerunSubjectAdjust}>
+                        AI重写设定
+                      </button>
+                    ) : null}
                     <button type="button" className={styles.assetGhostButton} onClick={closeSubjectAdjustDialog}>
                       取消
                     </button>
@@ -2022,14 +2609,23 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
               <div className={styles.assetPreviewPane}>
                 <img src={sceneImageDraft || activeSceneCard.image} alt={activeSceneCard.title} />
                 <div className={styles.assetThumbRow}>
-                  {SCENE_IMAGE_POOL.slice(0, 5).map((image) => (
+                  {sceneAssetThumbs.map((image) => (
                     <button
-                      key={`scene-thumb-${image}`}
+                      key={image.key}
                       type="button"
-                      className={cx(styles.assetThumbButton, (sceneImageDraft || activeSceneCard.image) === image && styles.assetThumbButtonActive)}
-                      onClick={() => setSceneImageDraft(image)}
+                      className={cx(
+                        styles.assetThumbButton,
+                        image.assetId
+                          ? sceneAssetDraftId === image.assetId && styles.assetThumbButtonActive
+                          : !sceneAssetDraftId && (sceneImageDraft || activeSceneCard.image) === image.image && styles.assetThumbButtonActive,
+                      )}
+                      onClick={() => {
+                        setSceneImageDraft(image.image);
+                        setSceneAssetDraftId(image.assetId);
+                      }}
+                      title={image.label}
                     >
-                      <img src={image} alt="场景参考图" />
+                      <img src={image.image} alt={image.label} />
                     </button>
                   ))}
                 </div>
@@ -2068,19 +2664,48 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
                     <button
                       type="button"
                       className={styles.assetPromptSend}
-                      onClick={() => setSceneImageDraft(nextImageFromPool(sceneImageDraft || activeSceneCard.image, SCENE_IMAGE_POOL))}
-                      aria-label="根据描述生成"
+                      onClick={generateSceneImage}
+                      aria-label="根据描述生成图片"
+                      disabled={!runtimeApi || !scenePromptDraft.trim() || plannerSubmitting}
                     >
                       <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
                         <path d="M4.5 7.427 8 4.072m0 0 3.5 3.355M8 4.072v7.855" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </button>
                   </div>
+                  {sceneAdjustMode === 'upload' ? (
+                    <div className={styles.assetUploadBox}>
+                      <input
+                        ref={sceneUploadInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className={styles.assetUploadInput}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0] ?? null;
+                          void handleSceneUpload(file);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className={styles.assetUploadButton}
+                        onClick={() => sceneUploadInputRef.current?.click()}
+                        disabled={!runtimeApi || assetUploadPending === 'scene'}
+                      >
+                        {assetUploadPending === 'scene' ? '上传中...' : '选择本地图片'}
+                      </button>
+                      <p className={styles.assetUploadHint}>支持 png / jpeg / webp，上传后会进入项目素材并自动绑定到当前场景。</p>
+                    </div>
+                  ) : null}
                 </div>
 
                 <footer className={styles.assetModalFooter}>
-                  <span>主体范例</span>
+                  <span>{activeSceneAssetLabel}</span>
                   <div className={styles.assetModalActions}>
+                    {runtimeApi ? (
+                      <button type="button" className={styles.assetSecondaryButton} onClick={rerunSceneAdjust}>
+                        AI重写设定
+                      </button>
+                    ) : null}
                     <button type="button" className={styles.assetGhostButton} onClick={closeSceneAdjustDialog}>
                       取消
                     </button>

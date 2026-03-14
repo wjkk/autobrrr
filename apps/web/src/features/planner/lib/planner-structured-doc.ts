@@ -5,12 +5,20 @@ interface RuntimePlannerSubject {
   id: string;
   name: string;
   prompt: string;
+  referenceAssetIds?: string[];
+  generatedAssetIds?: string[];
+  referenceAssets?: Array<{ sourceUrl: string | null; sourceKind?: string; createdAt?: string }>;
+  generatedAssets?: Array<{ sourceUrl: string | null; sourceKind?: string; createdAt?: string }>;
 }
 
 interface RuntimePlannerScene {
   id: string;
   name: string;
   prompt: string;
+  referenceAssetIds?: string[];
+  generatedAssetIds?: string[];
+  referenceAssets?: Array<{ sourceUrl: string | null; sourceKind?: string; createdAt?: string }>;
+  generatedAssets?: Array<{ sourceUrl: string | null; sourceKind?: string; createdAt?: string }>;
 }
 
 interface RuntimePlannerShotScript {
@@ -26,6 +34,43 @@ interface RuntimePlannerShotScript {
   voiceRole: string;
   dialogue: string;
   sortOrder: number;
+  referenceAssetIds?: string[];
+  generatedAssetIds?: string[];
+  referenceAssets?: Array<{ sourceUrl: string | null; sourceKind?: string; createdAt?: string }>;
+  generatedAssets?: Array<{ sourceUrl: string | null; sourceKind?: string; createdAt?: string }>;
+}
+
+export function plannerAssetPriority(sourceKind: string | undefined) {
+  switch ((sourceKind ?? '').toLowerCase()) {
+    case 'generated':
+      return 0;
+    case 'upload':
+      return 1;
+    case 'reference':
+      return 2;
+    case 'imported':
+      return 3;
+    default:
+      return 4;
+  }
+}
+
+export function choosePlannerAssetUrl(
+  assets: Array<{ sourceUrl: string | null; sourceKind?: string; createdAt?: string }> | undefined,
+) {
+  return (assets ?? [])
+    .filter((asset): asset is { sourceUrl: string; sourceKind?: string; createdAt?: string } => typeof asset.sourceUrl === 'string' && asset.sourceUrl.length > 0)
+    .slice()
+    .sort((left, right) => {
+      const priorityDiff = plannerAssetPriority(left.sourceKind) - plannerAssetPriority(right.sourceKind);
+      if (priorityDiff !== 0) {
+        return priorityDiff;
+      }
+
+      const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+      const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+      return rightTime - leftTime;
+    })[0]?.sourceUrl;
 }
 
 export interface PlannerStructuredDoc {
@@ -37,9 +82,9 @@ export interface PlannerStructuredDoc {
   highlights: Array<{ title: string; description: string }>;
   styleBullets: string[];
   subjectBullets: string[];
-  subjects: Array<{ title: string; prompt: string }>;
+  subjects: Array<{ title: string; prompt: string; referenceAssetIds?: string[]; generatedAssetIds?: string[] }>;
   sceneBullets: string[];
-  scenes: Array<{ title: string; prompt: string }>;
+  scenes: Array<{ title: string; prompt: string; referenceAssetIds?: string[]; generatedAssetIds?: string[] }>;
   scriptSummary: string[];
   acts: Array<{
     title: string;
@@ -52,6 +97,8 @@ export interface PlannerStructuredDoc {
       motion: string;
       voice: string;
       line: string;
+      referenceAssetIds?: string[];
+      generatedAssetIds?: string[];
     }>;
   }>;
 }
@@ -74,6 +121,7 @@ function normalizeActs(items: PlannerStructuredDoc['acts']): SekoActDraft[] {
     shots: act.shots.map((shot, shotIndex) => ({
       id: `act-${actIndex + 1}-shot-${shotIndex + 1}`,
       title: shot.title,
+      image: undefined,
       visual: shot.visual,
       composition: shot.composition,
       motion: shot.motion,
@@ -114,11 +162,15 @@ export function toStructuredPlannerDoc(seed: SekoPlanData): PlannerStructuredDoc
     subjects: seed.subjects.map((item) => ({
       title: item.title,
       prompt: item.prompt,
+      referenceAssetIds: [],
+      generatedAssetIds: [],
     })),
     sceneBullets: seed.sceneBullets,
     scenes: seed.scenes.map((item) => ({
       title: item.title,
       prompt: item.prompt,
+      referenceAssetIds: [],
+      generatedAssetIds: [],
     })),
     scriptSummary: seed.scriptSummary,
     acts: seed.acts.map((act) => ({
@@ -132,6 +184,8 @@ export function toStructuredPlannerDoc(seed: SekoPlanData): PlannerStructuredDoc
         motion: shot.motion,
         voice: shot.voice,
         line: shot.line,
+        referenceAssetIds: [],
+        generatedAssetIds: [],
       })),
     })),
   };
@@ -153,11 +207,15 @@ export function outlineToPreviewStructuredPlannerDoc(outline: PlannerOutlineDoc)
     subjects: outline.mainCharacters.map((item) => ({
       title: item.name,
       prompt: `${item.role}，${item.description}`,
+      referenceAssetIds: [],
+      generatedAssetIds: [],
     })),
     sceneBullets: outline.storyArc.map((item) => item.summary),
     scenes: outline.storyArc.slice(0, 4).map((item) => ({
       title: item.title,
       prompt: item.summary,
+      referenceAssetIds: [],
+      generatedAssetIds: [],
     })),
     scriptSummary: outline.storyArc.map((item) => item.summary),
     acts: [],
@@ -169,7 +227,7 @@ export function runtimeSubjectsToImageCards(subjects: RuntimePlannerSubject[], f
     id: subject.id,
     title: subject.name,
     prompt: subject.prompt,
-    image: fallbackImages[index % fallbackImages.length] ?? '',
+    image: choosePlannerAssetUrl([...(subject.generatedAssets ?? []), ...(subject.referenceAssets ?? [])]) ?? fallbackImages[index % fallbackImages.length] ?? '',
   }));
 }
 
@@ -178,7 +236,7 @@ export function runtimeScenesToImageCards(scenes: RuntimePlannerScene[], fallbac
     id: scene.id,
     title: scene.name,
     prompt: scene.prompt,
-    image: fallbackImages[index % fallbackImages.length] ?? '',
+    image: choosePlannerAssetUrl([...(scene.generatedAssets ?? []), ...(scene.referenceAssets ?? [])]) ?? fallbackImages[index % fallbackImages.length] ?? '',
   }));
 }
 
@@ -205,11 +263,14 @@ export function runtimeShotScriptsToActs(
     act.shots.push({
       id: shot.id,
       title: shot.title || shot.shotNo,
+      image: choosePlannerAssetUrl([...(shot.generatedAssets ?? []), ...(shot.referenceAssets ?? [])]) ?? undefined,
       visual: shot.visualDescription,
       composition: shot.composition,
       motion: shot.cameraMotion,
       voice: shot.voiceRole,
       line: shot.dialogue,
+      referenceAssetIds: shot.referenceAssetIds ?? [],
+      generatedAssetIds: shot.generatedAssetIds ?? [],
     });
 
     if (!existingAct) {

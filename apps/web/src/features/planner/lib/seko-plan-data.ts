@@ -8,6 +8,9 @@ export interface SekoImageCard {
 export interface SekoShotDraft {
   id: string;
   title: string;
+  image?: string;
+  referenceAssetIds?: string[];
+  generatedAssetIds?: string[];
   visual: string;
   composition: string;
   motion: string;

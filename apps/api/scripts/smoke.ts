@@ -474,8 +474,18 @@ async function main() {
   });
 
   const plannerWorkspaceAfterEntityUpdates = await request<{
-    subjects: Array<{ id: string; name: string; prompt: string }>;
-    scenes: Array<{ id: string; name: string; description: string }>;
+    subjects: Array<{
+      id: string;
+      name: string;
+      prompt: string;
+      referenceAssets?: Array<{ id: string }>;
+    }>;
+    scenes: Array<{
+      id: string;
+      name: string;
+      description: string;
+      referenceAssets?: Array<{ id: string }>;
+    }>;
     shotScripts: Array<{ id: string; visualDescription: string; composition: string; cameraMotion: string; dialogue: string }>;
     activeRefinement: { structuredDoc: { subjects: Array<{ title: string; prompt: string }>; scenes: Array<{ title: string; prompt: string }>; acts: Array<{ shots: Array<{ visual: string; composition: string; motion: string; line: string }> }> } | null } | null;
   }>(`/api/projects/${createdProject.data.projectId}/planner/workspace?episodeId=${episodeId}`, { cookie });
@@ -489,26 +499,6 @@ async function main() {
     throw new Error('Planner entity-level updates were not reflected in workspace.');
   }
   console.log('[smoke] planner entity updates reflected in workspace');
-
-  const createdShot = await request<{
-    id: string;
-    projectId: string;
-    episodeId: string;
-    sequenceNo: number;
-    title: string;
-  }>(`/api/projects/${createdProject.data.projectId}/shots`, {
-    method: 'POST',
-    cookie,
-    body: JSON.stringify({
-      episodeId,
-      title: '分镜1',
-      subtitleText: '固定镜头，机械猫看向窗外。',
-      narrationText: '雨夜中的机械猫安静观察城市。',
-      imagePrompt: '雨夜、窗边、机械猫、霓虹城市、电影感',
-      motionPrompt: '固定镜头，轻微推近，雨滴反光',
-    }),
-  });
-  console.log(`[smoke] shot created: ${createdShot.data.id}`);
 
   const createdAsset = await request<{ id: string; mediaKind: string; sourceKind: string }>(
     `/api/projects/${createdProject.data.projectId}/assets`,
@@ -532,6 +522,244 @@ async function main() {
     },
   );
   console.log(`[smoke] asset created: ${createdAsset.data.id}`);
+
+  await request(`/api/projects/${createdProject.data.projectId}/planner/subjects/${firstSubject.id}/assets`, {
+    method: 'PUT',
+    cookie,
+    body: JSON.stringify({
+      episodeId,
+      referenceAssetIds: [createdAsset.data.id],
+      generatedAssetIds: [],
+    }),
+  });
+  await request(`/api/projects/${createdProject.data.projectId}/planner/scenes/${firstScene.id}/assets`, {
+    method: 'PUT',
+    cookie,
+    body: JSON.stringify({
+      episodeId,
+      referenceAssetIds: [createdAsset.data.id],
+      generatedAssetIds: [],
+    }),
+  });
+
+  const plannerWorkspaceAfterAssetBinding = await request<{
+    subjects: Array<{ id: string; referenceAssets?: Array<{ id: string }> }>;
+    scenes: Array<{ id: string; referenceAssets?: Array<{ id: string }> }>;
+  }>(`/api/projects/${createdProject.data.projectId}/planner/workspace?episodeId=${episodeId}`, { cookie });
+  if (
+    plannerWorkspaceAfterAssetBinding.data.subjects[0]?.referenceAssets?.[0]?.id !== createdAsset.data.id
+    || plannerWorkspaceAfterAssetBinding.data.scenes[0]?.referenceAssets?.[0]?.id !== createdAsset.data.id
+  ) {
+    throw new Error('Planner subject/scene asset bindings were not reflected in workspace.');
+  }
+  console.log('[smoke] planner asset bindings reflected in workspace');
+
+  const subjectPartialRun = await request<{ run: { id: string; status: string } }>(
+    `/api/projects/${createdProject.data.projectId}/planner/partial-rerun`,
+    {
+      method: 'POST',
+      cookie,
+      body: JSON.stringify({
+        episodeId,
+        scope: 'subject_only',
+        targetId: firstSubject.id,
+        prompt: '让主体更有机械感，但保持雨夜孤独氛围。',
+      }),
+    },
+  );
+  const processedSubjectPartialRun = await processUntilMatch(
+    (processed) => !!processed && processed.runId === subjectPartialRun.data.run.id && processed.action === 'processed',
+    20,
+  );
+  if (!processedSubjectPartialRun) {
+    throw new Error('Subject-only partial rerun was not processed.');
+  }
+  const subjectPartialRunDetail = await request<{ status: string; output: { structuredDoc?: Record<string, unknown> } | null }>(
+    `/api/runs/${subjectPartialRun.data.run.id}`,
+    { cookie },
+  );
+  if (subjectPartialRunDetail.data.status !== 'completed' || !subjectPartialRunDetail.data.output?.structuredDoc) {
+    throw new Error('Subject-only partial rerun did not complete with structured output.');
+  }
+  console.log('[smoke] subject-only partial rerun completed');
+
+  const workspaceAfterSubjectPartialRun = await request<{
+    scenes: Array<{ id: string }>;
+    shotScripts: Array<{ id: string }>;
+  }>(`/api/projects/${createdProject.data.projectId}/planner/workspace?episodeId=${episodeId}`, { cookie });
+  const refreshedSceneId = workspaceAfterSubjectPartialRun.data.scenes[0]?.id;
+  const refreshedShotScriptId = workspaceAfterSubjectPartialRun.data.shotScripts[0]?.id;
+  if (!refreshedSceneId || !refreshedShotScriptId) {
+    throw new Error('Planner workspace did not return refreshed scene/shot ids after subject partial rerun.');
+  }
+
+  const scenePartialRun = await request<{ run: { id: string; status: string } }>(
+    `/api/projects/${createdProject.data.projectId}/planner/partial-rerun`,
+    {
+      method: 'POST',
+      cookie,
+      body: JSON.stringify({
+        episodeId,
+        scope: 'scene_only',
+        targetId: refreshedSceneId,
+        prompt: '让场景更湿冷，强化雨水反光和路灯层次。',
+      }),
+    },
+  );
+  const processedScenePartialRun = await processUntilMatch(
+    (processed) => !!processed && processed.runId === scenePartialRun.data.run.id && processed.action === 'processed',
+    20,
+  );
+  if (!processedScenePartialRun) {
+    throw new Error('Scene-only partial rerun was not processed.');
+  }
+  const scenePartialRunDetail = await request<{ status: string }>(`/api/runs/${scenePartialRun.data.run.id}`, { cookie });
+  if (scenePartialRunDetail.data.status !== 'completed') {
+    throw new Error('Scene-only partial rerun did not complete.');
+  }
+  console.log('[smoke] scene-only partial rerun completed');
+
+  const workspaceAfterScenePartialRun = await request<{
+    shotScripts: Array<{ id: string }>;
+  }>(`/api/projects/${createdProject.data.projectId}/planner/workspace?episodeId=${episodeId}`, { cookie });
+  const refreshedShotAfterScenePartialRun = workspaceAfterScenePartialRun.data.shotScripts[0]?.id;
+  if (!refreshedShotAfterScenePartialRun) {
+    throw new Error('Planner workspace did not return refreshed shot ids after scene partial rerun.');
+  }
+
+  const shotsPartialRun = await request<{ run: { id: string; status: string } }>(
+    `/api/projects/${createdProject.data.projectId}/planner/partial-rerun`,
+    {
+      method: 'POST',
+      cookie,
+      body: JSON.stringify({
+        episodeId,
+        scope: 'shots_only',
+        targetId: refreshedShotAfterScenePartialRun,
+        prompt: '把这个分镜改成更近的特写，并增加一点情绪停顿。',
+      }),
+    },
+  );
+  const processedShotsPartialRun = await processUntilMatch(
+    (processed) => !!processed && processed.runId === shotsPartialRun.data.run.id && processed.action === 'processed',
+    20,
+  );
+  if (!processedShotsPartialRun) {
+    throw new Error('Shots-only partial rerun was not processed.');
+  }
+  const shotsPartialRunDetail = await request<{ status: string }>(`/api/runs/${shotsPartialRun.data.run.id}`, { cookie });
+  if (shotsPartialRunDetail.data.status !== 'completed') {
+    throw new Error('Shots-only partial rerun did not complete.');
+  }
+  console.log('[smoke] shots-only partial rerun completed');
+
+  const workspaceAfterShotPartialRun = await request<{
+    subjects: Array<{ id: string }>;
+    scenes: Array<{ id: string }>;
+    shotScripts: Array<{ id: string }>;
+  }>(`/api/projects/${createdProject.data.projectId}/planner/workspace?episodeId=${episodeId}`, { cookie });
+  const subjectForImage = workspaceAfterShotPartialRun.data.subjects[0]?.id;
+  const sceneForImage = workspaceAfterShotPartialRun.data.scenes[0]?.id;
+  const shotForImage = workspaceAfterShotPartialRun.data.shotScripts[0]?.id;
+  if (!subjectForImage || !sceneForImage || !shotForImage) {
+    throw new Error('Planner workspace did not expose refreshed entity ids for image generation.');
+  }
+
+  const subjectImageRun = await request<{ run: { id: string; status: string } }>(
+    `/api/projects/${createdProject.data.projectId}/planner/subjects/${subjectForImage}/generate-image`,
+    {
+      method: 'POST',
+      cookie,
+      body: JSON.stringify({
+        episodeId,
+        prompt: '生成一个雨夜机械感更强的主体立绘。',
+        referenceAssetIds: [createdAsset.data.id],
+      }),
+    },
+  );
+  const processedSubjectImageRun = await processUntilMatch(
+    (processed) => !!processed && processed.runId === subjectImageRun.data.run.id && processed.action === 'processed',
+    20,
+  );
+  if (!processedSubjectImageRun) {
+    throw new Error('Planner subject image run was not processed.');
+  }
+  console.log('[smoke] planner subject image run completed');
+
+  const sceneImageRun = await request<{ run: { id: string; status: string } }>(
+    `/api/projects/${createdProject.data.projectId}/planner/scenes/${sceneForImage}/generate-image`,
+    {
+      method: 'POST',
+      cookie,
+      body: JSON.stringify({
+        episodeId,
+        prompt: '生成一个更潮湿、更有反光层次的街头场景图。',
+        referenceAssetIds: [createdAsset.data.id],
+      }),
+    },
+  );
+  const processedSceneImageRun = await processUntilMatch(
+    (processed) => !!processed && processed.runId === sceneImageRun.data.run.id && processed.action === 'processed',
+    20,
+  );
+  if (!processedSceneImageRun) {
+    throw new Error('Planner scene image run was not processed.');
+  }
+  console.log('[smoke] planner scene image run completed');
+
+  const shotImageRun = await request<{ run: { id: string; status: string } }>(
+    `/api/projects/${createdProject.data.projectId}/planner/shot-scripts/${shotForImage}/generate-image`,
+    {
+      method: 'POST',
+      cookie,
+      body: JSON.stringify({
+        episodeId,
+        prompt: '生成这个分镜的写实电影感草图。',
+      }),
+    },
+  );
+  const processedShotImageRun = await processUntilMatch(
+    (processed) => !!processed && processed.runId === shotImageRun.data.run.id && processed.action === 'processed',
+    20,
+  );
+  if (!processedShotImageRun) {
+    throw new Error('Planner shot image run was not processed.');
+  }
+  console.log('[smoke] planner shot image run completed');
+
+  const workspaceAfterPlannerImages = await request<{
+    subjects: Array<{ generatedAssets?: Array<{ id: string }> }>;
+    scenes: Array<{ generatedAssets?: Array<{ id: string }> }>;
+    shotScripts: Array<{ generatedAssets?: Array<{ id: string }> }>;
+  }>(`/api/projects/${createdProject.data.projectId}/planner/workspace?episodeId=${episodeId}`, { cookie });
+  if (
+    !workspaceAfterPlannerImages.data.subjects[0]?.generatedAssets?.length
+    || !workspaceAfterPlannerImages.data.scenes[0]?.generatedAssets?.length
+    || !workspaceAfterPlannerImages.data.shotScripts[0]?.generatedAssets?.length
+  ) {
+    throw new Error('Planner image generation results were not reflected in workspace.');
+  }
+  console.log('[smoke] planner image generation results reflected in workspace');
+
+  const createdShot = await request<{
+    id: string;
+    projectId: string;
+    episodeId: string;
+    sequenceNo: number;
+    title: string;
+  }>(`/api/projects/${createdProject.data.projectId}/shots`, {
+    method: 'POST',
+    cookie,
+    body: JSON.stringify({
+      episodeId,
+      title: '分镜1',
+      subtitleText: '固定镜头，机械猫看向窗外。',
+      narrationText: '雨夜中的机械猫安静观察城市。',
+      imagePrompt: '雨夜、窗边、机械猫、霓虹城市、电影感',
+      motionPrompt: '固定镜头，轻微推近，雨滴反光',
+    }),
+  });
+  console.log(`[smoke] shot created: ${createdShot.data.id}`);
 
   const imageRun = await request<{ run: { id: string; status: string } }>(
     `/api/projects/${createdProject.data.projectId}/shots/${createdShot.data.id}/generate-image`,

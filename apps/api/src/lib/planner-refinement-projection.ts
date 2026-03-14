@@ -8,14 +8,34 @@ interface ProjectionInput {
   refinementVersion: Pick<PlannerRefinementVersion, 'id' | 'sourceRunId'> & {
     structuredDocJson: Prisma.JsonValue | null;
   };
-  subjects: Array<Pick<PlannerSubject, 'id' | 'name' | 'appearance' | 'prompt' | 'sortOrder'>>;
-  scenes: Array<Pick<PlannerScene, 'id' | 'name' | 'time' | 'description' | 'prompt' | 'sortOrder'>>;
+  subjects: Array<
+    Pick<PlannerSubject, 'id' | 'name' | 'appearance' | 'prompt' | 'sortOrder'> & {
+      referenceAssetIdsJson?: Prisma.JsonValue | null;
+      generatedAssetIdsJson?: Prisma.JsonValue | null;
+    }
+  >;
+  scenes: Array<
+    Pick<PlannerScene, 'id' | 'name' | 'time' | 'description' | 'prompt' | 'sortOrder'> & {
+      referenceAssetIdsJson?: Prisma.JsonValue | null;
+      generatedAssetIdsJson?: Prisma.JsonValue | null;
+    }
+  >;
   shotScripts: Array<
     Pick<
       PlannerShotScript,
       'id' | 'sceneId' | 'actKey' | 'actTitle' | 'shotNo' | 'title' | 'visualDescription' | 'composition' | 'cameraMotion' | 'voiceRole' | 'dialogue' | 'sortOrder'
     >
+    & {
+      referenceAssetIdsJson?: Prisma.JsonValue | null;
+      generatedAssetIdsJson?: Prisma.JsonValue | null;
+    }
   >;
+}
+
+function readAssetIds(value: Prisma.JsonValue | null | undefined) {
+  return Array.isArray(value)
+    ? value.filter((assetId): assetId is string => typeof assetId === 'string' && assetId.length > 0)
+    : [];
 }
 
 function readBaseDoc(value: Prisma.JsonValue | null) {
@@ -66,6 +86,8 @@ export function rebuildPlannerStructuredDocFromProjection(input: ProjectionInput
       motion: shot.cameraMotion,
       voice: shot.voiceRole,
       line: shot.dialogue,
+      referenceAssetIds: readAssetIds(shot.referenceAssetIdsJson),
+      generatedAssetIds: readAssetIds(shot.generatedAssetIdsJson),
     });
     actsByKey.set(shot.actKey, act);
   }
@@ -76,11 +98,15 @@ export function rebuildPlannerStructuredDocFromProjection(input: ProjectionInput
     subjects: subjects.map((subject) => ({
       title: subject.name,
       prompt: subject.prompt,
+      referenceAssetIds: readAssetIds(subject.referenceAssetIdsJson),
+      generatedAssetIds: readAssetIds(subject.generatedAssetIdsJson),
     })),
     sceneBullets: scenes.map((scene) => scene.description || scene.prompt),
     scenes: scenes.map((scene) => ({
       title: scene.name,
       prompt: scene.prompt,
+      referenceAssetIds: readAssetIds(scene.referenceAssetIdsJson),
+      generatedAssetIds: readAssetIds(scene.generatedAssetIdsJson),
     })),
     scriptSummary: shots.length > 0
       ? [`分镜数量：${shots.length}`, `场景数量：${scenes.length}`, `主体数量：${subjects.length}`]
@@ -118,6 +144,8 @@ export async function syncPlannerRefinementProjection(args: {
         name: true,
         appearance: true,
         prompt: true,
+        referenceAssetIdsJson: true,
+        generatedAssetIdsJson: true,
         sortOrder: true,
       },
     }),
@@ -130,6 +158,8 @@ export async function syncPlannerRefinementProjection(args: {
         time: true,
         description: true,
         prompt: true,
+        referenceAssetIdsJson: true,
+        generatedAssetIdsJson: true,
         sortOrder: true,
       },
     }),
@@ -148,6 +178,8 @@ export async function syncPlannerRefinementProjection(args: {
         cameraMotion: true,
         voiceRole: true,
         dialogue: true,
+        referenceAssetIdsJson: true,
+        generatedAssetIdsJson: true,
         sortOrder: true,
       },
     }),

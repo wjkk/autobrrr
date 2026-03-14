@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ProviderConfigItem, SettingsAuthUser } from '../lib/provider-config-api';
 import styles from './provider-config-page.module.css';
@@ -30,6 +30,15 @@ interface DraftState {
   };
 }
 
+type ModelKind = 'text' | 'image' | 'video';
+
+interface ModelEndpointOption {
+  id: string;
+  slug: string;
+  label: string;
+  modelKind: string;
+}
+
 function makeDraft(config: ProviderConfigItem): DraftState {
   return {
     apiKey: '',
@@ -53,7 +62,219 @@ function makeDraft(config: ProviderConfigItem): DraftState {
   };
 }
 
-async function updateProviderConfig(providerCode: string, draft: DraftState) {
+function modelKindLabel(modelKind: ModelKind) {
+  if (modelKind === 'text') {
+    return '文本';
+  }
+  if (modelKind === 'image') {
+    return '图片';
+  }
+  return '视频';
+}
+
+function getEnabledModelSlugs(draft: DraftState, modelKind: ModelKind) {
+  if (modelKind === 'text') {
+    return draft.enabledModels.textEndpointSlugs;
+  }
+  if (modelKind === 'image') {
+    return draft.enabledModels.imageEndpointSlugs;
+  }
+  return draft.enabledModels.videoEndpointSlugs;
+}
+
+function getDefaultModelSlug(draft: DraftState, modelKind: ModelKind) {
+  if (modelKind === 'text') {
+    return draft.defaults.textEndpointSlug;
+  }
+  if (modelKind === 'image') {
+    return draft.defaults.imageEndpointSlug;
+  }
+  return draft.defaults.videoEndpointSlug;
+}
+
+function setEnabledModelSlugs(draft: DraftState, modelKind: ModelKind, nextSlugs: string[]): DraftState['enabledModels'] {
+  if (modelKind === 'text') {
+    return {
+      ...draft.enabledModels,
+      textEndpointSlugs: nextSlugs,
+    };
+  }
+  if (modelKind === 'image') {
+    return {
+      ...draft.enabledModels,
+      imageEndpointSlugs: nextSlugs,
+    };
+  }
+  return {
+    ...draft.enabledModels,
+    videoEndpointSlugs: nextSlugs,
+  };
+}
+
+function ModelSelectionSection(props: {
+  providerCode: string;
+  modelKind: ModelKind;
+  endpoints: ModelEndpointOption[];
+  draft: DraftState;
+  onDraftChange: (providerCode: string, next: Partial<DraftState>) => void;
+}) {
+  const { providerCode, modelKind, endpoints, draft, onDraftChange } = props;
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const enabledSlugs = getEnabledModelSlugs(draft, modelKind);
+  const enabledEndpoints = endpoints.filter((endpoint) => enabledSlugs.includes(endpoint.slug));
+  const defaultSlug = getDefaultModelSlug(draft, modelKind);
+  const selectableEndpoints = endpoints.filter((endpoint) => enabledSlugs.length === 0 || enabledSlugs.includes(endpoint.slug));
+  const filteredEndpoints = endpoints.filter((endpoint) => endpoint.label.toLowerCase().includes(searchQuery.trim().toLowerCase()));
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, []);
+
+  const toggleEndpoint = (endpointSlug: string) => {
+    const nextSlugs = enabledSlugs.includes(endpointSlug)
+      ? enabledSlugs.filter((slug) => slug !== endpointSlug)
+      : [...enabledSlugs, endpointSlug];
+
+    onDraftChange(providerCode, {
+      enabledModels: setEnabledModelSlugs(draft, modelKind, nextSlugs),
+    });
+  };
+
+  return (
+    <div className={styles.field}>
+      <div className={styles.modelSectionCard}>
+        <div className={styles.modelSectionHeader}>
+          <div>
+            <div className={styles.fieldLabel}>
+              <span>{modelKindLabel(modelKind)}模型</span>
+              <span className={styles.fieldHint}>已启用 {enabledSlugs.length} / {endpoints.length}</span>
+            </div>
+          </div>
+          <button type="button" className={styles.sectionToggleButton} onClick={() => setIsOpen((current) => !current)}>
+            {isOpen ? '收起' : '选择模型'}
+          </button>
+        </div>
+
+        <div ref={pickerRef} className={styles.modelPicker}>
+          <button
+            type="button"
+            className={`${styles.modelPickerTrigger} ${isOpen ? styles.modelPickerTriggerActive : ''}`}
+            onClick={() => setIsOpen((current) => !current)}
+          >
+            <div className={styles.modelPickerValues}>
+              {enabledEndpoints.length > 0 ? (
+                enabledEndpoints.map((endpoint) => (
+                  <span key={endpoint.id} className={styles.modelPickerTag}>
+                    {endpoint.label}
+                    <span
+                      className={styles.modelPickerTagRemove}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleEndpoint(endpoint.slug);
+                      }}
+                    >
+                      ×
+                    </span>
+                  </span>
+                ))
+              ) : (
+                <span className={styles.modelPickerPlaceholder}>点击选择可启用的{modelKindLabel(modelKind)}模型，可搜索、可复选</span>
+              )}
+            </div>
+            <div className={styles.modelPickerActions}>
+              {enabledEndpoints.length > 0 ? (
+                <span
+                  className={styles.modelPickerClear}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDraftChange(providerCode, {
+                      enabledModels: setEnabledModelSlugs(draft, modelKind, []),
+                    });
+                  }}
+                >
+                  清空
+                </span>
+              ) : null}
+              <span className={styles.modelPickerCaret}>{isOpen ? '⌃' : '⌄'}</span>
+            </div>
+          </button>
+
+          {isOpen ? (
+            <div className={styles.modelPickerPanel}>
+              <div className={styles.modelPickerSearchWrap}>
+                <input
+                  className={styles.modelPickerSearch}
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="搜索模型"
+                />
+              </div>
+              <div className={styles.modelPickerList}>
+                {filteredEndpoints.length > 0 ? (
+                  filteredEndpoints.map((endpoint) => {
+                    const checked = enabledSlugs.includes(endpoint.slug);
+                    return (
+                      <button
+                        key={endpoint.id}
+                        type="button"
+                        className={`${styles.modelPickerOption} ${checked ? styles.modelPickerOptionChecked : ''}`}
+                        onClick={() => toggleEndpoint(endpoint.slug)}
+                      >
+                        <span className={styles.modelPickerOptionMark}>{checked ? '✓' : ''}</span>
+                        <span className={styles.modelPickerOptionLabel}>{endpoint.label}</span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className={styles.modelPickerEmpty}>没有匹配到模型，请换个关键词。</div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className={styles.modelDefaultRow}>
+          <div className={styles.fieldLabel}>
+            <span>默认{modelKindLabel(modelKind)}模型</span>
+            <span className={styles.fieldHint}>{modelKind === 'text' ? 'planner / 文本任务' : modelKind === 'image' ? '图片生成' : '视频生成'} 未显式指定模型时使用</span>
+          </div>
+          <select
+            className={styles.input}
+            value={defaultSlug}
+            onChange={(event) =>
+              onDraftChange(providerCode, {
+                defaults: {
+                  ...draft.defaults,
+                  textEndpointSlug: modelKind === 'text' ? event.target.value : draft.defaults.textEndpointSlug,
+                  imageEndpointSlug: modelKind === 'image' ? event.target.value : draft.defaults.imageEndpointSlug,
+                  videoEndpointSlug: modelKind === 'video' ? event.target.value : draft.defaults.videoEndpointSlug,
+                },
+              })
+            }
+          >
+            <option value="">不设置</option>
+            {selectableEndpoints.map((endpoint) => (
+              <option key={endpoint.id} value={endpoint.slug}>
+                {endpoint.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+async function updateProviderConfig(providerCode: string, draft: DraftState): Promise<ProviderConfigItem> {
   const response = await fetch(`/api/provider-configs/${encodeURIComponent(providerCode)}`, {
     method: 'PUT',
     headers: {
@@ -85,7 +306,7 @@ async function updateProviderConfig(providerCode: string, draft: DraftState) {
   return payload.data;
 }
 
-async function testProviderConfig(providerCode: string, testKind: 'text' | 'image' | 'video') {
+async function testProviderConfig(providerCode: string, testKind: 'text' | 'image' | 'video'): Promise<ProviderConfigItem> {
   const response = await fetch(`/api/provider-configs/${encodeURIComponent(providerCode)}/test`, {
     method: 'POST',
     headers: {
@@ -104,6 +325,34 @@ async function testProviderConfig(providerCode: string, testKind: 'text' | 'imag
     throw error;
   }
 
+  if (!payload.data) {
+    throw new Error('测试返回为空。');
+  }
+
+  return payload.data;
+}
+
+async function syncProviderModels(providerCode: string): Promise<ProviderConfigItem> {
+  const response = await fetch(`/api/provider-configs/${encodeURIComponent(providerCode)}/sync-models`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  const payload = (await response.json()) as { ok: boolean; data?: ProviderConfigItem; error?: { message?: string } };
+  if (!response.ok || !payload.ok) {
+    const error = new Error(payload.error?.message ?? '模型目录同步失败。') as Error & { providerConfig?: ProviderConfigItem };
+    if (payload.data) {
+      error.providerConfig = payload.data;
+    }
+    throw error;
+  }
+
+  if (!payload.data) {
+    throw new Error('模型目录同步返回为空。');
+  }
+
   return payload.data;
 }
 
@@ -116,6 +365,7 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
   );
   const [savingCode, setSavingCode] = useState<string | null>(null);
   const [testingCode, setTestingCode] = useState<string | null>(null);
+  const [syncingCode, setSyncingCode] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Record<string, { message: string; error?: boolean }>>({});
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authEmail, setAuthEmail] = useState('');
@@ -123,12 +373,48 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
   const [authDisplayName, setAuthDisplayName] = useState('');
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [authFeedback, setAuthFeedback] = useState<string | null>(null);
+  const autoSyncedCodesRef = useRef<Set<string>>(new Set());
 
   const configuredCount = useMemo(() => configs.filter((item) => item.userConfig.configured).length, [configs]);
   const enabledCount = useMemo(() => configs.filter((item) => item.userConfig.enabled).length, [configs]);
   const testedCount = useMemo(() => configs.filter((item) => !!item.userConfig.lastTest.testedAt).length, [configs]);
   const passedCount = useMemo(() => configs.filter((item) => item.userConfig.lastTest.status === 'passed').length, [configs]);
   const failedCount = useMemo(() => configs.filter((item) => item.userConfig.lastTest.status === 'failed').length, [configs]);
+
+  const applyConfigUpdate = (updated: ProviderConfigItem, options?: { replaceDraft?: boolean }) => {
+    setConfigs((current) => current.map((item) => (item.provider.code === updated.provider.code ? updated : item)));
+    setDrafts((current) => {
+      const existingDraft = current[updated.provider.code];
+      if (!options?.replaceDraft) {
+        return existingDraft
+          ? current
+          : {
+              ...current,
+              [updated.provider.code]: makeDraft(updated),
+            };
+      }
+
+      return {
+        ...current,
+        [updated.provider.code]: {
+          ...(existingDraft ?? makeDraft(updated)),
+          apiKey: '',
+          baseUrlOverride: updated.userConfig.baseUrlOverride ?? updated.provider.baseUrl ?? '',
+          enabled: updated.userConfig.enabled,
+          enabledModels: {
+            textEndpointSlugs: updated.userConfig.enabledModels.textEndpointSlugs,
+            imageEndpointSlugs: updated.userConfig.enabledModels.imageEndpointSlugs,
+            videoEndpointSlugs: updated.userConfig.enabledModels.videoEndpointSlugs,
+          },
+          defaults: {
+            textEndpointSlug: updated.userConfig.defaults.textEndpointSlug ?? '',
+            imageEndpointSlug: updated.userConfig.defaults.imageEndpointSlug ?? '',
+            videoEndpointSlug: updated.userConfig.defaults.videoEndpointSlug ?? '',
+          },
+        },
+      };
+    });
+  };
 
   const onDraftChange = (providerCode: string, next: Partial<DraftState>) => {
     setDrafts((current) => ({
@@ -153,39 +439,42 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
     }));
 
     try {
-      const updated = await updateProviderConfig(providerCode, draft);
-      setConfigs((current) => current.map((item) => (item.provider.code === providerCode ? updated : item)));
-      setDrafts((current) => ({
-        ...current,
-        [providerCode]: {
-          ...current[providerCode],
-          apiKey: '',
-          baseUrlOverride: updated.userConfig.baseUrlOverride ?? updated.provider.baseUrl ?? '',
-          enabled: updated.userConfig.enabled,
-          defaults: {
-            textEndpointSlug: updated.userConfig.defaults.textEndpointSlug ?? '',
-            imageEndpointSlug: updated.userConfig.defaults.imageEndpointSlug ?? '',
-            videoEndpointSlug: updated.userConfig.defaults.videoEndpointSlug ?? '',
-          },
-          enabledModels: {
-            textEndpointSlugs: updated.userConfig.enabledModels.textEndpointSlugs,
-            imageEndpointSlugs: updated.userConfig.enabledModels.imageEndpointSlugs,
-            videoEndpointSlugs: updated.userConfig.enabledModels.videoEndpointSlugs,
-          },
-        },
-      }));
+      let updated = await updateProviderConfig(providerCode, draft);
+      applyConfigUpdate(updated, { replaceDraft: true });
+
+      if (providerCode === 'platou') {
+        setSyncingCode(providerCode);
+        try {
+          updated = await syncProviderModels(providerCode);
+          applyConfigUpdate(updated);
+        } catch (error) {
+          const providerConfig = error instanceof Error && 'providerConfig' in error ? (error.providerConfig as ProviderConfigItem | undefined) : undefined;
+          if (providerConfig) {
+            updated = providerConfig;
+            applyConfigUpdate(providerConfig);
+          }
+        } finally {
+          setSyncingCode(null);
+        }
+      }
+
       setFeedback((current) => ({
         ...current,
-        [providerCode]: { message: '配置已保存。' },
+        [providerCode]: { message: updated.userConfig.catalogSync.message ?? '配置已保存。' },
       }));
       setTestingCode(providerCode);
       try {
-        const message = await testProviderConfig(providerCode, draft.testKind);
+        const tested = await testProviderConfig(providerCode, draft.testKind);
+        applyConfigUpdate(tested);
         setFeedback((current) => ({
           ...current,
-          [providerCode]: { message: `配置已保存，${message}` },
+          [providerCode]: { message: `配置已保存，${tested.userConfig.lastTest.message ?? '测试成功。'}` },
         }));
       } catch (error) {
+        const providerConfig = error instanceof Error && 'providerConfig' in error ? (error.providerConfig as ProviderConfigItem | undefined) : undefined;
+        if (providerConfig) {
+          applyConfigUpdate(providerConfig);
+        }
         setFeedback((current) => ({
           ...current,
           [providerCode]: {
@@ -223,10 +512,7 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
 
     try {
       const updated = await testProviderConfig(providerCode, draft.testKind);
-      if (!updated) {
-        throw new Error('测试返回为空。');
-      }
-      setConfigs((current) => current.map((item) => (item.provider.code === providerCode ? updated : item)));
+      applyConfigUpdate(updated);
       setFeedback((current) => ({
         ...current,
         [providerCode]: { message: updated.userConfig.lastTest.message ?? '测试成功。' },
@@ -234,7 +520,7 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
     } catch (error) {
       const providerConfig = error instanceof Error && 'providerConfig' in error ? (error.providerConfig as ProviderConfigItem | undefined) : undefined;
       if (providerConfig) {
-        setConfigs((current) => current.map((item) => (item.provider.code === providerCode ? providerConfig : item)));
+        applyConfigUpdate(providerConfig);
       }
       setFeedback((current) => ({
         ...current,
@@ -247,6 +533,56 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
       setTestingCode(null);
     }
   };
+
+  const onSyncModels = async (providerCode: string, options?: { quiet?: boolean }) => {
+    setSyncingCode(providerCode);
+    if (!options?.quiet) {
+      setFeedback((current) => ({
+        ...current,
+        [providerCode]: { message: '' },
+      }));
+    }
+
+    try {
+      const updated = await syncProviderModels(providerCode);
+      applyConfigUpdate(updated);
+      if (!options?.quiet) {
+        setFeedback((current) => ({
+          ...current,
+          [providerCode]: { message: updated.userConfig.catalogSync.message ?? '模型目录已同步。' },
+        }));
+      }
+    } catch (error) {
+      const providerConfig = error instanceof Error && 'providerConfig' in error ? (error.providerConfig as ProviderConfigItem | undefined) : undefined;
+      if (providerConfig) {
+        applyConfigUpdate(providerConfig);
+      }
+      if (!options?.quiet) {
+        setFeedback((current) => ({
+          ...current,
+          [providerCode]: {
+            message: error instanceof Error ? error.message : '模型目录同步失败。',
+            error: true,
+          },
+        }));
+      }
+    } finally {
+      setSyncingCode(null);
+    }
+  };
+
+  useEffect(() => {
+    const platouConfig = configs.find((item) => item.provider.code === 'platou');
+    if (!platouConfig || !platouConfig.userConfig.configured || !platouConfig.userConfig.enabled) {
+      return;
+    }
+    if (platouConfig.userConfig.catalogSync.syncedAt || autoSyncedCodesRef.current.has('platou') || syncingCode === 'platou') {
+      return;
+    }
+
+    autoSyncedCodesRef.current.add('platou');
+    void onSyncModels('platou', { quiet: true });
+  }, [configs, syncingCode]);
 
   const effectiveUser = currentUser;
 
@@ -484,6 +820,13 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                 : testStatus === 'failed'
                   ? '最近测试失败'
                   : '尚未测试';
+            const catalogStatus = item.userConfig.catalogSync.status;
+            const catalogStatusLabel =
+              catalogStatus === 'passed'
+                ? '模型目录已同步'
+                : catalogStatus === 'failed'
+                  ? '模型目录同步失败'
+                  : '模型目录未同步';
 
             return (
               <section key={item.provider.id} className={styles.providerCard}>
@@ -530,6 +873,29 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                       <small>当前状态</small>
                       <strong>{item.userConfig.configured ? '已写入密钥' : '尚未配置'}</strong>
                       <p>{item.userConfig.updatedAt ? `最近更新：${new Date(item.userConfig.updatedAt).toLocaleString('zh-CN')}` : '首次保存后立即生效。'}</p>
+                    </div>
+                    <div className={styles.asideCard}>
+                      <small>模型目录</small>
+                      <div className={styles.statusRow}>
+                        <strong>{catalogStatusLabel}</strong>
+                        <span
+                          className={`${styles.statusBadge} ${
+                            catalogStatus === 'passed'
+                              ? styles.statusBadgeSuccess
+                              : catalogStatus === 'failed'
+                                ? styles.statusBadgeDanger
+                                : styles.statusBadgeNeutral
+                          }`}
+                        >
+                          {catalogStatus === 'passed' ? 'SYNCED' : catalogStatus === 'failed' ? 'FAILED' : 'PENDING'}
+                        </span>
+                      </div>
+                      <p>
+                        {item.userConfig.catalogSync.syncedAt
+                          ? `${new Date(item.userConfig.catalogSync.syncedAt).toLocaleString('zh-CN')} · 共 ${item.userConfig.catalogSync.modelCount ?? item.endpoints.length} 个模型`
+                          : `当前已收录 ${item.endpoints.length} 个模型（文本 ${textEndpoints.length} / 图片 ${imageEndpoints.length} / 视频 ${videoEndpoints.length}）`}
+                      </p>
+                      {item.userConfig.catalogSync.message ? <p>{item.userConfig.catalogSync.message}</p> : null}
                     </div>
                     <div className={styles.asideCard}>
                       <small>最近一次测试</small>
@@ -622,168 +988,33 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                     </label>
 
                     {textEndpoints.length ? (
-                      <div className={styles.field}>
-                        <div className={styles.fieldLabel}>
-                          <span>启用文本模型</span>
-                          <span className={styles.fieldHint}>当前 provider 下可参与文本任务的模型</span>
-                        </div>
-                        <div className={styles.endpointChecklist}>
-                          {textEndpoints.map((endpoint) => (
-                            <label key={endpoint.id} className={styles.endpointCheck}>
-                              <input
-                                type="checkbox"
-                                checked={draft.enabledModels.textEndpointSlugs.includes(endpoint.slug)}
-                                onChange={(event) =>
-                                  onDraftChange(item.provider.code, {
-                                    enabledModels: {
-                                      ...draft.enabledModels,
-                                      textEndpointSlugs: event.target.checked
-                                        ? [...draft.enabledModels.textEndpointSlugs, endpoint.slug]
-                                        : draft.enabledModels.textEndpointSlugs.filter((slug) => slug !== endpoint.slug),
-                                    },
-                                  })
-                                }
-                              />
-                              <span>{endpoint.label}</span>
-                            </label>
-                          ))}
-                        </div>
-                        <div className={styles.fieldLabel}>
-                          <span>默认文本模型</span>
-                          <span className={styles.fieldHint}>planner / 文本任务未显式指定模型时使用</span>
-                        </div>
-                        <select
-                          className={styles.input}
-                          value={draft.defaults.textEndpointSlug}
-                          onChange={(event) =>
-                            onDraftChange(item.provider.code, {
-                              defaults: {
-                                ...draft.defaults,
-                                textEndpointSlug: event.target.value,
-                              },
-                            })
-                          }
-                        >
-                          <option value="">不设置</option>
-                          {textEndpoints
-                            .filter((endpoint) => draft.enabledModels.textEndpointSlugs.length === 0 || draft.enabledModels.textEndpointSlugs.includes(endpoint.slug))
-                            .map((endpoint) => (
-                              <option key={endpoint.id} value={endpoint.slug}>
-                                {endpoint.label}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
+                      <ModelSelectionSection
+                        providerCode={item.provider.code}
+                        modelKind="text"
+                        endpoints={textEndpoints}
+                        draft={draft}
+                        onDraftChange={onDraftChange}
+                      />
                     ) : null}
 
                     {imageEndpoints.length ? (
-                      <div className={styles.field}>
-                        <div className={styles.fieldLabel}>
-                          <span>启用图片模型</span>
-                          <span className={styles.fieldHint}>当前 provider 下可参与图片任务的模型</span>
-                        </div>
-                        <div className={styles.endpointChecklist}>
-                          {imageEndpoints.map((endpoint) => (
-                            <label key={endpoint.id} className={styles.endpointCheck}>
-                              <input
-                                type="checkbox"
-                                checked={draft.enabledModels.imageEndpointSlugs.includes(endpoint.slug)}
-                                onChange={(event) =>
-                                  onDraftChange(item.provider.code, {
-                                    enabledModels: {
-                                      ...draft.enabledModels,
-                                      imageEndpointSlugs: event.target.checked
-                                        ? [...draft.enabledModels.imageEndpointSlugs, endpoint.slug]
-                                        : draft.enabledModels.imageEndpointSlugs.filter((slug) => slug !== endpoint.slug),
-                                    },
-                                  })
-                                }
-                              />
-                              <span>{endpoint.label}</span>
-                            </label>
-                          ))}
-                        </div>
-                        <div className={styles.fieldLabel}>
-                          <span>默认图片模型</span>
-                          <span className={styles.fieldHint}>图片生成未显式指定模型时使用</span>
-                        </div>
-                        <select
-                          className={styles.input}
-                          value={draft.defaults.imageEndpointSlug}
-                          onChange={(event) =>
-                            onDraftChange(item.provider.code, {
-                              defaults: {
-                                ...draft.defaults,
-                                imageEndpointSlug: event.target.value,
-                              },
-                            })
-                          }
-                        >
-                          <option value="">不设置</option>
-                          {imageEndpoints
-                            .filter((endpoint) => draft.enabledModels.imageEndpointSlugs.length === 0 || draft.enabledModels.imageEndpointSlugs.includes(endpoint.slug))
-                            .map((endpoint) => (
-                              <option key={endpoint.id} value={endpoint.slug}>
-                                {endpoint.label}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
+                      <ModelSelectionSection
+                        providerCode={item.provider.code}
+                        modelKind="image"
+                        endpoints={imageEndpoints}
+                        draft={draft}
+                        onDraftChange={onDraftChange}
+                      />
                     ) : null}
 
                     {videoEndpoints.length ? (
-                      <div className={styles.field}>
-                        <div className={styles.fieldLabel}>
-                          <span>启用视频模型</span>
-                          <span className={styles.fieldHint}>当前 provider 下可参与视频任务的模型</span>
-                        </div>
-                        <div className={styles.endpointChecklist}>
-                          {videoEndpoints.map((endpoint) => (
-                            <label key={endpoint.id} className={styles.endpointCheck}>
-                              <input
-                                type="checkbox"
-                                checked={draft.enabledModels.videoEndpointSlugs.includes(endpoint.slug)}
-                                onChange={(event) =>
-                                  onDraftChange(item.provider.code, {
-                                    enabledModels: {
-                                      ...draft.enabledModels,
-                                      videoEndpointSlugs: event.target.checked
-                                        ? [...draft.enabledModels.videoEndpointSlugs, endpoint.slug]
-                                        : draft.enabledModels.videoEndpointSlugs.filter((slug) => slug !== endpoint.slug),
-                                    },
-                                  })
-                                }
-                              />
-                              <span>{endpoint.label}</span>
-                            </label>
-                          ))}
-                        </div>
-                        <div className={styles.fieldLabel}>
-                          <span>默认视频模型</span>
-                          <span className={styles.fieldHint}>视频生成未显式指定模型时使用</span>
-                        </div>
-                        <select
-                          className={styles.input}
-                          value={draft.defaults.videoEndpointSlug}
-                          onChange={(event) =>
-                            onDraftChange(item.provider.code, {
-                              defaults: {
-                                ...draft.defaults,
-                                videoEndpointSlug: event.target.value,
-                              },
-                            })
-                          }
-                        >
-                          <option value="">不设置</option>
-                          {videoEndpoints
-                            .filter((endpoint) => draft.enabledModels.videoEndpointSlugs.length === 0 || draft.enabledModels.videoEndpointSlugs.includes(endpoint.slug))
-                            .map((endpoint) => (
-                              <option key={endpoint.id} value={endpoint.slug}>
-                                {endpoint.label}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
+                      <ModelSelectionSection
+                        providerCode={item.provider.code}
+                        modelKind="video"
+                        endpoints={videoEndpoints}
+                        draft={draft}
+                        onDraftChange={onDraftChange}
+                      />
                     ) : null}
 
                     <div className={styles.toggleRow}>
@@ -806,11 +1037,21 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                         {currentFeedback?.message ?? ''}
                       </div>
                       <div className={styles.footerActions}>
+                        {item.provider.code === 'platou' ? (
+                          <button
+                            type="button"
+                            className={styles.testButton}
+                            onClick={() => onSyncModels(item.provider.code)}
+                            disabled={syncingCode === item.provider.code || savingCode === item.provider.code}
+                          >
+                            {syncingCode === item.provider.code ? '同步模型中...' : '同步模型'}
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           className={styles.testButton}
                           onClick={() => onTest(item.provider.code)}
-                          disabled={testingCode === item.provider.code || savingCode === item.provider.code}
+                          disabled={testingCode === item.provider.code || savingCode === item.provider.code || syncingCode === item.provider.code}
                         >
                           {testingCode === item.provider.code ? '测试中...' : '测试连接'}
                         </button>
@@ -818,7 +1059,7 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                           type="button"
                           className={styles.saveButton}
                           onClick={() => onSave(item.provider.code)}
-                          disabled={savingCode === item.provider.code}
+                          disabled={savingCode === item.provider.code || syncingCode === item.provider.code}
                         >
                           {savingCode === item.provider.code ? '保存中...' : '保存配置'}
                         </button>

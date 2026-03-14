@@ -3,7 +3,9 @@ import { z } from 'zod';
 
 import { submitAicsoImageGeneration } from '../lib/aicso-client.js';
 import { submitArkTextResponse } from '../lib/ark-client.js';
-import { queryPlatouVideoGeneration, submitPlatouChatCompletion, submitPlatouImageGeneration, submitPlatouVideoGeneration } from '../lib/platou-client.js';
+import { mergeProviderConfigOptions, parseProviderConfigOptions } from '../lib/provider-config-options.js';
+import { extractPlatouCatalogModels, syncPlatouModelCatalog } from '../lib/platou-model-catalog.js';
+import { listPlatouModels, queryPlatouVideoGeneration, submitPlatouChatCompletion, submitPlatouImageGeneration, submitPlatouVideoGeneration } from '../lib/platou-client.js';
 import { requireUser } from '../lib/auth.js';
 import { prisma } from '../lib/prisma.js';
 
@@ -65,7 +67,7 @@ function mapProviderConfig(args: {
     updatedAt: Date;
   } | null;
 }) {
-  const options = args.config ? ((args.config.optionsJson && typeof args.config.optionsJson === 'object' && !Array.isArray(args.config.optionsJson) ? args.config.optionsJson : {}) as Record<string, unknown>) : {};
+  const options = parseProviderConfigOptions(args.config?.optionsJson);
   const maskedApiKey =
     args.config?.apiKey && args.config.apiKey.length > 8
       ? `${args.config.apiKey.slice(0, 4)}••••${args.config.apiKey.slice(-4)}`
@@ -97,16 +99,9 @@ function mapProviderConfig(args: {
           maskedApiKey,
           enabled: args.config.enabled,
           baseUrlOverride: args.config.baseUrlOverride,
-          defaults: {
-            textEndpointSlug: typeof options.textEndpointSlug === 'string' ? options.textEndpointSlug : null,
-            imageEndpointSlug: typeof options.imageEndpointSlug === 'string' ? options.imageEndpointSlug : null,
-            videoEndpointSlug: typeof options.videoEndpointSlug === 'string' ? options.videoEndpointSlug : null,
-          },
-          enabledModels: {
-            textEndpointSlugs: Array.isArray(options.textEndpointSlugs) ? options.textEndpointSlugs.filter((value): value is string => typeof value === 'string') : [],
-            imageEndpointSlugs: Array.isArray(options.imageEndpointSlugs) ? options.imageEndpointSlugs.filter((value): value is string => typeof value === 'string') : [],
-            videoEndpointSlugs: Array.isArray(options.videoEndpointSlugs) ? options.videoEndpointSlugs.filter((value): value is string => typeof value === 'string') : [],
-          },
+          defaults: options.defaults,
+          enabledModels: options.enabledModels,
+          catalogSync: options.catalogSync,
           lastTest: {
             status: args.config.lastTestStatus ?? null,
             message: args.config.lastTestMessage ?? null,
@@ -131,6 +126,12 @@ function mapProviderConfig(args: {
             textEndpointSlugs: [],
             imageEndpointSlugs: [],
             videoEndpointSlugs: [],
+          },
+          catalogSync: {
+            status: null,
+            message: null,
+            syncedAt: null,
+            modelCount: null,
           },
           lastTest: {
             status: null,
@@ -212,6 +213,74 @@ function pickTestEndpoint(args: {
   return args.endpoints[0] ?? null;
 }
 
+function mapProviderEndpoints(endpoints: Array<{
+  id: string;
+  slug: string;
+  label: string;
+  isDefault: boolean;
+  family: {
+    slug: string;
+    modelKind: string;
+  };
+}>) {
+  return endpoints.map((endpoint) => ({
+    id: endpoint.id,
+    slug: endpoint.slug,
+    label: endpoint.label,
+    modelKind: endpoint.family.modelKind.toLowerCase(),
+    familySlug: endpoint.family.slug,
+    isDefault: endpoint.isDefault,
+  }));
+}
+
+async function fetchProviderConfigItem(providerCode: string, userId: string) {
+  const provider = await prisma.modelProvider.findUnique({
+    where: { code: providerCode },
+    include: {
+      endpoints: {
+        where: {
+          status: 'ACTIVE',
+        },
+        include: {
+          family: {
+            select: {
+              slug: true,
+              modelKind: true,
+            },
+          },
+        },
+        orderBy: [{ family: { modelKind: 'asc' } }, { priority: 'asc' }, { createdAt: 'asc' }],
+      },
+      userConfigs: {
+        where: { userId },
+        take: 1,
+        select: {
+          id: true,
+          enabled: true,
+          apiKey: true,
+          baseUrlOverride: true,
+          optionsJson: true,
+          lastTestStatus: true,
+          lastTestMessage: true,
+          lastTestAt: true,
+          lastTestEndpointSlug: true,
+          updatedAt: true,
+        },
+      },
+    },
+  });
+
+  if (!provider) {
+    return null;
+  }
+
+  return mapProviderConfig({
+    provider,
+    endpoints: mapProviderEndpoints(provider.endpoints),
+    config: provider.userConfigs[0] ?? null,
+  });
+}
+
 export async function registerProviderConfigRoutes(app: FastifyInstance) {
   app.get('/api/provider-configs', async (request, reply) => {
     const user = await requireUser(request, reply);
@@ -260,14 +329,7 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       data: providers.map((provider) =>
         mapProviderConfig({
           provider,
-          endpoints: provider.endpoints.map((endpoint) => ({
-            id: endpoint.id,
-            slug: endpoint.slug,
-            label: endpoint.label,
-            modelKind: endpoint.family.modelKind.toLowerCase(),
-            familySlug: endpoint.family.slug,
-            isDefault: endpoint.isDefault,
-          })),
+          endpoints: mapProviderEndpoints(provider.endpoints),
           config: provider.userConfigs[0] ?? null,
         }),
       ),
@@ -382,6 +444,23 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       }
     }
 
+    const currentOptions = parseProviderConfigOptions(provider.userConfigs[0]?.optionsJson);
+    const nextOptions =
+      payload.data.defaults !== undefined || payload.data.enabledModels !== undefined
+        ? mergeProviderConfigOptions(currentOptions.raw, {
+            defaults: {
+              textEndpointSlug: payload.data.defaults?.textEndpointSlug || null,
+              imageEndpointSlug: payload.data.defaults?.imageEndpointSlug || null,
+              videoEndpointSlug: payload.data.defaults?.videoEndpointSlug || null,
+            },
+            enabledModels: {
+              textEndpointSlugs: payload.data.enabledModels?.textEndpointSlugs ?? currentOptions.enabledModels.textEndpointSlugs,
+              imageEndpointSlugs: payload.data.enabledModels?.imageEndpointSlugs ?? currentOptions.enabledModels.imageEndpointSlugs,
+              videoEndpointSlugs: payload.data.enabledModels?.videoEndpointSlugs ?? currentOptions.enabledModels.videoEndpointSlugs,
+            },
+          })
+        : undefined;
+
     const config = await prisma.userProviderConfig.upsert({
       where: {
         userId_providerId: {
@@ -393,18 +472,7 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
         ...(payload.data.apiKey !== undefined ? { apiKey: payload.data.apiKey || null } : {}),
         ...(payload.data.baseUrlOverride !== undefined ? { baseUrlOverride: payload.data.baseUrlOverride || null } : {}),
         ...(payload.data.enabled !== undefined ? { enabled: payload.data.enabled } : {}),
-        ...((payload.data.defaults !== undefined || payload.data.enabledModels !== undefined)
-          ? {
-              optionsJson: {
-                textEndpointSlug: payload.data.defaults?.textEndpointSlug || null,
-                imageEndpointSlug: payload.data.defaults?.imageEndpointSlug || null,
-                videoEndpointSlug: payload.data.defaults?.videoEndpointSlug || null,
-                textEndpointSlugs: payload.data.enabledModels?.textEndpointSlugs ?? [],
-                imageEndpointSlugs: payload.data.enabledModels?.imageEndpointSlugs ?? [],
-                videoEndpointSlugs: payload.data.enabledModels?.videoEndpointSlugs ?? [],
-              },
-            }
-          : {}),
+        ...(nextOptions !== undefined ? { optionsJson: nextOptions } : {}),
       },
       create: {
         userId: user.id,
@@ -412,16 +480,7 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
         apiKey: payload.data.apiKey || null,
         baseUrlOverride: payload.data.baseUrlOverride || null,
         enabled: payload.data.enabled ?? true,
-        optionsJson: payload.data.defaults || payload.data.enabledModels
-          ? {
-              textEndpointSlug: payload.data.defaults?.textEndpointSlug || null,
-              imageEndpointSlug: payload.data.defaults?.imageEndpointSlug || null,
-              videoEndpointSlug: payload.data.defaults?.videoEndpointSlug || null,
-              textEndpointSlugs: payload.data.enabledModels?.textEndpointSlugs ?? [],
-              imageEndpointSlugs: payload.data.enabledModels?.imageEndpointSlugs ?? [],
-              videoEndpointSlugs: payload.data.enabledModels?.videoEndpointSlugs ?? [],
-            }
-          : undefined,
+        optionsJson: nextOptions,
       },
       select: {
         id: true,
@@ -457,17 +516,154 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       ok: true,
       data: mapProviderConfig({
         provider,
-        endpoints: endpoints.map((endpoint) => ({
-          id: endpoint.id,
-          slug: endpoint.slug,
-          label: endpoint.label,
-          modelKind: endpoint.family.modelKind.toLowerCase(),
-          familySlug: endpoint.family.slug,
-          isDefault: endpoint.isDefault,
-        })),
+        endpoints: mapProviderEndpoints(endpoints),
         config,
       }),
     });
+  });
+
+  app.post('/api/provider-configs/:providerCode/sync-models', async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) {
+      return;
+    }
+
+    const params = providerCodeParamsSchema.safeParse(request.params);
+    if (!params.success) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'INVALID_ARGUMENT',
+          message: 'Invalid provider sync request.',
+        },
+      });
+    }
+
+    const provider = await prisma.modelProvider.findUnique({
+      where: { code: params.data.providerCode },
+      include: {
+        userConfigs: {
+          where: { userId: user.id },
+          take: 1,
+          select: {
+            id: true,
+            enabled: true,
+            apiKey: true,
+            baseUrlOverride: true,
+            optionsJson: true,
+          },
+        },
+      },
+    });
+
+    if (!provider) {
+      return reply.code(404).send({
+        ok: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Provider not found.',
+        },
+      });
+    }
+
+    if (provider.code !== 'platou') {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'SYNC_NOT_SUPPORTED',
+          message: 'This provider does not support model catalog sync yet.',
+        },
+      });
+    }
+
+    const config = provider.userConfigs[0] ?? null;
+    if (!config?.enabled || !config.apiKey) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'PROVIDER_NOT_CONFIGURED',
+          message: 'This provider is not configured for the current user.',
+        },
+      });
+    }
+
+    const baseUrl = config.baseUrlOverride ?? provider.baseUrl;
+    if (!baseUrl) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'BASE_URL_REQUIRED',
+          message: 'This provider requires a base URL to be configured.',
+        },
+      });
+    }
+
+    try {
+      const payload = await listPlatouModels({
+        baseUrl,
+        apiKey: config.apiKey,
+      });
+      const discoveredModels = extractPlatouCatalogModels(payload);
+      if (discoveredModels.length === 0) {
+        throw new Error('Platou model catalog returned no supported text/image/video models.');
+      }
+
+      const syncResult = await syncPlatouModelCatalog({
+        providerId: provider.id,
+        discoveredModels,
+      });
+
+      await prisma.userProviderConfig.update({
+        where: {
+          userId_providerId: {
+            userId: user.id,
+            providerId: provider.id,
+          },
+        },
+        data: {
+          optionsJson: mergeProviderConfigOptions(config.optionsJson, {
+            catalogSync: {
+              status: 'passed',
+              message: `已同步 ${syncResult.totalCount} 个模型（文本 ${syncResult.byKind.TEXT} / 图片 ${syncResult.byKind.IMAGE} / 视频 ${syncResult.byKind.VIDEO}）。`,
+              syncedAt: new Date().toISOString(),
+              modelCount: syncResult.totalCount,
+            },
+          }),
+        },
+      });
+
+      return reply.send({
+        ok: true,
+        data: await fetchProviderConfigItem(provider.code, user.id),
+      });
+    } catch (error) {
+      await prisma.userProviderConfig.update({
+        where: {
+          userId_providerId: {
+            userId: user.id,
+            providerId: provider.id,
+          },
+        },
+        data: {
+          optionsJson: mergeProviderConfigOptions(config.optionsJson, {
+            catalogSync: {
+              status: 'failed',
+              message: error instanceof Error ? error.message : 'Model catalog sync failed.',
+              syncedAt: new Date().toISOString(),
+            },
+          }),
+        },
+      });
+
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'MODEL_SYNC_FAILED',
+          message: error instanceof Error ? error.message : 'Model catalog sync failed.',
+        },
+        data: await fetchProviderConfigItem(provider.code, user.id),
+      });
+    }
   });
 
   app.post('/api/provider-configs/:providerCode/test', async (request, reply) => {
@@ -521,39 +717,7 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
     }
 
     const buildResponse = async () => {
-      const refreshedConfig = await prisma.userProviderConfig.findUnique({
-        where: {
-          userId_providerId: {
-            userId: user.id,
-            providerId: provider.id,
-          },
-        },
-        select: {
-          id: true,
-          enabled: true,
-          apiKey: true,
-          baseUrlOverride: true,
-          optionsJson: true,
-          lastTestStatus: true,
-          lastTestMessage: true,
-          lastTestAt: true,
-          lastTestEndpointSlug: true,
-          updatedAt: true,
-        },
-      });
-
-      return mapProviderConfig({
-        provider,
-        endpoints: provider.endpoints.map((endpoint) => ({
-          id: endpoint.id,
-          slug: endpoint.slug,
-          label: endpoint.label,
-          modelKind: endpoint.family.modelKind.toLowerCase(),
-          familySlug: endpoint.family.slug,
-          isDefault: endpoint.isDefault,
-        })),
-        config: refreshedConfig,
-      });
+      return fetchProviderConfigItem(provider.code, user.id);
     };
 
     const config = provider.userConfigs[0] ?? null;
@@ -580,17 +744,7 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       });
     }
 
-    const defaults = config.optionsJson && typeof config.optionsJson === 'object' && !Array.isArray(config.optionsJson)
-      ? {
-          textEndpointSlug: typeof (config.optionsJson as Record<string, unknown>).textEndpointSlug === 'string' ? ((config.optionsJson as Record<string, unknown>).textEndpointSlug as string) : null,
-          imageEndpointSlug: typeof (config.optionsJson as Record<string, unknown>).imageEndpointSlug === 'string' ? ((config.optionsJson as Record<string, unknown>).imageEndpointSlug as string) : null,
-          videoEndpointSlug: typeof (config.optionsJson as Record<string, unknown>).videoEndpointSlug === 'string' ? ((config.optionsJson as Record<string, unknown>).videoEndpointSlug as string) : null,
-        }
-      : {
-          textEndpointSlug: null,
-          imageEndpointSlug: null,
-          videoEndpointSlug: null,
-        };
+    const defaults = parseProviderConfigOptions(config.optionsJson).defaults;
 
     const endpoints = provider.endpoints.map((endpoint) => ({
       id: endpoint.id,

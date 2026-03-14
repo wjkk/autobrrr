@@ -49,6 +49,15 @@ export async function submitPlatouChatCompletion(args: { baseUrl: string; apiKey
   });
 }
 
+export async function listPlatouModels(args: { baseUrl: string; apiKey: string }) {
+  return requestPlatou<unknown>({
+    baseUrl: args.baseUrl,
+    apiKey: args.apiKey,
+    path: '/v1/models',
+    method: 'GET',
+  });
+}
+
 export async function submitPlatouImageGeneration(args: { baseUrl: string; apiKey: string; model: string; prompt: string }) {
   return requestPlatou<Record<string, unknown>>({
     baseUrl: args.baseUrl,

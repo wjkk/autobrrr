@@ -751,14 +751,14 @@
 
 .presetCard {
   flex: 1;
-  height: 120px;
+  height: 128px;
   /* Slightly shorter cards */
   background: var(--bg-subtle);
   /* Very faint background */
   border: 1px solid var(--border-default);
   /* Almost invisible border */
   border-radius: 16px;
-  padding: 16px;
+  padding: 16px 20px;
   text-align: left;
   cursor: pointer;
   transition: all 0.2s;
@@ -785,29 +785,30 @@
   /* Slightly smaller text */
   margin-top: 4px;
   margin-left: 4px;
+  max-width: calc(100% - 188px);
   color: var(--text-primary);
   font-weight: 500;
   z-index: 2;
+  position: relative;
 }
 
 .presetImages {
   position: absolute;
-  bottom: -5px;
-  /* Adjust image base positioning */
-  right: -5px;
-  /* Float them closer to the right edge */
+  bottom: -2px;
+  right: 12px;
   display: flex;
   align-items: flex-end;
-  height: 80px;
-  width: 140px;
+  height: 88px;
+  width: 172px;
   z-index: 1;
+  pointer-events: none;
 }
 
 .presetImg1,
 .presetImg2,
 .presetImg3 {
-  width: 60px;
-  height: 80px;
+  width: 64px;
+  height: 86px;
   border-radius: 6px;
   object-fit: cover;
   position: absolute;
@@ -819,34 +820,34 @@
 .presetImg1 {
   left: 0;
   bottom: 0;
-  transform: rotate(-15deg);
+  transform: rotate(-13deg);
   z-index: 1;
 }
 
 .presetImg2 {
-  left: 30px;
-  bottom: 5px;
-  transform: rotate(-5deg);
+  left: 48px;
+  bottom: 2px;
+  transform: rotate(-2deg);
   z-index: 2;
 }
 
 .presetImg3 {
-  left: 60px;
+  left: 96px;
   bottom: 0;
-  transform: rotate(10deg);
+  transform: rotate(11deg);
   z-index: 3;
 }
 
 .presetCard:hover .presetImg1 {
-  transform: rotate(-25deg) scale(1.1);
+  transform: rotate(-18deg) scale(1.06) translateX(-4px);
 }
 
 .presetCard:hover .presetImg2 {
-  transform: rotate(0deg) scale(1.1) translateY(-10px);
+  transform: rotate(0deg) scale(1.06) translateY(-8px);
 }
 
 .presetCard:hover .presetImg3 {
-  transform: rotate(20deg) scale(1.1);
+  transform: rotate(16deg) scale(1.06) translateX(4px);
 }
 
 /* Inner Input Area */
@@ -973,6 +974,11 @@
   color: var(--text-primary);
 }
 
+.toolIcon:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
 .toolIconActive {
   background: var(--bg-hover);
   color: var(--text-primary);
@@ -1094,6 +1100,13 @@
   overflow-y: auto;
   padding-right: 8px;
   /* For scrollbar */
+}
+
+.popoverEmpty {
+  padding: 14px 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 /* Style & Character Grid Popovers */

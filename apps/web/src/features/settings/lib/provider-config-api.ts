@@ -32,6 +32,12 @@ export interface ProviderConfigItem {
       imageEndpointSlugs: string[];
       videoEndpointSlugs: string[];
     };
+    catalogSync: {
+      status: string | null;
+      message: string | null;
+      syncedAt: string | null;
+      modelCount: number | null;
+    };
     lastTest: {
       status: string | null;
       message: string | null;

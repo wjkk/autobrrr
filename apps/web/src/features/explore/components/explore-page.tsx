@@ -8,17 +8,50 @@ import styles from './explore-page.module.css';
 
 import { createStudioProject } from '@/lib/studio-service';
 import {
-  CHARACTER_OPTIONS,
   CONTENT_TABS,
-  IMAGE_MODEL_OPTIONS,
   PRESET_LIBRARY,
-  STYLE_OPTIONS,
   TAB_PLACEHOLDERS,
   TAB_PREFIX_CLASS_SUFFIX,
 } from './explore-page.data';
-import type { ContentTab, ExplorePopover, ExploreSidebarNav } from './explore-page.types';
+import type {
+  ContentTab,
+  ExploreCatalogScope,
+  ExploreCharacterOption,
+  ExplorePopover,
+  ExploreSidebarNav,
+  ExploreStyleOption,
+  ExploreSubjectGenderFilter,
+} from './explore-page.types';
 
 const PRESET_IMAGE_CLASSES = [styles.presetImg1, styles.presetImg2, styles.presetImg3];
+
+interface ApiEnvelopeSuccess<T> {
+  ok: true;
+  data: T;
+}
+
+interface ApiEnvelopeFailure {
+  ok: false;
+  error: {
+    code: string;
+    message: string;
+  };
+}
+
+type ApiEnvelope<T> = ApiEnvelopeSuccess<T> | ApiEnvelopeFailure;
+
+interface ExploreImageModelOption {
+  id: string;
+  slug: string;
+  label: string;
+  isUserDefault?: boolean;
+  provider: {
+    code: string;
+    name: string;
+  };
+}
+
+type ExploreCatalogResponse<T> = T[];
 
 export function ExplorePage() {
   const router = useRouter();
@@ -30,6 +63,7 @@ export function ExplorePage() {
   const [promptText, setPromptText] = useState('');
   const [toastMsg, setToastMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [scriptSourceName, setScriptSourceName] = useState('');
 
   // Prototype UI States
   const [activeSidebarNav, setActiveSidebarNav] = useState<ExploreSidebarNav>('home');
@@ -40,8 +74,16 @@ export function ExplorePage() {
 
   // Selected parameters
   const [selectedModel, setSelectedModel] = useState(''); // 画风
-  const [selectedImageModel, setSelectedImageModel] = useState(''); // 主体图模型
-  const [selectedCharacter, setSelectedCharacter] = useState(''); // 主体角色
+  const [selectedImageModel, setSelectedImageModel] = useState(''); // 主体图模型 endpoint slug
+  const [selectedCharacter, setSelectedCharacter] = useState(''); // 主体角色 slug
+  const [imageModelOptions, setImageModelOptions] = useState<ExploreImageModelOption[]>([]);
+  const [imageModelLoading, setImageModelLoading] = useState(false);
+  const [characterOptions, setCharacterOptions] = useState<ExploreCharacterOption[]>([]);
+  const [characterLoading, setCharacterLoading] = useState(false);
+  const [styleOptions, setStyleOptions] = useState<ExploreStyleOption[]>([]);
+  const [styleLoading, setStyleLoading] = useState(false);
+  const [subjectScope, setSubjectScope] = useState<ExploreCatalogScope>('public');
+  const [subjectGenderFilter, setSubjectGenderFilter] = useState<ExploreSubjectGenderFilter>('all');
 
   // Auto-hide toast
   useEffect(() => {
@@ -50,6 +92,179 @@ export function ExplorePage() {
       return () => clearTimeout(timer);
     }
   }, [toastMsg]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setImageModelLoading(true);
+
+    const fetchImageModels = async () => {
+      const candidates = [
+        '/api/model-endpoints?modelKind=image&scope=userEnabled',
+        '/api/model-endpoints?modelKind=image&scope=all',
+      ];
+
+      for (const endpoint of candidates) {
+        const response = await fetch(endpoint, {
+          headers: {
+            Accept: 'application/json',
+          },
+          cache: 'no-store',
+        });
+        const payload = (await response.json()) as ApiEnvelope<ExploreImageModelOption[]>;
+        if (!response.ok || !payload.ok) {
+          throw new Error(!payload.ok ? payload.error.message : '加载主体图模型失败。');
+        }
+        if (payload.data.length > 0 || endpoint === candidates[candidates.length - 1]) {
+          return payload.data;
+        }
+      }
+
+      return [];
+    };
+
+    void fetchImageModels()
+      .then((data) => {
+        if (cancelled) {
+          return;
+        }
+        setImageModelOptions(data);
+        setSelectedImageModel((current) => {
+          if (current && data.some((model) => model.slug === current)) {
+            return current;
+          }
+          return data.find((model) => model.isUserDefault)?.slug ?? data[0]?.slug ?? '';
+        });
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setImageModelOptions([]);
+        setSelectedImageModel('');
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setImageModelLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCharacterLoading(true);
+
+    void fetch('/api/explore/subjects?scope=all', {
+      headers: {
+        Accept: 'application/json',
+      },
+      cache: 'no-store',
+    })
+      .then(async (response) => {
+        const payload = (await response.json()) as ApiEnvelope<ExploreCatalogResponse<ExploreCharacterOption>>;
+        if (!response.ok || !payload.ok) {
+          throw new Error(!payload.ok ? payload.error.message : '加载主体列表失败。');
+        }
+        return payload.data;
+      })
+      .then((data) => {
+        if (cancelled) {
+          return;
+        }
+        setCharacterOptions(data);
+        setSelectedCharacter((current) => {
+          if (current && data.some((subject) => subject.slug === current)) {
+            return current;
+          }
+          return data[0]?.slug ?? '';
+        });
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setCharacterOptions([]);
+        setSelectedCharacter('');
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setCharacterLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStyleLoading(true);
+
+    void fetch('/api/explore/styles?scope=all', {
+      headers: {
+        Accept: 'application/json',
+      },
+      cache: 'no-store',
+    })
+      .then(async (response) => {
+        const payload = (await response.json()) as ApiEnvelope<ExploreCatalogResponse<ExploreStyleOption>>;
+        if (!response.ok || !payload.ok) {
+          throw new Error(!payload.ok ? payload.error.message : '加载画风列表失败。');
+        }
+        return payload.data;
+      })
+      .then((data) => {
+        if (cancelled) {
+          return;
+        }
+        setStyleOptions(data);
+        setSelectedModel((current) => {
+          if (current && data.some((style) => style.slug === current)) {
+            return current;
+          }
+          return data[0]?.slug ?? '';
+        });
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setStyleOptions([]);
+        setSelectedModel('');
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setStyleLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const selectedImageModelOption = imageModelOptions.find((model) => model.slug === selectedImageModel) ?? null;
+  const selectedCharacterOption = characterOptions.find((subject) => subject.slug === selectedCharacter) ?? null;
+  const selectedStyleOption = styleOptions.find((style) => style.slug === selectedModel) ?? null;
+  const filteredCharacterOptions = characterOptions.filter((subject) => {
+    if (subjectScope === 'public' && subject.visibility !== 'public') {
+      return false;
+    }
+
+    if (subjectScope === 'personal' && subject.visibility !== 'personal') {
+      return false;
+    }
+
+    if (subjectGenderFilter !== 'all' && subject.genderTag !== subjectGenderFilter) {
+      return false;
+    }
+
+    return true;
+  });
 
   const triggerToast = (msg: string) => {
     setToastMsg(msg);
@@ -84,9 +299,45 @@ export function ExplorePage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isExpanded]);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      triggerToast(`已准备上传: ${e.target.files[0].name}`);
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+
+    if (!file) {
+      return;
+    }
+
+    const lowerName = file.name.toLowerCase();
+    const isTextLike =
+      file.type.startsWith('text/') ||
+      file.type === 'application/json' ||
+      lowerName.endsWith('.txt') ||
+      lowerName.endsWith('.md') ||
+      lowerName.endsWith('.markdown') ||
+      lowerName.endsWith('.json');
+
+    if (!isTextLike) {
+      triggerToast('上传剧本当前仅支持 txt / md / json 文本文件。');
+      return;
+    }
+
+    try {
+      const content = await file.text();
+      const normalized = content.trim();
+      if (!normalized) {
+        triggerToast('剧本文件内容为空。');
+        return;
+      }
+
+      setPromptText(normalized);
+      setScriptSourceName(file.name);
+      setIsExpanded(true);
+      triggerToast(`已导入剧本: ${file.name}`);
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 50);
+    } catch {
+      triggerToast('读取剧本文件失败。');
     }
   };
 
@@ -102,6 +353,17 @@ export function ExplorePage() {
       const created = await createStudioProject({
         prompt: normalizedPrompt,
         contentMode,
+        creationConfig: {
+          selectedTab: activeTab,
+          scriptSourceName: scriptSourceName || undefined,
+          scriptContent: scriptSourceName ? normalizedPrompt : undefined,
+          imageModelEndpointSlug: selectedImageModel || undefined,
+          subjectProfileSlug: selectedCharacter || undefined,
+          stylePresetSlug: selectedModel || undefined,
+          settings: {
+            multiEpisode: isMultiEpisode,
+          },
+        },
       });
       router.push(`/projects/${created.projectId}/planner`);
     } catch (error) {
@@ -251,7 +513,7 @@ export function ExplorePage() {
                         <div className={styles.popoverContainer}>
                           {selectedImageModel ? (
                             <div className={cx(styles.selectedTokenPill, activePopover === 'imageModel' && styles.selectedTokenPillActive)} onClick={() => setActivePopover(activePopover === 'imageModel' ? null : 'imageModel')}>
-                              <span className={styles.tokenPillText}>{selectedImageModel}</span>
+                              <span className={styles.tokenPillText}>{selectedImageModelOption?.label ?? selectedImageModel}</span>
                               <button className={styles.tokenPillClear} onClick={(e) => { e.stopPropagation(); setSelectedImageModel(''); }}>
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                               </button>
@@ -260,6 +522,7 @@ export function ExplorePage() {
                             <Tooltip content="主体图模型">
                               <button
                                 className={cx(styles.toolIcon, activePopover === 'imageModel' && styles.toolIconActive)}
+                                disabled={imageModelLoading || imageModelOptions.length === 0}
                                 onClick={() => setActivePopover(activePopover === 'imageModel' ? null : 'imageModel')}
                               >
                                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
@@ -271,8 +534,8 @@ export function ExplorePage() {
                         <div className={styles.popoverContainer}>
                           {selectedCharacter ? (
                             <div className={cx(styles.selectedTokenPill, activePopover === 'character' && styles.selectedTokenPillActive)} onClick={() => setActivePopover(activePopover === 'character' ? null : 'character')}>
-                              <img src={CHARACTER_OPTIONS.find((c) => c.name === selectedCharacter)?.imageUrl} alt={selectedCharacter} className={styles.tokenPillAvatar} />
-                              <span className={styles.tokenPillText}>{selectedCharacter}</span>
+                              <img src={selectedCharacterOption?.imageUrl} alt={selectedCharacterOption?.name ?? selectedCharacter} className={styles.tokenPillAvatar} />
+                              <span className={styles.tokenPillText}>{selectedCharacterOption?.name ?? selectedCharacter}</span>
                               <button className={styles.tokenPillClear} onClick={(e) => { e.stopPropagation(); setSelectedCharacter(''); }}>
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                               </button>
@@ -292,8 +555,8 @@ export function ExplorePage() {
                         <div className={styles.popoverContainer}>
                           {selectedModel ? (
                             <div className={cx(styles.selectedTokenPill, activePopover === 'model' && styles.selectedTokenPillActive)} onClick={() => setActivePopover(activePopover === 'model' ? null : 'model')}>
-                              <img src={STYLE_OPTIONS.find((s) => s.name === selectedModel)?.imageUrl} alt={selectedModel} className={styles.tokenPillAvatar} />
-                              <span className={styles.tokenPillText}>{selectedModel}</span>
+                              <img src={selectedStyleOption?.imageUrl} alt={selectedStyleOption?.name ?? selectedModel} className={styles.tokenPillAvatar} />
+                              <span className={styles.tokenPillText}>{selectedStyleOption?.name ?? selectedModel}</span>
                               <button className={styles.tokenPillClear} onClick={(e) => { e.stopPropagation(); setSelectedModel(''); }}>
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                               </button>
@@ -337,6 +600,7 @@ export function ExplorePage() {
                       type="file"
                       ref={fileInputRef}
                       style={{ display: 'none' }}
+                      accept=".txt,.md,.markdown,.json,text/plain,text/markdown,application/json"
                       onChange={handleFileSelect}
                     />
                   </div>
@@ -353,17 +617,19 @@ export function ExplorePage() {
                     <div className={styles.popoverMenu}>
                       <div className={styles.popoverHeader}>主体图模型</div>
                       <div className={styles.popoverModelList}>
-                        {IMAGE_MODEL_OPTIONS.map(m => (
+                        {imageModelLoading ? <div className={styles.popoverEmpty}>正在加载后台已启用的生图模型...</div> : null}
+                        {!imageModelLoading && imageModelOptions.length === 0 ? <div className={styles.popoverEmpty}>请先去接口配置里启用至少一个图片模型。</div> : null}
+                        {imageModelOptions.map((model) => (
                           <button
-                            key={m}
-                            className={cx(styles.popoverItem, selectedImageModel === m && styles.popoverItemActive)}
+                            key={model.id}
+                            className={cx(styles.popoverItem, selectedImageModel === model.slug && styles.popoverItemActive)}
                             onClick={() => {
-                              setSelectedImageModel(m);
+                              setSelectedImageModel(model.slug);
                               setActivePopover(null);
                             }}
                           >
-                            {m}
-                            {selectedImageModel === m && (
+                            <span>{model.label}</span>
+                            {selectedImageModel === model.slug && (
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
                             )}
                           </button>
@@ -376,26 +642,28 @@ export function ExplorePage() {
                     <div className={styles.popoverMenu}>
                       <div className={styles.popoverHeader} style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', gap: '16px' }}>
-                          <span style={{ color: 'var(--text-primary)', cursor: 'pointer' }}>公共</span>
-                          <span style={{ cursor: 'pointer' }}>个人</span>
+                          <span style={{ color: subjectScope === 'public' ? 'var(--text-primary)' : undefined, cursor: 'pointer' }} onClick={() => setSubjectScope('public')}>公共</span>
+                          <span style={{ color: subjectScope === 'personal' ? 'var(--text-primary)' : undefined, cursor: 'pointer' }} onClick={() => setSubjectScope('personal')}>个人</span>
                         </div>
                         <span onClick={() => router.push('/projects/new-character')} className={styles.textLink}>+ 添加新主体</span>
                       </div>
 
                       <div className={styles.popoverFilterBar}>
-                        <span className={styles.filterChipActive}>全部</span>
-                        <span className={styles.filterChip}>女性</span>
-                        <span className={styles.filterChip}>男性</span>
-                        <span className={styles.filterChip}>小孩</span>
+                        <span className={cx(subjectGenderFilter === 'all' ? styles.filterChipActive : styles.filterChip)} onClick={() => setSubjectGenderFilter('all')}>全部</span>
+                        <span className={cx(subjectGenderFilter === 'female' ? styles.filterChipActive : styles.filterChip)} onClick={() => setSubjectGenderFilter('female')}>女性</span>
+                        <span className={cx(subjectGenderFilter === 'male' ? styles.filterChipActive : styles.filterChip)} onClick={() => setSubjectGenderFilter('male')}>男性</span>
+                        <span className={cx(subjectGenderFilter === 'child' ? styles.filterChipActive : styles.filterChip)} onClick={() => setSubjectGenderFilter('child')}>小孩</span>
                       </div>
 
                       <div className={cx(styles.popoverGridCols4, styles.popoverGridScrollable)}>
-                        {CHARACTER_OPTIONS.map((char) => (
+                        {characterLoading ? <div className={styles.popoverEmpty}>正在加载主体列表...</div> : null}
+                        {!characterLoading && filteredCharacterOptions.length === 0 ? <div className={styles.popoverEmpty}>暂无可用主体。</div> : null}
+                        {filteredCharacterOptions.map((char) => (
                           <button
-                            key={char.name}
-                            className={cx(styles.characterAvatarBtn, selectedCharacter === char.name && styles.characterAvatarBtnActive)}
+                            key={char.id}
+                            className={cx(styles.characterAvatarBtn, selectedCharacter === char.slug && styles.characterAvatarBtnActive)}
                             onClick={() => {
-                              setSelectedCharacter(char.name);
+                              setSelectedCharacter(char.slug);
                               setActivePopover(null);
                             }}
                           >
@@ -411,12 +679,14 @@ export function ExplorePage() {
                     <div className={styles.popoverMenu}>
                       <div className={styles.popoverHeader}>画风列表</div>
                       <div className={cx(styles.popoverGridCols5, styles.popoverGridScrollable)}>
-                        {STYLE_OPTIONS.map((style) => (
+                        {styleLoading ? <div className={styles.popoverEmpty}>正在加载画风列表...</div> : null}
+                        {!styleLoading && styleOptions.length === 0 ? <div className={styles.popoverEmpty}>暂无可用画风。</div> : null}
+                        {styleOptions.map((style) => (
                           <button
-                            key={style.name}
-                            className={cx(styles.styleCardBtn, selectedModel === style.name && styles.styleCardBtnActive)}
+                            key={style.id}
+                            className={cx(styles.styleCardBtn, selectedModel === style.slug && styles.styleCardBtnActive)}
                             onClick={() => {
-                              setSelectedModel(style.name);
+                              setSelectedModel(style.slug);
                               setActivePopover(null);
                             }}
                           >

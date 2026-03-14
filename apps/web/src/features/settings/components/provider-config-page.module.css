@@ -511,27 +511,208 @@
   gap: 8px;
 }
 
-.endpointChecklist {
+.modelSectionCard {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 20px;
+  background: rgba(248, 250, 252, 0.78);
+}
+
+.modelSectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sectionToggleButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.modelDefaultRow {
   display: grid;
   gap: 8px;
-  padding: 12px 14px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.modelPicker {
+  position: relative;
+}
+
+.modelPickerTrigger {
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
   border-radius: 18px;
-  background: rgba(248, 250, 252, 0.92);
-}
-
-.endpointCheck {
+  background: rgba(255, 255, 255, 0.96);
+  color: #0f172a;
+  cursor: pointer;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #334155;
-  font-size: 14px;
-  font-weight: 500;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
-.endpointCheck input {
+.modelPickerTriggerActive {
+  border-color: rgba(37, 99, 235, 0.46);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.modelPickerValues {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.modelPickerPlaceholder {
+  padding: 7px 2px;
+  color: #64748b;
+  font-size: 14px;
+  text-align: left;
+}
+
+.modelPickerTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.09);
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.modelPickerTagRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 16px;
   height: 16px;
+  border-radius: 999px;
+  color: #64748b;
+}
+
+.modelPickerActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+.modelPickerClear {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.modelPickerCaret {
+  color: #334155;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.modelPickerPanel {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(18px);
+}
+
+.modelPickerSearchWrap {
+  padding: 2px;
+}
+
+.modelPickerSearch {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.96);
+  color: #0f172a;
+  outline: none;
+}
+
+.modelPickerSearch:focus {
+  border-color: rgba(37, 99, 235, 0.46);
+}
+
+.modelPickerList {
+  display: grid;
+  gap: 4px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.modelPickerOption {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: #1e293b;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.modelPickerOption:hover {
+  background: rgba(241, 245, 249, 0.92);
+}
+
+.modelPickerOptionChecked {
+  background: rgba(239, 246, 255, 0.96);
+}
+
+.modelPickerOptionMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  color: #2563eb;
+  font-weight: 800;
+}
+
+.modelPickerOptionLabel {
+  flex: 1;
+}
+
+.modelPickerEmpty {
+  padding: 14px 12px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .fieldLabel {
@@ -704,6 +885,10 @@
   }
 
   .healthHeader {
+    display: grid;
+  }
+
+  .modelSectionHeader {
     display: grid;
   }
 }

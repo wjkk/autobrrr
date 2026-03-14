@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify';
+import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { requireUser } from '../lib/auth.js';
 import { resolveModelSelection } from '../lib/model-registry.js';
 import { prisma } from '../lib/prisma.js';
+import { listUserEnabledModelEndpoints } from '../lib/user-model-defaults.js';
 
 const listFamiliesQuerySchema = z.object({
   modelKind: z.enum(['image', 'video', 'text', 'audio', 'lipsync']).optional(),
@@ -12,6 +14,7 @@ const listFamiliesQuerySchema = z.object({
 const listEndpointsQuerySchema = z.object({
   familySlug: z.string().trim().min(1).optional(),
   modelKind: z.enum(['image', 'video', 'text', 'audio', 'lipsync']).optional(),
+  scope: z.enum(['all', 'userEnabled']).optional().default('all'),
 });
 
 const resolveSchema = z.object({
@@ -73,17 +76,31 @@ export async function registerModelRegistryRoutes(app: FastifyInstance) {
       });
     }
 
-    const endpoints = await prisma.modelEndpoint.findMany({
-      where: {
-        ...(query.data.familySlug ? { family: { slug: query.data.familySlug } } : {}),
-        ...(query.data.modelKind ? { family: { ...(query.data.familySlug ? { slug: query.data.familySlug } : {}), modelKind: query.data.modelKind.toUpperCase() as 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO' | 'LIPSYNC' } } : {}),
-      },
-      include: {
-        family: true,
-        provider: true,
-      },
-      orderBy: [{ family: { slug: 'asc' } }, { priority: 'asc' }, { createdAt: 'asc' }],
-    });
+    let endpoints: Array<Prisma.ModelEndpointGetPayload<{ include: { family: true; provider: true } }>> = [];
+    let userDefaultEndpointSlug: string | null = null;
+
+    if (query.data.scope === 'userEnabled' && query.data.modelKind && ['image', 'video', 'text'].includes(query.data.modelKind)) {
+      const result = await listUserEnabledModelEndpoints(
+        user.id,
+        query.data.modelKind.toUpperCase() as 'IMAGE' | 'VIDEO' | 'TEXT',
+      );
+      userDefaultEndpointSlug = result.defaultEndpointSlug;
+      endpoints = query.data.familySlug
+        ? result.endpoints.filter((endpoint) => endpoint.family.slug === query.data.familySlug)
+        : result.endpoints;
+    } else {
+      endpoints = await prisma.modelEndpoint.findMany({
+        where: {
+          ...(query.data.familySlug ? { family: { slug: query.data.familySlug } } : {}),
+          ...(query.data.modelKind ? { family: { ...(query.data.familySlug ? { slug: query.data.familySlug } : {}), modelKind: query.data.modelKind.toUpperCase() as 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO' | 'LIPSYNC' } } : {}),
+        },
+        include: {
+          family: true,
+          provider: true,
+        },
+        orderBy: [{ family: { slug: 'asc' } }, { priority: 'asc' }, { createdAt: 'asc' }],
+      });
+    }
 
     return reply.send({
       ok: true,
@@ -95,6 +112,7 @@ export async function registerModelRegistryRoutes(app: FastifyInstance) {
         status: endpoint.status.toLowerCase(),
         priority: endpoint.priority,
         isDefault: endpoint.isDefault,
+        isUserDefault: userDefaultEndpointSlug === endpoint.slug,
         family: {
           id: endpoint.family.id,
           slug: endpoint.family.slug,

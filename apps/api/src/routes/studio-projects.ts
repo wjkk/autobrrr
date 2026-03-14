@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { requireUser } from '../lib/auth.js';
@@ -8,6 +9,15 @@ import { prisma } from '../lib/prisma.js';
 const createProjectSchema = z.object({
   prompt: z.string().trim().min(1).max(2000),
   contentMode: z.enum(['single', 'series']).default('single'),
+  creationConfig: z.object({
+    selectedTab: z.enum(['短剧漫剧', '音乐MV', '知识分享']).default('短剧漫剧'),
+    scriptSourceName: z.string().trim().min(1).max(255).optional(),
+    scriptContent: z.string().trim().min(1).max(100_000).optional(),
+    imageModelEndpointSlug: z.string().trim().min(1).max(120).optional(),
+    subjectProfileSlug: z.string().trim().min(1).max(120).optional(),
+    stylePresetSlug: z.string().trim().min(1).max(120).optional(),
+    settings: z.record(z.string(), z.unknown()).optional(),
+  }).optional(),
 });
 
 function mapProjectStatus(status: string) {
@@ -65,6 +75,90 @@ export async function registerStudioProjectRoutes(app: FastifyInstance) {
 
     const contentMode = payload.data.contentMode === 'series' ? 'SERIES' : 'SINGLE';
     const title = buildProjectTitleFromPrompt(payload.data.prompt);
+    const creationConfig = payload.data.creationConfig;
+
+    const [imageModelEndpoint, subjectProfile, stylePreset] = await Promise.all([
+      creationConfig?.imageModelEndpointSlug
+        ? prisma.modelEndpoint.findFirst({
+            where: {
+              slug: creationConfig.imageModelEndpointSlug,
+              status: 'ACTIVE',
+              family: {
+                modelKind: 'IMAGE',
+              },
+            },
+            select: {
+              id: true,
+            },
+          })
+        : Promise.resolve(null),
+      creationConfig?.subjectProfileSlug
+        ? prisma.subjectProfile.findFirst({
+            where: {
+              slug: creationConfig.subjectProfileSlug,
+              enabled: true,
+              OR: [
+                { visibility: 'PUBLIC' },
+                {
+                  visibility: 'PERSONAL',
+                  ownerUserId: user.id,
+                },
+              ],
+            },
+            select: {
+              id: true,
+            },
+          })
+        : Promise.resolve(null),
+      creationConfig?.stylePresetSlug
+        ? prisma.stylePreset.findFirst({
+            where: {
+              slug: creationConfig.stylePresetSlug,
+              enabled: true,
+              OR: [
+                { visibility: 'PUBLIC' },
+                {
+                  visibility: 'PERSONAL',
+                  ownerUserId: user.id,
+                },
+              ],
+            },
+            select: {
+              id: true,
+            },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    if (creationConfig?.imageModelEndpointSlug && !imageModelEndpoint) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'INVALID_IMAGE_MODEL',
+          message: 'Selected image model is not available.',
+        },
+      });
+    }
+
+    if (creationConfig?.subjectProfileSlug && !subjectProfile) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'INVALID_SUBJECT_PROFILE',
+          message: 'Selected subject is not available.',
+        },
+      });
+    }
+
+    if (creationConfig?.stylePresetSlug && !stylePreset) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'INVALID_STYLE_PRESET',
+          message: 'Selected style is not available.',
+        },
+      });
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       const project = await tx.project.create({
@@ -76,6 +170,21 @@ export async function registerStudioProjectRoutes(app: FastifyInstance) {
           createdById: user.id,
         },
       });
+
+      if (creationConfig) {
+        await tx.projectCreationConfig.create({
+          data: {
+            projectId: project.id,
+            selectedTab: creationConfig.selectedTab,
+            scriptSourceName: creationConfig.scriptSourceName ?? null,
+            scriptContent: creationConfig.scriptContent ?? null,
+            imageModelEndpointId: imageModelEndpoint?.id ?? null,
+            subjectProfileId: subjectProfile?.id ?? null,
+            stylePresetId: stylePreset?.id ?? null,
+            ...(creationConfig.settings ? { settingsJson: creationConfig.settings as Prisma.InputJsonValue } : {}),
+          },
+        });
+      }
 
       const episode = await tx.episode.create({
         data: {
@@ -161,6 +270,31 @@ export async function registerStudioProjectRoutes(app: FastifyInstance) {
             status: true,
           },
         },
+        creationConfig: {
+          include: {
+            imageModelEndpoint: {
+              select: {
+                id: true,
+                slug: true,
+                label: true,
+              },
+            },
+            subjectProfile: {
+              select: {
+                id: true,
+                slug: true,
+                name: true,
+              },
+            },
+            stylePreset: {
+              select: {
+                id: true,
+                slug: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -183,6 +317,17 @@ export async function registerStudioProjectRoutes(app: FastifyInstance) {
         contentMode: project.contentMode.toLowerCase(),
         status: project.status.toLowerCase(),
         currentEpisodeId: project.currentEpisodeId,
+        creationConfig: project.creationConfig
+          ? {
+              selectedTab: project.creationConfig.selectedTab,
+              scriptSourceName: project.creationConfig.scriptSourceName,
+              hasScriptContent: Boolean(project.creationConfig.scriptContent),
+              imageModelEndpoint: project.creationConfig.imageModelEndpoint,
+              subjectProfile: project.creationConfig.subjectProfile,
+              stylePreset: project.creationConfig.stylePreset,
+              settings: project.creationConfig.settingsJson,
+            }
+          : null,
         episodes: project.episodes.map((episode) => ({
           id: episode.id,
           episodeNo: episode.episodeNo,

@@ -56,6 +56,15 @@ function resolveErrorMessage(payload: unknown, fallback: string) {
 export interface CreateStudioProjectInput {
   prompt: string;
   contentMode: ProjectContentMode;
+  creationConfig?: {
+    selectedTab: '短剧漫剧' | '音乐MV' | '知识分享';
+    scriptSourceName?: string;
+    scriptContent?: string;
+    imageModelEndpointSlug?: string;
+    subjectProfileSlug?: string;
+    stylePresetSlug?: string;
+    settings?: Record<string, unknown>;
+  };
 }
 
 export interface CreateStudioProjectResult {
@@ -189,6 +198,13 @@ export async function createStudioProject(input: CreateStudioProjectInput): Prom
   const payload: CreateStudioProjectInput = {
     prompt: normalizedPrompt,
     contentMode: input.contentMode === 'series' ? 'series' : 'single',
+    ...(input.creationConfig
+      ? {
+          creationConfig: {
+            ...input.creationConfig,
+          },
+        }
+      : {}),
   };
 
   if (typeof window !== 'undefined') {

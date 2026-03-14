@@ -91,6 +91,25 @@ enum ModelEndpointStatus {
   DISABLED
 }
 
+enum CatalogVisibility {
+  PUBLIC
+  PERSONAL
+}
+
+enum SubjectType {
+  HUMAN
+  ANIMAL
+  CREATURE
+  OBJECT
+}
+
+enum SubjectGenderTag {
+  UNKNOWN
+  FEMALE
+  MALE
+  CHILD
+}
+
 enum RunType {
   PLANNER_DOC_UPDATE
   STORYBOARD_GENERATION
@@ -133,6 +152,8 @@ model User {
   plannerSessions PlannerSession[]
   assets       Asset[]
   providerConfigs UserProviderConfig[]
+  subjectProfiles SubjectProfile[]
+  stylePresets StylePreset[]
 
   @@map("users")
 }
@@ -174,6 +195,7 @@ model Project {
   runs             Run[]
   recipes          GenerationRecipe[]
   recipeExecutions RecipeExecution[]
+  creationConfig   ProjectCreationConfig?
 
   @@index([status, updatedAt])
   @@index([createdById, updatedAt])
@@ -370,6 +392,7 @@ model ModelEndpoint {
   family              ModelFamily         @relation(fields: [familyId], references: [id], onDelete: Cascade)
   provider            ModelProvider       @relation(fields: [providerId], references: [id], onDelete: Cascade)
   runs                Run[]
+  projectCreationConfigs ProjectCreationConfig[]
 
   @@index([familyId, status, priority])
   @@index([providerId, status, priority])
@@ -412,6 +435,81 @@ model RecipeExecution {
   @@index([recipeId, createdAt])
   @@index([projectId, status, createdAt])
   @@map("recipe_executions")
+}
+
+model SubjectProfile {
+  id                String            @id @default(cuid())
+  slug              String            @unique @db.VarChar(120)
+  name              String            @db.VarChar(120)
+  visibility        CatalogVisibility @default(PUBLIC)
+  ownerUserId       String?           @map("owner_user_id")
+  subjectType       SubjectType       @map("subject_type") @default(HUMAN)
+  genderTag         SubjectGenderTag  @map("gender_tag") @default(UNKNOWN)
+  previewImageUrl   String            @map("preview_image_url") @db.VarChar(2048)
+  referenceImageUrl String?           @map("reference_image_url") @db.VarChar(2048)
+  description       String?           @db.Text
+  promptTemplate    String?           @map("prompt_template") @db.Text
+  negativePrompt    String?           @map("negative_prompt") @db.Text
+  tagsJson          Json?             @map("tags_json")
+  metadataJson      Json?             @map("metadata_json")
+  enabled           Boolean           @default(true)
+  sortOrder         Int               @map("sort_order") @default(100)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  ownerUser         User?             @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  projectCreationConfigs ProjectCreationConfig[]
+
+  @@index([visibility, enabled, sortOrder])
+  @@index([ownerUserId, visibility, enabled, sortOrder])
+  @@index([genderTag, enabled, sortOrder])
+  @@map("subject_profiles")
+}
+
+model StylePreset {
+  id              String            @id @default(cuid())
+  slug            String            @unique @db.VarChar(120)
+  name            String            @db.VarChar(120)
+  visibility      CatalogVisibility @default(PUBLIC)
+  ownerUserId     String?           @map("owner_user_id")
+  previewImageUrl String            @map("preview_image_url") @db.VarChar(2048)
+  description     String?           @db.Text
+  promptTemplate  String?           @map("prompt_template") @db.Text
+  negativePrompt  String?           @map("negative_prompt") @db.Text
+  tagsJson        Json?             @map("tags_json")
+  metadataJson    Json?             @map("metadata_json")
+  enabled         Boolean           @default(true)
+  sortOrder       Int               @map("sort_order") @default(100)
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  ownerUser       User?             @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  projectCreationConfigs ProjectCreationConfig[]
+
+  @@index([visibility, enabled, sortOrder])
+  @@index([ownerUserId, visibility, enabled, sortOrder])
+  @@map("style_presets")
+}
+
+model ProjectCreationConfig {
+  id                   String         @id @default(cuid())
+  projectId            String         @unique @map("project_id")
+  selectedTab          String         @map("selected_tab") @db.VarChar(64)
+  scriptSourceName     String?        @map("script_source_name") @db.VarChar(255)
+  scriptContent        String?        @map("script_content") @db.Text
+  imageModelEndpointId String?        @map("image_model_endpoint_id")
+  subjectProfileId     String?        @map("subject_profile_id")
+  stylePresetId        String?        @map("style_preset_id")
+  settingsJson         Json?          @map("settings_json")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+  project              Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  imageModelEndpoint   ModelEndpoint? @relation(fields: [imageModelEndpointId], references: [id], onDelete: SetNull)
+  subjectProfile       SubjectProfile? @relation(fields: [subjectProfileId], references: [id], onDelete: SetNull)
+  stylePreset          StylePreset?   @relation(fields: [stylePresetId], references: [id], onDelete: SetNull)
+
+  @@index([imageModelEndpointId])
+  @@index([subjectProfileId])
+  @@index([stylePresetId])
+  @@map("project_creation_configs")
 }
 
 model Run {

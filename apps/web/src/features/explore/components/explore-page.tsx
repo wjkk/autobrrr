@@ -24,6 +24,11 @@ import type {
 } from './explore-page.types';
 
 const PRESET_IMAGE_CLASSES = [styles.presetImg1, styles.presetImg2, styles.presetImg3];
+const MAX_SCRIPT_HAN_CHAR_COUNT = 10_000;
+
+function countHanCharacters(value: string) {
+  return (value.match(/\p{Script=Han}/gu) ?? []).length;
+}
 
 interface ApiEnvelopeSuccess<T> {
   ok: true;
@@ -309,15 +314,12 @@ export function ExplorePage() {
 
     const lowerName = file.name.toLowerCase();
     const isTextLike =
-      file.type.startsWith('text/') ||
-      file.type === 'application/json' ||
       lowerName.endsWith('.txt') ||
       lowerName.endsWith('.md') ||
-      lowerName.endsWith('.markdown') ||
-      lowerName.endsWith('.json');
+      lowerName.endsWith('.markdown');
 
     if (!isTextLike) {
-      triggerToast('上传剧本当前仅支持 txt / md / json 文本文件。');
+      triggerToast('上传附件当前仅支持 txt / md / markdown 文件。');
       return;
     }
 
@@ -326,6 +328,11 @@ export function ExplorePage() {
       const normalized = content.trim();
       if (!normalized) {
         triggerToast('剧本文件内容为空。');
+        return;
+      }
+
+      if (countHanCharacters(normalized) > MAX_SCRIPT_HAN_CHAR_COUNT) {
+        triggerToast(`上传附件的汉字数量不能超过 ${MAX_SCRIPT_HAN_CHAR_COUNT}。`);
         return;
       }
 
@@ -344,6 +351,11 @@ export function ExplorePage() {
   const handleSubmit = async () => {
     const normalizedPrompt = promptText.trim();
     if (!normalizedPrompt || submitting) {
+      return;
+    }
+
+    if (countHanCharacters(normalizedPrompt) > MAX_SCRIPT_HAN_CHAR_COUNT) {
+      triggerToast(`内容中的汉字数量不能超过 ${MAX_SCRIPT_HAN_CHAR_COUNT}。`);
       return;
     }
 
@@ -600,7 +612,7 @@ export function ExplorePage() {
                       type="file"
                       ref={fileInputRef}
                       style={{ display: 'none' }}
-                      accept=".txt,.md,.markdown,.json,text/plain,text/markdown,application/json"
+                      accept=".txt,.md,.markdown,text/plain,text/markdown"
                       onChange={handleFileSelect}
                     />
                   </div>

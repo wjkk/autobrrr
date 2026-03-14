@@ -191,16 +191,52 @@ async function main() {
     body: JSON.stringify({
       prompt: '烟雨中的机械猫在屋檐下观察城市，生成一个短片项目',
       contentMode: 'single',
+      creationConfig: {
+        selectedTab: '短剧漫剧',
+        scriptSourceName: 'smoke-script.md',
+        scriptContent: '# Smoke Script\n\n机械猫在雨夜城市中寻找失落的记忆。',
+        imageModelEndpointSlug: 'proxy-seko-image-v1',
+        subjectProfileSlug: 'little-fox',
+        stylePresetSlug: 'ink-oriental',
+        settings: {
+          multiEpisode: false,
+        },
+      },
     }),
   });
   console.log(`[smoke] project created: ${createdProject.data.projectId}`);
 
+  await request('/api/explore/subjects?scope=all', { cookie });
+  console.log('[smoke] explore subjects ok');
+
+  await request('/api/explore/styles?scope=all', { cookie });
+  console.log('[smoke] explore styles ok');
+
   const project = await request<{
     id: string;
     currentEpisodeId: string | null;
+    creationConfig: {
+      selectedTab: string;
+      scriptSourceName: string | null;
+      hasScriptContent: boolean;
+      imageModelEndpoint: { slug: string } | null;
+      subjectProfile: { slug: string } | null;
+      stylePreset: { slug: string } | null;
+      settings: Record<string, unknown> | null;
+    } | null;
     episodes: Array<{ id: string; episodeNo: number; title: string; status: string }>;
   }>(`/api/studio/projects/${createdProject.data.projectId}`, { cookie });
   console.log('[smoke] project detail ok');
+
+  if (
+    project.data.creationConfig?.imageModelEndpoint?.slug !== 'proxy-seko-image-v1'
+    || project.data.creationConfig?.subjectProfile?.slug !== 'little-fox'
+    || project.data.creationConfig?.stylePreset?.slug !== 'ink-oriental'
+    || project.data.creationConfig?.hasScriptContent !== true
+  ) {
+    throw new Error('Project creation config snapshot was not persisted correctly.');
+  }
+  console.log('[smoke] project creation config persisted');
 
   const episodeId = project.data.currentEpisodeId ?? project.data.episodes[0]?.id;
   if (!episodeId) {

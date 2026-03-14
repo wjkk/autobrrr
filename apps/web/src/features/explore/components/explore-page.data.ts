@@ -1,8 +1,6 @@
 import type {
   ContentTab,
-  ExploreCharacterOption,
   ExplorePresetCard,
-  ExploreStyleOption,
   InspirationCard,
 } from './explore-page.types';
 
@@ -23,23 +21,6 @@ export const TAB_PREFIX_CLASS_SUFFIX: Record<ContentTab, 'drama' | 'mv' | 'edu'>
   音乐MV: 'mv',
   知识分享: 'edu',
 };
-
-export const IMAGE_MODEL_OPTIONS = ['智能选择', 'Seko Image', 'Z-Image', '即梦 5.0', '即梦 4.5'];
-
-export const CHARACTER_OPTIONS: ExploreCharacterOption[] = [
-  { id: 'fallback-seko', slug: 'fallback-seko', name: 'Seko', imageUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100', visibility: 'public', subjectType: 'human', genderTag: 'female' },
-  { id: 'fallback-old-master', slug: 'fallback-old-master', name: '老顽童', imageUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=100', visibility: 'public', subjectType: 'human', genderTag: 'male' },
-  { id: 'fallback-little-fox', slug: 'fallback-little-fox', name: '小狐狸', imageUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100', visibility: 'public', subjectType: 'animal', genderTag: 'unknown' },
-  { id: 'fallback-young-man', slug: 'fallback-young-man', name: '青年', imageUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=100', visibility: 'public', subjectType: 'human', genderTag: 'male' },
-];
-
-export const STYLE_OPTIONS: ExploreStyleOption[] = [
-  { id: 'fallback-cinematic', slug: 'fallback-cinematic', name: '影视质感', imageUrl: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&q=80&w=100', visibility: 'public' },
-  { id: 'fallback-vivid-realism', slug: 'fallback-vivid-realism', name: '高饱和写实', imageUrl: 'https://images.unsplash.com/photo-1621415053503-455b80a1532f?auto=format&fit=crop&q=80&w=100', visibility: 'public' },
-  { id: 'fallback-anime', slug: 'fallback-anime', name: '日漫二次元', imageUrl: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&q=80&w=100', visibility: 'public' },
-  { id: 'fallback-cartoon-3d', slug: 'fallback-cartoon-3d', name: '3D卡通', imageUrl: 'https://images.unsplash.com/photo-1627856013091-fed6e4e070c4?auto=format&fit=crop&q=80&w=100', visibility: 'public' },
-  { id: 'fallback-ink-oriental', slug: 'fallback-ink-oriental', name: '水墨国风', imageUrl: 'https://plus.unsplash.com/premium_photo-1673306778968-5aab577a7365?auto=format&fit=crop&q=80&w=100', visibility: 'public' },
-];
 
 const DRAMA_PRESETS: ExplorePresetCard[] = [
   {

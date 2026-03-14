@@ -43,6 +43,8 @@
    说明：Web/客户端到后端的查询与命令接口。
 3. `docs/specs/internal-execution-api-spec-v0.3.md`  
    说明：后端到 Worker/provider 的内部任务下发与回传协议。
+4. `docs/specs/explore-catalog-management-spec-v0.3.md`  
+   说明：首页主体/画风目录、项目入口配置快照与后续管理字段设计。
 
 ### 3.3 状态与实施
 

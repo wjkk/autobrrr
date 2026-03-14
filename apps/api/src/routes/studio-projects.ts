@@ -6,13 +6,25 @@ import { requireUser } from '../lib/auth.js';
 import { buildProjectTitleFromPrompt } from '../lib/project-title.js';
 import { prisma } from '../lib/prisma.js';
 
+const MAX_SCRIPT_HAN_CHAR_COUNT = 10_000;
+
+function countHanCharacters(value: string) {
+  return (value.match(/\p{Script=Han}/gu) ?? []).length;
+}
+
 const createProjectSchema = z.object({
-  prompt: z.string().trim().min(1).max(2000),
+  prompt: z.string().trim().min(1).max(100_000).refine(
+    (value) => countHanCharacters(value) <= MAX_SCRIPT_HAN_CHAR_COUNT,
+    `Prompt 汉字数量不能超过 ${MAX_SCRIPT_HAN_CHAR_COUNT}。`,
+  ),
   contentMode: z.enum(['single', 'series']).default('single'),
   creationConfig: z.object({
     selectedTab: z.enum(['短剧漫剧', '音乐MV', '知识分享']).default('短剧漫剧'),
     scriptSourceName: z.string().trim().min(1).max(255).optional(),
-    scriptContent: z.string().trim().min(1).max(100_000).optional(),
+    scriptContent: z.string().trim().min(1).max(100_000).refine(
+      (value) => countHanCharacters(value) <= MAX_SCRIPT_HAN_CHAR_COUNT,
+      `scriptContent 汉字数量不能超过 ${MAX_SCRIPT_HAN_CHAR_COUNT}。`,
+    ).optional(),
     imageModelEndpointSlug: z.string().trim().min(1).max(120).optional(),
     subjectProfileSlug: z.string().trim().min(1).max(120).optional(),
     stylePresetSlug: z.string().trim().min(1).max(120).optional(),

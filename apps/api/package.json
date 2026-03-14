@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "seed:explore-catalogs": "tsx scripts/seed-explore-catalogs.ts",
     "seed:model-registry": "tsx scripts/seed-model-registry.ts",
+    "seed:planner-agents": "tsx scripts/seed-planner-agents.ts",
     "smoke": "tsx scripts/smoke.ts",
     "prisma:generate": "prisma generate --schema ./prisma/schema.prisma",
     "prisma:push": "prisma db push --schema ./prisma/schema.prisma"

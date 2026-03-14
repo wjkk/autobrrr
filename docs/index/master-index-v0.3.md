@@ -45,6 +45,10 @@
    说明：后端到 Worker/provider 的内部任务下发与回传协议。
 4. `docs/specs/explore-catalog-management-spec-v0.3.md`  
    说明：首页主体/画风目录、项目入口配置快照与后续管理字段设计。
+5. `docs/specs/planner-agent-orchestration-spec-v0.1.md`  
+   说明：Planner 阶段 Agent / Sub-Agent 编排、结构化输出、消息流与 Prompt 调试治理专项设计。
+6. `docs/specs/planner-workflow-and-document-spec-v0.1.md`  
+   说明：基于 Seko 规划页反推的两阶段策划工作流、Outline/Refinement 文档结构、主体/场景生命周期与实施顺序。
 
 ### 3.3 状态与实施
 
@@ -72,3 +76,5 @@
 6. `internal-execution-api-spec-v0.3.md`
 7. `state-machine-and-error-code-spec-v0.3.md`
 8. `backend-implementation-checklist-v0.3.md`
+9. `planner-agent-orchestration-spec-v0.1.md`
+10. `planner-workflow-and-document-spec-v0.1.md`

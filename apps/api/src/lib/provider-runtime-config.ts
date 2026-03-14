@@ -17,6 +17,53 @@ export interface ProviderRuntimeConfig {
   enabled: boolean;
 }
 
+export async function resolveProviderRuntimeConfigForUser(args: {
+  userId: string;
+  providerId: string;
+  fallbackCode?: string | null;
+  fallbackBaseUrl?: string | null;
+}) {
+  const provider = await prisma.modelProvider.findUnique({
+    where: { id: args.providerId },
+    select: {
+      id: true,
+      code: true,
+      baseUrl: true,
+      enabled: true,
+    },
+  });
+
+  if (!provider) {
+    return {
+      providerCode: args.fallbackCode ?? null,
+      baseUrl: args.fallbackBaseUrl ?? null,
+      apiKey: null,
+      enabled: true,
+    } satisfies ProviderRuntimeConfig;
+  }
+
+  const userConfig = await prisma.userProviderConfig.findUnique({
+    where: {
+      userId_providerId: {
+        userId: args.userId,
+        providerId: provider.id,
+      },
+    },
+    select: {
+      apiKey: true,
+      baseUrlOverride: true,
+      enabled: true,
+    },
+  });
+
+  return {
+    providerCode: provider.code,
+    baseUrl: userConfig?.baseUrlOverride ?? provider.baseUrl,
+    apiKey: userConfig?.apiKey ?? null,
+    enabled: userConfig?.enabled ?? provider.enabled,
+  } satisfies ProviderRuntimeConfig;
+}
+
 export async function resolveRunProviderRuntimeConfig(run: Run): Promise<ProviderRuntimeConfig> {
   const input = readObject(run.inputJson);
   const modelProvider = readObject(input.modelProvider);
@@ -57,24 +104,10 @@ export async function resolveRunProviderRuntimeConfig(run: Run): Promise<Provide
     };
   }
 
-  const userConfig = await prisma.userProviderConfig.findUnique({
-    where: {
-      userId_providerId: {
-        userId: project.createdById,
-        providerId: provider.id,
-      },
-    },
-    select: {
-      apiKey: true,
-      baseUrlOverride: true,
-      enabled: true,
-    },
+  return resolveProviderRuntimeConfigForUser({
+    userId: project.createdById,
+    providerId: provider.id,
+    fallbackCode: inputProviderCode,
+    fallbackBaseUrl: inputBaseUrl,
   });
-
-  return {
-    providerCode: provider.code,
-    baseUrl: userConfig?.baseUrlOverride ?? provider.baseUrl,
-    apiKey: userConfig?.apiKey ?? null,
-    enabled: userConfig?.enabled ?? provider.enabled,
-  };
 }

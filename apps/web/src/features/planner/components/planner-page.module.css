@@ -828,6 +828,92 @@
   line-height: 1.6;
 }
 
+.outlineDocument {
+  display: grid;
+  gap: 16px;
+}
+
+.outlineMetaGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.outlineMetaCard {
+  border: 1px solid #dce4f2;
+  border-radius: 14px;
+  background: #f8fbff;
+  padding: 12px 14px;
+  display: grid;
+  gap: 4px;
+}
+
+.outlineMetaCard span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.outlineMetaCard strong {
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.outlinePremise {
+  margin: 0 0 12px;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.outlineCharacterStack,
+.outlineArcStack {
+  display: grid;
+  gap: 10px;
+}
+
+.outlineCharacterCard,
+.outlineArcCard {
+  border: 1px solid #dce4f2;
+  border-radius: 14px;
+  background: #f8fbff;
+  padding: 12px 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.outlineCharacterCard header,
+.outlineArcCard header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.outlineCharacterCard strong,
+.outlineArcCard strong {
+  color: #111827;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.outlineCharacterCard span,
+.outlineArcCard span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.outlineCharacterCard p,
+.outlineArcCard p {
+  margin: 0;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
 .inlineProgressNotice {
   margin: 0;
   border: 1px solid #d7e3fb;
@@ -1631,6 +1717,12 @@
   padding: 9px 16px;
   cursor: pointer;
   white-space: nowrap;
+}
+
+.generateButton:disabled {
+  background: #cbd5e1;
+  color: #475569;
+  cursor: not-allowed;
 }
 
 .bootCard {

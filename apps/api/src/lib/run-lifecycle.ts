@@ -1,7 +1,8 @@
 import { Prisma } from '@prisma/client';
 import type { Run } from '@prisma/client';
 
-import { parsePlannerStructuredDoc } from './planner-doc.js';
+import { finalizePlannerConversation } from './planner-orchestrator.js';
+import { extractPlannerText, findStringDeep } from './planner-text-extraction.js';
 import { prisma } from './prisma.js';
 
 export type SupportedMediaKind = 'IMAGE' | 'VIDEO';
@@ -38,29 +39,6 @@ function buildGeneratedFileName(runId: string, mediaKind: SupportedMediaKind) {
 
 function readObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
-
-function findStringDeep(value: unknown, keys: string[]): string | null {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-
-  const record = value as Record<string, unknown>;
-  for (const key of keys) {
-    const direct = typeof record[key] === 'string' && record[key] ? (record[key] as string) : null;
-    if (direct) {
-      return direct;
-    }
-  }
-
-  for (const nested of Object.values(record)) {
-    const found = findStringDeep(nested, keys);
-    if (found) {
-      return found;
-    }
-  }
-
-  return null;
 }
 
 function resolveProviderSourceUrl(run: Run, mediaKind: SupportedMediaKind) {
@@ -117,53 +95,6 @@ function resolveDimensions(mediaKind: SupportedMediaKind, run: Run) {
   };
 }
 
-function extractPlannerText(providerData: unknown, fallbackPrompt: string) {
-  const record = readObject(providerData);
-
-  if (typeof record.output_text === 'string' && record.output_text.trim()) {
-    return record.output_text.trim();
-  }
-
-  const outputs = Array.isArray(record.output) ? record.output : [];
-  for (const output of outputs) {
-    const content = Array.isArray(readObject(output).content) ? (readObject(output).content as unknown[]) : [];
-    for (const item of content) {
-      const candidate = readObject(item);
-      const text = typeof candidate.text === 'string' ? candidate.text.trim() : '';
-      if (text) {
-        return text;
-      }
-    }
-  }
-
-  const choices = Array.isArray(record.choices) ? record.choices : [];
-  for (const choice of choices) {
-    const message = readObject(readObject(choice).message);
-    const content = message.content;
-    if (typeof content === 'string' && content.trim()) {
-      return content.trim();
-    }
-  }
-
-  const candidates = Array.isArray(record.candidates) ? record.candidates : [];
-  for (const candidate of candidates) {
-    const content = readObject(readObject(candidate).content);
-    const parts = Array.isArray(content.parts) ? content.parts : [];
-    const textPart = parts.find((part) => typeof readObject(part).text === 'string');
-    const text = textPart ? (readObject(textPart).text as string).trim() : '';
-    if (text) {
-      return text;
-    }
-  }
-
-  return `【策划草案】
-主题：${fallbackPrompt}
-
-1. 故事梗概：围绕该主题生成单集短片策划。
-2. 视觉风格：保持角色一致性与镜头节奏。
-3. 分镜方向：先建立场景，再推进动作与情绪变化。`;
-}
-
 export async function finalizePlannerRun(run: Run): Promise<RunLifecycleAction> {
   if (run.resourceType !== 'planner_session' || !run.resourceId || !run.projectId || !run.episodeId) {
     return failRun(run.id, 'RUN_RESOURCE_INVALID', 'Run is missing planner session/project/episode linkage.');
@@ -181,50 +112,11 @@ export async function finalizePlannerRun(run: Run): Promise<RunLifecycleAction> 
   const output = readObject(run.outputJson);
   const rawPrompt = typeof input.rawPrompt === 'string' ? input.rawPrompt : '未命名策划';
   const generatedText = extractPlannerText(output.providerData, rawPrompt);
-  const structuredDoc = parsePlannerStructuredDoc({
-    rawText: generatedText,
-    userPrompt: rawPrompt,
-    projectTitle: typeof input.projectTitle === 'string' ? input.projectTitle : '未命名项目',
-    episodeTitle: typeof input.episodeTitle === 'string' ? input.episodeTitle : '第1集',
-  });
-
-  await prisma.$transaction(async (tx) => {
-    await tx.plannerSession.update({
-      where: { id: plannerSession.id },
-      data: {
-        status: 'READY',
-      },
-    });
-
-    await tx.project.update({
-      where: { id: plannerSession.projectId },
-      data: {
-        status: 'READY_FOR_STORYBOARD',
-      },
-    });
-
-    await tx.episode.update({
-      where: { id: plannerSession.episodeId },
-      data: {
-        status: 'READY_FOR_STORYBOARD',
-      },
-    });
-
-    await tx.run.update({
-      where: { id: run.id },
-      data: {
-        status: 'COMPLETED',
-        providerStatus: run.providerStatus ?? 'succeeded',
-        outputJson: {
-          ...output,
-          generatedText,
-          structuredDoc,
-          plannerSessionId: plannerSession.id,
-        },
-        finishedAt: new Date(),
-        nextPollAt: null,
-      },
-    });
+  await finalizePlannerConversation({
+    run,
+    plannerSession,
+    generatedText,
+    createdById: plannerSession.createdById,
   });
 
   return {

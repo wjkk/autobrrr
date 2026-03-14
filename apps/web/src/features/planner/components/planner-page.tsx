@@ -8,13 +8,20 @@ import { useRouter } from 'next/navigation';
 import { Dialog } from '@/features/shared/components/dialog';
 import { plannerCopy } from '@/lib/copy';
 
-import type { PlannerRuntimeApiContext } from '../lib/planner-api';
+import type { ApiPlannerWorkspace, PlannerRuntimeApiContext } from '../lib/planner-api';
 import type { PlannerStructuredDoc } from '../lib/planner-structured-doc';
+import {
+  outlineToPreviewStructuredPlannerDoc,
+  runtimeScenesToImageCards,
+  runtimeShotScriptsToActs,
+  runtimeSubjectsToImageCards,
+} from '../lib/planner-structured-doc';
 import { usePlannerRefinement } from '../hooks/use-planner-refinement';
 import { sekoPlanData, type SekoActDraft, type SekoImageCard } from '../lib/seko-plan-data';
 import { toPlannerSeedData, toStructuredPlannerDoc } from '../lib/planner-structured-doc';
 import { sekoPlanThreadData } from '../lib/seko-plan-thread-data';
 import { PlannerHistoryMenu } from './internal/planner-history-menu';
+import { PlannerOutlineView } from './planner-outline-view';
 import styles from './planner-page.module.css';
 
 interface PlannerPageProps {
@@ -23,6 +30,7 @@ interface PlannerPageProps {
   initialGeneratedText?: string | null;
   initialStructuredDoc?: PlannerStructuredDoc | null;
   initialPlannerReady?: boolean;
+  initialWorkspace?: ApiPlannerWorkspace | null;
 }
 
 type PlannerMode = 'single' | 'series';
@@ -55,6 +63,23 @@ type PlannerSaveState =
   | { status: 'saving'; message: string }
   | { status: 'saved'; message: string }
   | { status: 'error'; message: string };
+
+type PlannerThreadMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  messageType: string;
+  content: string;
+  rawContent?: Record<string, unknown> | null;
+  createdAt?: string;
+};
+
+interface PlannerHistoryVersionView {
+  id: string;
+  versionNumber: number;
+  trigger: string;
+  status: 'running' | 'ready' | 'failed';
+  createdAt: number;
+}
 
 const BOOT_PROGRESS_STEPS = [28, 49, 67, 85, 100];
 
@@ -122,6 +147,163 @@ async function requestPlannerApi<T>(path: string, init?: RequestInit) {
   }
 
   return payload.data;
+}
+
+async function postPlannerVersionAction<T>(path: string, episodeId: string) {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      episodeId,
+    }),
+  });
+
+  const payload = (await response.json()) as ApiEnvelope<T>;
+  if (!response.ok || !payload.ok) {
+    const errorPayload = payload as ApiEnvelopeFailure;
+    throw new Error(errorPayload.error?.message ?? `Request failed: ${path}`);
+  }
+
+  return payload.data;
+}
+
+async function patchPlannerEntity<T>(path: string, body: Record<string, unknown>) {
+  const response = await fetch(path, {
+    method: 'PATCH',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const payload = (await response.json()) as ApiEnvelope<T>;
+  if (!response.ok || !payload.ok) {
+    const errorPayload = payload as ApiEnvelopeFailure;
+    throw new Error(errorPayload.error?.message ?? `Request failed: ${path}`);
+  }
+
+  return payload.data;
+}
+
+async function deletePlannerEntity<T>(path: string) {
+  const response = await fetch(path, {
+    method: 'DELETE',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  const payload = (await response.json()) as ApiEnvelope<T>;
+  if (!response.ok || !payload.ok) {
+    const errorPayload = payload as ApiEnvelopeFailure;
+    throw new Error(errorPayload.error?.message ?? `Request failed: ${path}`);
+  }
+
+  return payload.data;
+}
+
+function readMessageText(content: Record<string, unknown> | null | undefined) {
+  return content && typeof content.text === 'string' ? content.text : '';
+}
+
+function readMessageNotice(content: Record<string, unknown> | null | undefined) {
+  if (!content) {
+    return '';
+  }
+
+  if (typeof content.message === 'string') {
+    return content.message;
+  }
+
+  if (typeof content.text === 'string') {
+    return content.text;
+  }
+
+  return '';
+}
+
+function readStepSummary(content: Record<string, unknown> | null | undefined) {
+  if (!content) {
+    return '';
+  }
+
+  const steps = Array.isArray(content.steps) ? content.steps : [];
+  const firstStep = steps[0];
+  if (firstStep && typeof firstStep === 'object' && !Array.isArray(firstStep)) {
+    const stepTitle = (firstStep as Record<string, unknown>).title;
+    if (typeof stepTitle === 'string') {
+      return stepTitle;
+    }
+  }
+
+  return '';
+}
+
+function readOutlineSummary(content: Record<string, unknown> | null | undefined) {
+  if (!content) {
+    return '';
+  }
+
+  if (typeof content.text === 'string' && content.text.trim()) {
+    return content.text;
+  }
+
+  const documentTitle = typeof content.documentTitle === 'string' ? content.documentTitle : '';
+  if (documentTitle) {
+    return `已生成剧本大纲：${documentTitle}`;
+  }
+
+  const outlineDoc =
+    content.outlineDoc && typeof content.outlineDoc === 'object' && !Array.isArray(content.outlineDoc)
+      ? (content.outlineDoc as Record<string, unknown>)
+      : null;
+  if (outlineDoc && typeof outlineDoc.projectTitle === 'string') {
+    return `已生成剧本大纲：${outlineDoc.projectTitle}`;
+  }
+
+  return '已生成剧本大纲';
+}
+
+function normaliseHistoryTrigger(triggerType: string) {
+  return triggerType.toLowerCase();
+}
+
+function normaliseHistoryStatus(status: string): 'running' | 'ready' | 'failed' {
+  if (status === 'running' || status === 'ready' || status === 'failed') {
+    return status;
+  }
+
+  return 'ready';
+}
+
+function mapWorkspaceMessagesToThread(
+  messages: NonNullable<ApiPlannerWorkspace['messages']> | undefined,
+): PlannerThreadMessage[] {
+  if (!messages?.length) {
+    return [];
+  }
+
+  return messages
+    .map((message) => ({
+      id: message.id,
+      role: (message.role === 'user' ? 'user' : 'assistant') as PlannerThreadMessage['role'],
+      messageType: message.messageType,
+      content:
+        message.messageType === 'assistant_outline_card'
+          ? readOutlineSummary(message.content)
+          : message.messageType === 'assistant_steps'
+            ? readStepSummary(message.content)
+            : message.messageType === 'assistant_document_receipt'
+              ? readMessageNotice(message.content)
+              : readMessageText(message.content),
+      rawContent: message.content,
+      createdAt: message.createdAt,
+    }))
+    .filter((message) => message.messageType === 'assistant_steps' || message.content.trim().length > 0);
 }
 
 function nextLocalId(prefix: string) {
@@ -204,7 +386,7 @@ function ratioCardWidth(ratio: PlannerAssetRatio) {
   return 150;
 }
 
-export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialStructuredDoc, initialPlannerReady }: PlannerPageProps) {
+export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialStructuredDoc, initialPlannerReady, initialWorkspace }: PlannerPageProps) {
   const router = useRouter();
   const timersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
 
@@ -221,8 +403,8 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
   const [notice, setNotice] = useState<string | null>(null);
   const [outlineConfirmed, setOutlineConfirmed] = useState(false);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
-
-  const [messages, setMessages] = useState<Array<{ id: string; role: 'user' | 'assistant'; content: string }>>([]);
+  const [runtimeWorkspace, setRuntimeWorkspace] = useState<ApiPlannerWorkspace | null>(initialWorkspace ?? null);
+  const [messages, setMessages] = useState<PlannerThreadMessage[]>(() => mapWorkspaceMessagesToThread(initialWorkspace?.messages));
 
   const [subjectDialogCardId, setSubjectDialogCardId] = useState<string | null>(null);
   const [subjectNameDraft, setSubjectNameDraft] = useState('');
@@ -248,6 +430,10 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
   const [saveState, setSaveState] = useState<PlannerSaveState>({ status: 'idle', message: '' });
 
   const plannerDoc = useMemo(() => (structuredPlannerDoc ? toPlannerSeedData(structuredPlannerDoc, sekoPlanData) : sekoPlanData), [structuredPlannerDoc]);
+  const workspaceStepAnalysis = runtimeWorkspace?.activeRefinement?.stepAnalysis ?? [];
+  const workspaceHistoryVersions = runtimeWorkspace?.refinementVersions ?? [];
+  const runtimeActiveOutline = runtimeWorkspace?.activeOutline ?? null;
+  const runtimeActiveRefinement = runtimeWorkspace?.activeRefinement ?? null;
 
   const persistPlannerDoc = async (nextDoc: PlannerStructuredDoc, successMessage: string) => {
     setStructuredPlannerDoc(nextDoc);
@@ -327,14 +513,28 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
       return;
     }
 
+    if (runtimeWorkspace?.activeRefinement) {
+      setOutlineConfirmed(true);
+      return;
+    }
+
+    if (runtimeWorkspace?.activeOutline) {
+      setOutlineConfirmed(false);
+      return;
+    }
+
     setOutlineConfirmed(true);
     hydrateReadyVersion({
       trigger: 'confirm_outline',
       instruction: studio.planner.submittedRequirement || studio.project.brief,
     });
-  }, [hydrateReadyVersion, initialGeneratedText, initialPlannerReady, studio.planner.submittedRequirement, studio.project.brief, versions.length]);
+  }, [hydrateReadyVersion, initialGeneratedText, initialPlannerReady, runtimeWorkspace?.activeOutline, runtimeWorkspace?.activeRefinement, studio.planner.submittedRequirement, studio.project.brief, versions.length]);
 
-  const pollPlannerRunUntilTerminal = async (runId: string, trigger: 'confirm_outline' | 'rerun', instruction: string) => {
+  const pollPlannerRunUntilTerminal = async (
+    runId: string,
+    trigger: 'generate_outline' | 'update_outline' | 'confirm_outline' | 'rerun',
+    instruction: string,
+  ) => {
     for (let attempt = 0; attempt < 20; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
       const run = await requestPlannerApi<{ status: string; output: { generatedText?: string; structuredDoc?: PlannerStructuredDoc | null } | null; errorMessage: string | null }>(
@@ -343,17 +543,32 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
 
       if (run.status === 'completed' && run.output?.generatedText) {
         const generatedText = run.output?.generatedText ?? '';
-        setServerPlannerText(generatedText);
-        setStructuredPlannerDoc(run.output?.structuredDoc ?? null);
-        setOutlineConfirmed(true);
-        const nextId = hydrateReadyVersion({ trigger, instruction });
-        selectVersion(nextId);
-        setMessages((current) => [
-          ...current,
-          { id: nextLocalId('msg'), role: 'user', content: instruction || (trigger === 'confirm_outline' ? sekoPlanThreadData.confirmPrompt : '请重新细化剧情内容。') },
-          { id: nextLocalId('msg'), role: 'assistant', content: generatedText },
-        ]);
-        setNotice(trigger === 'confirm_outline' ? '已生成策划文档。' : '已生成新的策划版本。');
+        const workspace = await refreshPlannerWorkspace();
+        if (!workspace) {
+          setServerPlannerText(generatedText);
+          setStructuredPlannerDoc(run.output?.structuredDoc ?? null);
+          if (trigger === 'confirm_outline' || trigger === 'rerun') {
+            setOutlineConfirmed(true);
+            const nextId = hydrateReadyVersion({ trigger: trigger === 'confirm_outline' ? 'confirm_outline' : 'rerun', instruction });
+            selectVersion(nextId);
+          } else {
+            setOutlineConfirmed(false);
+          }
+          setMessages((current) => [
+            ...current,
+            { id: nextLocalId('msg'), role: 'user', messageType: 'user_input', content: instruction || (trigger === 'rerun' ? '请重新细化剧情内容。' : sekoPlanThreadData.confirmPrompt) },
+            { id: nextLocalId('msg'), role: 'assistant', messageType: 'assistant_text', content: generatedText },
+          ]);
+        }
+        setNotice(
+          workspace?.activeRefinement
+            ? trigger === 'confirm_outline'
+              ? '已完成细化并更新策划文档。'
+              : '已生成新的策划版本。'
+            : trigger === 'generate_outline' || trigger === 'update_outline'
+              ? '已生成新的剧本大纲版本。'
+              : '已生成剧本大纲，请确认后继续细化。',
+        );
         setPlannerSubmitting(false);
         return;
       }
@@ -369,7 +584,10 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
     setPlannerSubmitting(false);
   };
 
-  const submitPlannerRunViaApi = async (trigger: 'confirm_outline' | 'rerun', instruction: string) => {
+  const submitPlannerRunViaApi = async (
+    trigger: 'generate_outline' | 'update_outline' | 'confirm_outline' | 'rerun',
+    instruction: string,
+  ) => {
     if (!runtimeApi) {
       return false;
     }
@@ -398,6 +616,29 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
     }
   }, [activeEpisodeId, plannerEpisodes]);
 
+  const refreshPlannerWorkspace = async () => {
+    if (!runtimeApi) {
+      return null;
+    }
+
+    const workspace = await requestPlannerApi<ApiPlannerWorkspace>(
+      `/api/planner/projects/${encodeURIComponent(runtimeApi.projectId)}/workspace?episodeId=${encodeURIComponent(runtimeApi.episodeId)}`,
+    );
+
+    setRuntimeWorkspace(workspace);
+    setDisplayTitle(workspace.project.title);
+    setMessages(mapWorkspaceMessagesToThread(workspace.messages));
+    setServerPlannerText(workspace.latestPlannerRun?.generatedText ?? '');
+    const derivedStructuredDoc = workspace.activeRefinement?.structuredDoc
+      ?? workspace.latestPlannerRun?.structuredDoc
+      ?? (workspace.activeOutline?.outlineDoc ? outlineToPreviewStructuredPlannerDoc(workspace.activeOutline.outlineDoc) : null)
+      ?? null;
+    setStructuredPlannerDoc(derivedStructuredDoc);
+    setOutlineConfirmed(Boolean(workspace.plannerSession?.outlineConfirmedAt));
+
+    return workspace;
+  };
+
   const activeEpisode = useMemo(() => plannerEpisodes.find((item) => item.id === activeEpisodeId) ?? plannerEpisodes[0] ?? null, [plannerEpisodes, activeEpisodeId]);
   const activeStyle = styleById(activeEpisode?.styleId ?? 61);
   const activeEpisodeNumber = Number.parseInt(activeEpisode?.label.replace('EP ', '') ?? '1', 10);
@@ -412,45 +653,137 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
     [aspectRatio],
   );
 
-  const subjectCards = activeVersion?.subjectCards ?? [];
-  const sceneCards = activeVersion?.sceneCards ?? [];
-  const scriptActs = activeVersion?.scriptActs ?? [];
+  const usingRuntimePlanner = Boolean(runtimeApi && runtimeWorkspace);
+  const usingRuntimeDoc = Boolean(runtimeActiveRefinement || runtimeWorkspace?.activeOutline);
+  const runtimeSubjectCards = useMemo(
+    () => runtimeSubjectsToImageCards(runtimeWorkspace?.subjects ?? [], SUBJECT_IMAGE_POOL),
+    [runtimeWorkspace?.subjects],
+  );
+  const runtimeSceneCards = useMemo(
+    () => runtimeScenesToImageCards(runtimeWorkspace?.scenes ?? [], SCENE_IMAGE_POOL),
+    [runtimeWorkspace?.scenes],
+  );
+  const runtimeScriptActs = useMemo(
+    () => runtimeShotScriptsToActs(runtimeWorkspace?.shotScripts ?? [], runtimeWorkspace?.scenes ?? []),
+    [runtimeWorkspace?.scenes, runtimeWorkspace?.shotScripts],
+  );
+  const displaySubjectCards =
+    runtimeActiveRefinement && runtimeSubjectCards.length > 0
+      ? runtimeSubjectCards
+      : usingRuntimeDoc
+        ? plannerDoc.subjects
+        : activeVersion?.subjectCards ?? [];
+  const displaySceneCards =
+    runtimeActiveRefinement && runtimeSceneCards.length > 0
+      ? runtimeSceneCards
+      : usingRuntimeDoc
+        ? plannerDoc.scenes
+        : activeVersion?.sceneCards ?? [];
+  const displayScriptActs =
+    runtimeActiveRefinement && runtimeScriptActs.length > 0
+      ? runtimeScriptActs
+      : usingRuntimeDoc
+        ? plannerDoc.acts
+        : activeVersion?.scriptActs ?? [];
+  const displaySections = usingRuntimeDoc
+    ? {
+        summary: plannerDoc.summaryBullets.length > 0,
+        style: plannerDoc.styleBullets.length > 0,
+        subjects: (runtimeActiveRefinement ? runtimeSubjectCards.length : plannerDoc.subjects.length) > 0,
+        scenes: (runtimeActiveRefinement ? runtimeSceneCards.length : plannerDoc.scenes.length) > 0,
+        script: (runtimeActiveRefinement ? runtimeScriptActs.length : plannerDoc.acts.length) > 0,
+      }
+    : activeVersion?.sections ?? {
+        summary: false,
+        style: false,
+        subjects: false,
+        scenes: false,
+        script: false,
+      };
+  const displayVersionStatus = runtimeActiveRefinement?.status ?? runtimeWorkspace?.activeOutline?.status ?? activeVersion?.status ?? null;
+  const displayVersionProgress = runtimeActiveRefinement ? null : activeVersion?.progressPercent ?? null;
+  const historyVersions: PlannerHistoryVersionView[] = runtimeActiveRefinement
+    ? workspaceHistoryVersions
+        .slice()
+        .sort(
+          (
+            left: NonNullable<ApiPlannerWorkspace['refinementVersions']>[number],
+            right: NonNullable<ApiPlannerWorkspace['refinementVersions']>[number],
+          ) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
+        )
+        .map((version: NonNullable<ApiPlannerWorkspace['refinementVersions']>[number]) => ({
+          id: version.id,
+          versionNumber: version.versionNumber,
+          trigger: normaliseHistoryTrigger(version.triggerType),
+          status: normaliseHistoryStatus(version.status),
+          createdAt: new Date(version.createdAt).getTime(),
+        }))
+    : runtimeActiveOutline
+      ? (runtimeWorkspace?.outlineVersions ?? [])
+          .slice()
+          .sort(
+            (
+              left: NonNullable<ApiPlannerWorkspace['outlineVersions']>[number],
+              right: NonNullable<ApiPlannerWorkspace['outlineVersions']>[number],
+            ) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
+          )
+          .map((version: NonNullable<ApiPlannerWorkspace['outlineVersions']>[number]) => ({
+            id: version.id,
+            versionNumber: version.versionNumber,
+            trigger: normaliseHistoryTrigger(version.triggerType),
+            status: normaliseHistoryStatus(version.status),
+            createdAt: new Date(version.createdAt).getTime(),
+          }))
+      : versions;
+  const historyActiveVersionId = runtimeActiveRefinement?.id ?? activeVersionId;
+  const hasDisplayVersion = Boolean(runtimeActiveRefinement || runtimeWorkspace?.activeOutline || activeVersion);
 
   const activeSubjectCard = useMemo(() => {
     if (!subjectDialogCardId) {
       return null;
     }
 
-    return subjectCards.find((item) => item.id === subjectDialogCardId) ?? null;
-  }, [subjectCards, subjectDialogCardId]);
+    return displaySubjectCards.find((item) => item.id === subjectDialogCardId) ?? null;
+  }, [displaySubjectCards, subjectDialogCardId]);
 
   const activeSceneCard = useMemo(() => {
     if (!sceneDialogCardId) {
       return null;
     }
 
-    return sceneCards.find((item) => item.id === sceneDialogCardId) ?? null;
-  }, [sceneCards, sceneDialogCardId]);
+    return displaySceneCards.find((item) => item.id === sceneDialogCardId) ?? null;
+  }, [displaySceneCards, sceneDialogCardId]);
 
   const deletingShot = useMemo(() => {
     if (!shotDeleteDialog) {
       return null;
     }
 
-    const act = scriptActs.find((item) => item.id === shotDeleteDialog.actId);
+    const act = displayScriptActs.find((item) => item.id === shotDeleteDialog.actId);
     const shot = act?.shots.find((item) => item.id === shotDeleteDialog.shotId);
 
     return shot ?? null;
-  }, [scriptActs, shotDeleteDialog]);
+  }, [displayScriptActs, shotDeleteDialog]);
 
   const refinementDetailSteps = useMemo(
     () =>
-      sekoPlanThreadData.refinementSteps.map((title, index) => ({
-        title,
-        status: activeVersion?.steps[index] ?? ('waiting' as PlannerStepStatus),
-        tags: index === 2 ? ['设计角色特征'] : index === 3 ? ['设计短片主要场景细节'] : [],
-      })),
-    [activeVersion],
+      runtimeActiveRefinement
+        ? workspaceStepAnalysis.map((step) => ({
+            title: step.title,
+            status: (step.status === 'done' || step.status === 'running' || step.status === 'waiting' || step.status === 'failed'
+              ? step.status
+              : 'waiting') as PlannerStepStatus,
+            tags:
+              step.detail && Array.isArray(step.detail.details)
+                ? step.detail.details.filter((detail): detail is string => typeof detail === 'string')
+                : [],
+          }))
+        : sekoPlanThreadData.refinementSteps.map((title, index) => ({
+            title,
+            status: activeVersion?.steps[index] ?? ('waiting' as PlannerStepStatus),
+            tags: index === 2 ? ['设计角色特征'] : index === 3 ? ['设计短片主要场景细节'] : [],
+          })),
+    [activeVersion, runtimeActiveRefinement, workspaceStepAnalysis],
   );
 
   const handleConfirmOutline = () => {
@@ -461,11 +794,26 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
     setHistoryMenuOpen(false);
 
     if (runtimeApi) {
-      submitPlannerRunViaApi('confirm_outline', requirement.trim() || sekoPlanThreadData.confirmPrompt).catch((error: unknown) => {
-        setPlannerSubmitting(false);
-        setNotice(error instanceof Error ? error.message : '策划生成失败，请稍后重试。');
-      });
-      setNotice('已提交策划生成任务。');
+      if (!runtimeActiveOutline) {
+        setNotice('当前没有可确认的大纲版本。');
+        return;
+      }
+
+      setPlannerSubmitting(true);
+      postPlannerVersionAction(
+        `/api/planner/projects/${encodeURIComponent(runtimeApi.projectId)}/outline-versions/${encodeURIComponent(runtimeActiveOutline.id)}/confirm`,
+        runtimeApi.episodeId,
+      )
+        .then(async () => {
+          await refreshPlannerWorkspace();
+          setNotice('已确认当前大纲，下一步可开始细化剧情内容。');
+        })
+        .catch((error: unknown) => {
+          setNotice(error instanceof Error ? error.message : '确认大纲失败。');
+        })
+        .finally(() => {
+          setPlannerSubmitting(false);
+        });
       return;
     }
 
@@ -475,8 +823,8 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
 
     setMessages((current) => [
       ...current,
-      { id: nextLocalId('msg'), role: 'user', content: sekoPlanThreadData.confirmPrompt },
-      { id: nextLocalId('msg'), role: 'assistant', content: sekoPlanThreadData.refinementReply },
+      { id: nextLocalId('msg'), role: 'user', messageType: 'user_input', content: sekoPlanThreadData.confirmPrompt },
+      { id: nextLocalId('msg'), role: 'assistant', messageType: 'assistant_text', content: sekoPlanThreadData.refinementReply },
     ]);
 
     setNotice('已确认大纲，开始细化剧情内容。');
@@ -508,8 +856,8 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
     setHistoryMenuOpen(false);
     setMessages((current) => [
       ...current,
-      { id: nextLocalId('msg'), role: 'user', content: instruction || '请重新细化剧情内容。' },
-      { id: nextLocalId('msg'), role: 'assistant', content: plannerCopy.assistantWorking },
+      { id: nextLocalId('msg'), role: 'user', messageType: 'user_input', content: instruction || '请重新细化剧情内容。' },
+      { id: nextLocalId('msg'), role: 'assistant', messageType: 'assistant_text', content: plannerCopy.assistantWorking },
     ]);
     setNotice('已创建新的细化版本。');
   };
@@ -518,6 +866,16 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
     const instruction = requirement.trim();
     if (!instruction) {
       setNotice('请输入内容后提交。');
+      return;
+    }
+
+    if (!outlineConfirmed && runtimeApi) {
+      const trigger = runtimeActiveOutline ? 'update_outline' : 'generate_outline';
+      submitPlannerRunViaApi(trigger, instruction).catch((error: unknown) => {
+        setPlannerSubmitting(false);
+        setNotice(error instanceof Error ? error.message : '策划生成失败，请稍后重试。');
+      });
+      setNotice(runtimeActiveOutline ? '已提交大纲修改任务。' : '已提交剧本大纲生成任务。');
       return;
     }
 
@@ -530,7 +888,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
   };
 
   const openSubjectAdjustDialog = (cardId: string) => {
-    const target = subjectCards.find((item) => item.id === cardId);
+    const target = displaySubjectCards.find((item) => item.id === cardId);
     if (!target) {
       return;
     }
@@ -555,7 +913,28 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
       return;
     }
 
-    const nextSubjects = subjectCards.map((item) =>
+    if (runtimeApi && runtimeActiveRefinement) {
+      patchPlannerEntity(
+        `/api/planner/projects/${encodeURIComponent(runtimeApi.projectId)}/subjects/${encodeURIComponent(subjectDialogCardId)}`,
+        {
+          episodeId: runtimeApi.episodeId,
+          name: subjectNameDraft.trim() || undefined,
+          appearance: subjectPromptDraft.trim() || undefined,
+          prompt: subjectPromptDraft.trim() || undefined,
+        },
+      )
+        .then(async () => {
+          await refreshPlannerWorkspace();
+          setNotice('主体设定已更新。示例图仍为本地预览。');
+        })
+        .catch((error: unknown) => {
+          setNotice(error instanceof Error ? error.message : '主体设定更新失败。');
+        });
+      closeSubjectAdjustDialog();
+      return;
+    }
+
+    const nextSubjects = displaySubjectCards.map((item) =>
       item.id === subjectDialogCardId
         ? {
             ...item,
@@ -584,7 +963,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
   };
 
   const openSceneAdjustDialog = (cardId: string) => {
-    const target = sceneCards.find((item) => item.id === cardId);
+    const target = displaySceneCards.find((item) => item.id === cardId);
     if (!target) {
       return;
     }
@@ -609,7 +988,28 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
       return;
     }
 
-    const nextScenes = sceneCards.map((item) =>
+    if (runtimeApi && runtimeActiveRefinement) {
+      patchPlannerEntity(
+        `/api/planner/projects/${encodeURIComponent(runtimeApi.projectId)}/scenes/${encodeURIComponent(sceneDialogCardId)}`,
+        {
+          episodeId: runtimeApi.episodeId,
+          name: sceneNameDraft.trim() || undefined,
+          description: scenePromptDraft.trim() || undefined,
+          prompt: scenePromptDraft.trim() || undefined,
+        },
+      )
+        .then(async () => {
+          await refreshPlannerWorkspace();
+          setNotice('场景设定已更新。示例图仍为本地预览。');
+        })
+        .catch((error: unknown) => {
+          setNotice(error instanceof Error ? error.message : '场景设定更新失败。');
+        });
+      closeSceneAdjustDialog();
+      return;
+    }
+
+    const nextScenes = displaySceneCards.map((item) =>
       item.id === sceneDialogCardId
         ? {
             ...item,
@@ -638,7 +1038,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
   };
 
   const openShotInlineEditor = (actId: string, shotId: string) => {
-    const act = scriptActs.find((item) => item.id === actId);
+    const act = displayScriptActs.find((item) => item.id === actId);
     const shot = act?.shots.find((item) => item.id === shotId);
     if (!shot) {
       return;
@@ -664,7 +1064,30 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
       return;
     }
 
-    const nextActs = scriptActs.map((act) =>
+    if (runtimeApi && runtimeActiveRefinement) {
+      patchPlannerEntity(
+        `/api/planner/projects/${encodeURIComponent(runtimeApi.projectId)}/shot-scripts/${encodeURIComponent(editingShot.shotId)}`,
+        {
+          episodeId: runtimeApi.episodeId,
+          visualDescription: shotDraft.visual,
+          composition: shotDraft.composition,
+          cameraMotion: shotDraft.motion,
+          voiceRole: shotDraft.voice,
+          dialogue: shotDraft.line,
+        },
+      )
+        .then(async () => {
+          await refreshPlannerWorkspace();
+          setNotice('分镜内容已更新。');
+        })
+        .catch((error: unknown) => {
+          setNotice(error instanceof Error ? error.message : '分镜更新失败。');
+        });
+      cancelShotInlineEditor();
+      return;
+    }
+
+    const nextActs = displayScriptActs.map((act) =>
       act.id !== editingShot.actId
         ? act
         : {
@@ -708,11 +1131,26 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
       return;
     }
 
+    if (runtimeApi && runtimeActiveRefinement) {
+      deletePlannerEntity(
+        `/api/planner/projects/${encodeURIComponent(runtimeApi.projectId)}/shot-scripts/${encodeURIComponent(shotDeleteDialog.shotId)}?episodeId=${encodeURIComponent(runtimeApi.episodeId)}`,
+      )
+        .then(async () => {
+          await refreshPlannerWorkspace();
+          setNotice('分镜已删除。');
+        })
+        .catch((error: unknown) => {
+          setNotice(error instanceof Error ? error.message : '删除分镜失败。');
+        });
+      closeShotDeleteDialog();
+      return;
+    }
+
     if (editingShot?.actId === shotDeleteDialog.actId && editingShot.shotId === shotDeleteDialog.shotId) {
       cancelShotInlineEditor();
     }
 
-    const nextActs = scriptActs
+    const nextActs = displayScriptActs
       .map((act) =>
         act.id !== shotDeleteDialog.actId
           ? act
@@ -735,12 +1173,12 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
   };
 
   const startCreation = () => {
-    if (activeVersion?.status !== 'ready') {
+    if (displayVersionStatus !== 'ready') {
       setNotice('请先完成剧情细化后再生成分镜。');
       return;
     }
 
-    if (!scriptActs.some((act) => act.shots.length > 0)) {
+    if (!displayScriptActs.some((act) => act.shots.length > 0)) {
       setNotice('当前还没有可生成的分镜草稿。');
       return;
     }
@@ -815,112 +1253,254 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
 
               <div className={styles.commandColumn}>
                 <div className={styles.messageScroll}>
-                  <article className={cx(styles.messageRow, styles.messageRowUser)}>
-                    <p className={cx(styles.messageBubble, styles.messageBubbleUser)}>{requirement || sekoPlanThreadData.userPrompt}</p>
-                  </article>
+                  {usingRuntimePlanner && messages.length > 0 ? (
+                    messages.map((item) => {
+                      const isUser = item.role === 'user';
+                      const stepItems =
+                        item.messageType === 'assistant_steps' && Array.isArray(item.rawContent?.steps)
+                          ? item.rawContent.steps
+                              .map((step) => (step && typeof step === 'object' && !Array.isArray(step) ? (step as Record<string, unknown>) : null))
+                              .filter((step): step is Record<string, unknown> => step !== null)
+                          : [];
+                      const receiptTitle =
+                        item.messageType === 'assistant_document_receipt' && typeof item.rawContent?.documentTitle === 'string'
+                          ? item.rawContent.documentTitle
+                          : runtimeActiveRefinement?.documentTitle ?? runtimeWorkspace?.activeOutline?.documentTitle;
+                      const outlineDoc =
+                        item.messageType === 'assistant_outline_card'
+                        && item.rawContent?.outlineDoc
+                        && typeof item.rawContent.outlineDoc === 'object'
+                        && !Array.isArray(item.rawContent.outlineDoc)
+                          ? (item.rawContent.outlineDoc as Record<string, unknown>)
+                          : null;
 
-                  <article className={styles.assistantThread}>
-                    <header className={styles.messageAgentHeader}>
-                      <span className={styles.messageAgentMark}>S</span>
-                      <span>{SEKO_ASSISTANT_NAME}</span>
-                    </header>
+                      if (item.messageType === 'assistant_steps') {
+                        return (
+                          <article key={item.id} className={styles.assistantThread}>
+                            <header className={styles.messageAgentHeader}>
+                              <span className={styles.messageAgentMark}>S</span>
+                              <span>{SEKO_ASSISTANT_NAME}</span>
+                            </header>
 
-                    <article className={styles.llmStepCard}>
-                      <div className={styles.threadStepItem}>
-                        <span className={styles.threadStepDot}>✓</span>
-                        <strong>策划剧本大纲</strong>
-                      </div>
-                    </article>
+                            <article className={styles.docStepsCard}>
+                              {stepItems.map((step, index) => {
+                                const title = typeof step.title === 'string' ? step.title : `步骤 ${index + 1}`;
+                                const status = typeof step.status === 'string' ? step.status : 'done';
+                                const tags =
+                                  Array.isArray(step.details)
+                                    ? step.details.filter((detail): detail is string => typeof detail === 'string')
+                                    : [];
 
-                    <article className={styles.outlineCard}>
-                      <h4>{sekoPlanThreadData.outlineTitle}</h4>
-                      {sekoPlanThreadData.sections.map((section) => (
-                        <section key={section.title} className={styles.outlineSection}>
-                          <h5>{section.title}</h5>
-                          <ul>
-                            {section.lines.map((line, index) => (
-                              <li key={`${section.title}-${index}`}>{line}</li>
-                            ))}
-                          </ul>
-                        </section>
-                      ))}
-                    </article>
+                                return (
+                                  <div key={`${item.id}-${title}-${index}`} className={styles.docStepItem}>
+                                    <span
+                                      className={cx(
+                                        styles.docStepDot,
+                                        status === 'done' && styles.docStepDotDone,
+                                        status === 'running' && styles.docStepDotRunning,
+                                      )}
+                                    />
+                                    {index < stepItems.length - 1 ? <span className={styles.docStepConnector} /> : null}
+                                    <div className={styles.docStepBody}>
+                                      <strong>{title}</strong>
+                                      {tags.length ? (
+                                        <div className={styles.docStepTags}>
+                                          {tags.map((tag) => (
+                                            <span key={`${item.id}-${title}-${tag}`} className={styles.docStepTag}>
+                                              {tag}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </article>
+                          </article>
+                        );
+                      }
 
-                    <p className={styles.messageBubble}>{sekoPlanThreadData.assistantSummary}</p>
-                    <p className={styles.messageBubble}>{sekoPlanThreadData.assistantPrompt}</p>
-                    {serverPlannerText ? <p className={styles.messageBubble}>{serverPlannerText}</p> : null}
+                      if (item.messageType === 'assistant_outline_card') {
+                        const storyArc =
+                          outlineDoc && Array.isArray(outlineDoc.storyArc)
+                            ? outlineDoc.storyArc
+                                .map((arc) => (arc && typeof arc === 'object' && !Array.isArray(arc) ? (arc as Record<string, unknown>) : null))
+                                .filter((arc): arc is Record<string, unknown> => arc !== null)
+                            : [];
 
-                    {!outlineConfirmed ? (
-                      <article className={styles.threadNoticeCard}>
-                        <strong>确认后自动开始细化剧情内容</strong>
-                        <p>右侧文档会按步骤逐步渲染，支持后续局部微调与历史版本切换。</p>
-                        <button type="button" className={styles.confirmOutlineButton} onClick={handleConfirmOutline} disabled={plannerSubmitting}>
-                          确认大纲
-                        </button>
-                      </article>
-                    ) : null}
-                  </article>
+                        return (
+                          <article key={item.id} className={styles.assistantThread}>
+                            <header className={styles.messageAgentHeader}>
+                              <span className={styles.messageAgentMark}>S</span>
+                              <span>{SEKO_ASSISTANT_NAME}</span>
+                            </header>
 
-                  {outlineConfirmed ? (
-                    <article className={styles.assistantThread}>
-                      <header className={styles.messageAgentHeader}>
-                        <span className={styles.messageAgentMark}>S</span>
-                        <span>{SEKO_ASSISTANT_NAME}</span>
-                      </header>
-
-                      <article className={styles.llmStepCard}>
-                        <div className={styles.threadStepItem}>
-                          <span className={styles.threadStepDot}>✓</span>
-                          <strong>细化剧情内容</strong>
-                        </div>
-                      </article>
-
-                      <p className={styles.messageBubble}>{sekoPlanThreadData.refinementReply}</p>
-
-                      <article className={styles.docStepsCard}>
-                        {refinementDetailSteps.map((step, index) => (
-                          <div key={step.title} className={styles.docStepItem}>
-                            <span className={cx(styles.docStepDot, step.status === 'done' && styles.docStepDotDone, step.status === 'running' && styles.docStepDotRunning)} />
-                            {index < refinementDetailSteps.length - 1 ? <span className={styles.docStepConnector} /> : null}
-                            <div className={styles.docStepBody}>
-                              <strong>{step.title}</strong>
-                              {step.tags.length ? (
-                                <div className={styles.docStepTags}>
-                                  {step.tags.map((tag) => (
-                                    <span key={`${step.title}-${tag}`} className={styles.docStepTag}>
-                                      {tag}
-                                    </span>
-                                  ))}
-                                </div>
+                            <article className={styles.outlineCard}>
+                              <h4>{typeof outlineDoc?.projectTitle === 'string' ? outlineDoc.projectTitle : '剧本大纲'}</h4>
+                              <section className={styles.outlineSection}>
+                                <h5>基础信息</h5>
+                                <ul>
+                                  {typeof outlineDoc?.genre === 'string' ? <li>{`题材风格：${outlineDoc.genre}`}</li> : null}
+                                  {typeof outlineDoc?.format === 'string' ? <li>{`内容形态：${outlineDoc.format === 'series' ? '多剧集' : '单片'}`}</li> : null}
+                                  {typeof outlineDoc?.episodeCount === 'number' ? <li>{`剧集篇幅：${outlineDoc.episodeCount} 集`}</li> : null}
+                                  {typeof outlineDoc?.premise === 'string' ? <li>{`剧情简介：${outlineDoc.premise}`}</li> : null}
+                                </ul>
+                              </section>
+                              {storyArc.length > 0 ? (
+                                <section className={styles.outlineSection}>
+                                  <h5>情节概要</h5>
+                                  <ul>
+                                    {storyArc.map((arc, index) => {
+                                      const episodeNo = typeof arc.episodeNo === 'number' ? `第${arc.episodeNo}集` : `第${index + 1}集`;
+                                      const title = typeof arc.title === 'string' ? arc.title : '未命名';
+                                      const summary = typeof arc.summary === 'string' ? arc.summary : '';
+                                      return <li key={`${item.id}-arc-${index}`}>{`${episodeNo} ${title}：${summary}`}</li>;
+                                    })}
+                                  </ul>
+                                </section>
                               ) : null}
-                            </div>
-                          </div>
-                        ))}
+                            </article>
+                          </article>
+                        );
+                      }
+
+                      if (item.messageType === 'assistant_document_receipt') {
+                        return (
+                          <article key={item.id} className={styles.assistantThread}>
+                            <header className={styles.messageAgentHeader}>
+                              <span className={styles.messageAgentMark}>S</span>
+                              <span>{SEKO_ASSISTANT_NAME}</span>
+                            </header>
+
+                            <article className={styles.threadNoticeCard}>
+                              <strong>{receiptTitle ? `已更新：${receiptTitle}` : '已更新右侧策划文档'}</strong>
+                              <p>{item.content || '策划文档已同步完成，可继续追问或切换版本。'}</p>
+                              {runtimeActiveRefinement ? (
+                                <p>{`当前版本：V${runtimeActiveRefinement.versionNumber} · ${runtimeActiveRefinement.subAgentProfile?.displayName ?? '未命名子 Agent'}`}</p>
+                              ) : null}
+                            </article>
+                          </article>
+                        );
+                      }
+
+                      return (
+                        <article key={item.id} className={cx(styles.messageRow, isUser && styles.messageRowUser)}>
+                          {!isUser ? <span className={styles.messageAuthor}>{SEKO_ASSISTANT_NAME}</span> : null}
+                          <p className={cx(styles.messageBubble, isUser && styles.messageBubbleUser)}>{item.content}</p>
+                        </article>
+                      );
+                    })
+                  ) : (
+                    <>
+                      <article className={cx(styles.messageRow, styles.messageRowUser)}>
+                        <p className={cx(styles.messageBubble, styles.messageBubbleUser)}>{requirement || sekoPlanThreadData.userPrompt}</p>
                       </article>
 
-                      {activeVersion ? (
-                        <article className={styles.threadNoticeCard}>
-                          <strong>{`当前版本：V${activeVersion.versionNumber}`}</strong>
-                          <p>
-                            {activeVersion.status === 'running'
-                              ? `细化进行中，进度 ${activeVersion.progressPercent}%。`
-                              : '当前版本已完成，可在右侧微调内容。'}
-                          </p>
+                      <article className={styles.assistantThread}>
+                        <header className={styles.messageAgentHeader}>
+                          <span className={styles.messageAgentMark}>S</span>
+                          <span>{SEKO_ASSISTANT_NAME}</span>
+                        </header>
+
+                        <article className={styles.llmStepCard}>
+                          <div className={styles.threadStepItem}>
+                            <span className={styles.threadStepDot}>✓</span>
+                            <strong>策划剧本大纲</strong>
+                          </div>
+                        </article>
+
+                        <article className={styles.outlineCard}>
+                          <h4>{sekoPlanThreadData.outlineTitle}</h4>
+                          {sekoPlanThreadData.sections.map((section) => (
+                            <section key={section.title} className={styles.outlineSection}>
+                              <h5>{section.title}</h5>
+                              <ul>
+                                {section.lines.map((line, index) => (
+                                  <li key={`${section.title}-${index}`}>{line}</li>
+                                ))}
+                              </ul>
+                            </section>
+                          ))}
+                        </article>
+
+                        <p className={styles.messageBubble}>{sekoPlanThreadData.assistantSummary}</p>
+                        <p className={styles.messageBubble}>{sekoPlanThreadData.assistantPrompt}</p>
+                        {serverPlannerText ? <p className={styles.messageBubble}>{serverPlannerText}</p> : null}
+
+                        {!outlineConfirmed ? (
+                          <article className={styles.threadNoticeCard}>
+                            <strong>确认后自动开始细化剧情内容</strong>
+                            <p>右侧文档会按步骤逐步渲染，支持后续局部微调与历史版本切换。</p>
+                            <button type="button" className={styles.confirmOutlineButton} onClick={handleConfirmOutline} disabled={plannerSubmitting}>
+                              确认大纲
+                            </button>
+                          </article>
+                        ) : null}
+                      </article>
+
+                      {outlineConfirmed ? (
+                        <article className={styles.assistantThread}>
+                          <header className={styles.messageAgentHeader}>
+                            <span className={styles.messageAgentMark}>S</span>
+                            <span>{SEKO_ASSISTANT_NAME}</span>
+                          </header>
+
+                          <article className={styles.llmStepCard}>
+                            <div className={styles.threadStepItem}>
+                              <span className={styles.threadStepDot}>✓</span>
+                              <strong>细化剧情内容</strong>
+                            </div>
+                          </article>
+
+                          <p className={styles.messageBubble}>{sekoPlanThreadData.refinementReply}</p>
+
+                          <article className={styles.docStepsCard}>
+                            {refinementDetailSteps.map((step, index) => (
+                              <div key={step.title} className={styles.docStepItem}>
+                                <span className={cx(styles.docStepDot, step.status === 'done' && styles.docStepDotDone, step.status === 'running' && styles.docStepDotRunning)} />
+                                {index < refinementDetailSteps.length - 1 ? <span className={styles.docStepConnector} /> : null}
+                                <div className={styles.docStepBody}>
+                                  <strong>{step.title}</strong>
+                                  {step.tags.length ? (
+                                    <div className={styles.docStepTags}>
+                                      {step.tags.map((tag) => (
+                                        <span key={`${step.title}-${tag}`} className={styles.docStepTag}>
+                                          {tag}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </div>
+                            ))}
+                          </article>
+
+                          {activeVersion ? (
+                            <article className={styles.threadNoticeCard}>
+                              <strong>{`当前版本：V${activeVersion.versionNumber}`}</strong>
+                              <p>
+                                {activeVersion.status === 'running'
+                                  ? `细化进行中，进度 ${activeVersion.progressPercent}%。`
+                                  : '当前版本已完成，可在右侧微调内容。'}
+                              </p>
+                            </article>
+                          ) : null}
                         </article>
                       ) : null}
-                    </article>
-                  ) : null}
 
-                  {messages.map((item) => {
-                    const isUser = item.role === 'user';
+                      {messages.map((item) => {
+                        const isUser = item.role === 'user';
 
-                    return (
-                      <article key={item.id} className={cx(styles.messageRow, isUser && styles.messageRowUser)}>
-                        {!isUser ? <span className={styles.messageAuthor}>{studio.assistantName}</span> : null}
-                        <p className={cx(styles.messageBubble, isUser && styles.messageBubbleUser)}>{item.content}</p>
-                      </article>
-                    );
-                  })}
+                        return (
+                          <article key={item.id} className={cx(styles.messageRow, isUser && styles.messageRowUser)}>
+                            {!isUser ? <span className={styles.messageAuthor}>{studio.assistantName}</span> : null}
+                            <p className={cx(styles.messageBubble, isUser && styles.messageBubbleUser)}>{item.content}</p>
+                          </article>
+                        );
+                      })}
+                    </>
+                  )}
                 </div>
 
                 <div className={styles.composerWrap}>
@@ -990,10 +1570,26 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
                 ) : null}
                 <PlannerHistoryMenu
                   open={historyMenuOpen}
-                  versions={versions}
-                  activeVersionId={activeVersionId}
+                  versions={historyVersions}
+                  activeVersionId={historyActiveVersionId}
                   onToggle={() => setHistoryMenuOpen((current) => !current)}
-                  onSelect={(versionId) => {
+                  onSelect={async (versionId) => {
+                    if (usingRuntimePlanner) {
+                      try {
+                        const isRefinementStage = Boolean(runtimeActiveRefinement);
+                        const actionPath = isRefinementStage
+                          ? `/api/planner/projects/${encodeURIComponent(runtimeApi!.projectId)}/refinement-versions/${encodeURIComponent(versionId)}/activate`
+                          : `/api/planner/projects/${encodeURIComponent(runtimeApi!.projectId)}/outline-versions/${encodeURIComponent(versionId)}/activate`;
+                        await postPlannerVersionAction(actionPath, runtimeApi!.episodeId);
+                        await refreshPlannerWorkspace();
+                      } catch (error) {
+                        setNotice(error instanceof Error ? error.message : '切换策划版本失败。');
+                      } finally {
+                        setHistoryMenuOpen(false);
+                      }
+                      return;
+                    }
+
                     selectVersion(versionId);
                     setHistoryMenuOpen(false);
                   }}
@@ -1003,16 +1599,24 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
 
             <div className={styles.resultContent}>
               <div className={styles.documentContainer}>
-                {!activeVersion ? (
+                {!hasDisplayVersion ? (
                   <article className={styles.emptyDocCard}>
                     <strong>等待细化产出</strong>
                     <p>确认左侧大纲后，将自动开始细化并逐步渲染主体、场景和分镜剧本。</p>
                   </article>
                 ) : null}
 
-                {activeVersion?.status === 'running' ? <p className={styles.inlineProgressNotice}>剧情细化中 · {activeVersion.progressPercent}%</p> : null}
+                {!runtimeActiveRefinement && runtimeActiveOutline?.outlineDoc ? (
+                  <PlannerOutlineView outline={runtimeActiveOutline.outlineDoc} />
+                ) : null}
 
-                {activeVersion?.sections.summary ? (
+                {displayVersionStatus === 'running' ? (
+                  <p className={styles.inlineProgressNotice}>
+                    {displayVersionProgress === null ? '剧情细化中' : `剧情细化中 · ${displayVersionProgress}%`}
+                  </p>
+                ) : null}
+
+                {runtimeActiveRefinement && displaySections.summary ? (
                   <section id="doc-summary" className={styles.docSection}>
                     <h3 className={styles.sectionTitle}>故事梗概</h3>
                     <ul>
@@ -1034,7 +1638,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
                   </section>
                 ) : null}
 
-                {activeVersion?.sections.style ? (
+                {runtimeActiveRefinement && displaySections.style ? (
                   <section id="doc-style" className={styles.docSection}>
                     <h3 className={styles.sectionTitle}>美术风格</h3>
                     <ul>
@@ -1046,7 +1650,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
                   </section>
                 ) : null}
 
-                {activeVersion?.sections.subjects ? (
+                {runtimeActiveRefinement && displaySections.subjects ? (
                   <section id="doc-subjects" className={styles.docSection}>
                     <h3 className={styles.sectionTitle}>主体列表</h3>
                     <ul>
@@ -1056,7 +1660,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
                     </ul>
 
                     <div className={styles.subjectStrip} style={mediaCardStyle}>
-                      {subjectCards.map((item) => (
+                      {displaySubjectCards.map((item) => (
                         <article key={item.id} className={styles.subjectCard} onClick={() => openSubjectAdjustDialog(item.id)} role="button" tabIndex={0}>
                           <button
                             type="button"
@@ -1082,7 +1686,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
                   </section>
                 ) : null}
 
-                {activeVersion?.sections.scenes ? (
+                {runtimeActiveRefinement && displaySections.scenes ? (
                   <section id="doc-scenes" className={styles.docSection}>
                     <h3 className={styles.sectionTitle}>场景列表</h3>
                     <ul>
@@ -1092,7 +1696,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
                     </ul>
 
                     <div className={styles.sceneStrip} style={mediaCardStyle}>
-                      {sceneCards.map((item) => (
+                      {displaySceneCards.map((item) => (
                         <article key={item.id} className={styles.sceneThumbCard} onClick={() => openSceneAdjustDialog(item.id)} role="button" tabIndex={0}>
                           <button
                             type="button"
@@ -1118,7 +1722,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
                   </section>
                 ) : null}
 
-                {activeVersion?.sections.script ? (
+                {runtimeActiveRefinement && displaySections.script ? (
                   <section id="doc-script" className={styles.docSection}>
                     <h3 className={styles.sectionTitle}>分镜剧本</h3>
 
@@ -1128,16 +1732,16 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
                         {plannerDoc.scriptSummary.map((line, index) => (
                           <li key={`script-summary-${index}`}>{line}</li>
                         ))}
-                        <li>总分镜数：{scriptActs.reduce((sum, act) => sum + act.shots.length, 0)}</li>
+                        <li>总分镜数：{displayScriptActs.reduce((sum, act) => sum + act.shots.length, 0)}</li>
                       </ul>
                     </div>
 
                     <div className={styles.actStack}>
-                      {scriptActs.map((act, actIndex) => (
+                      {displayScriptActs.map((act, actIndex) => (
                         <section key={act.id} className={styles.actSection}>
                           <header className={styles.actHeader}>
                             <strong>
-                              {act.title}：{sceneCards[actIndex]?.title ?? `场景 ${actIndex + 1}`}
+                              {act.title}：{displaySceneCards[actIndex]?.title ?? `场景 ${actIndex + 1}`}
                             </strong>
                             <span>
                               {act.time || '夜晚'} · {act.location || '室外'}
@@ -1295,8 +1899,8 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
                 </label>
               </div>
 
-              <button type="button" className={styles.generateButton} onClick={startCreation}>
-                生成分镜 · {pointCost}
+              <button type="button" className={styles.generateButton} onClick={startCreation} disabled={!runtimeActiveRefinement}>
+                {runtimeActiveRefinement ? `生成分镜 · ${pointCost}` : '确认大纲后可生成分镜'}
               </button>
             </footer>
           </section>

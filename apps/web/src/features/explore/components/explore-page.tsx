@@ -19,15 +19,46 @@ import type {
   ExploreCharacterOption,
   ExplorePopover,
   ExploreSidebarNav,
+  ExploreSubjectAgeFilter,
   ExploreStyleOption,
   ExploreSubjectGenderFilter,
+  ExploreSubjectMetadata,
+  ExploreSubjectSourceType,
 } from './explore-page.types';
 
 const PRESET_IMAGE_CLASSES = [styles.presetImg1, styles.presetImg2, styles.presetImg3];
 const MAX_SCRIPT_HAN_CHAR_COUNT = 10_000;
+const SUBJECT_TYPE_OPTIONS: Array<{ value: ExploreSubjectSourceType; label: string }> = [
+  { value: 'all', label: '类别' },
+  { value: 'character', label: '角色' },
+  { value: 'scene', label: '场景' },
+];
+const SUBJECT_GENDER_OPTIONS: Array<{ value: ExploreSubjectGenderFilter; label: string }> = [
+  { value: 'all', label: '性别' },
+  { value: 'female', label: '女性' },
+  { value: 'male', label: '男性' },
+  { value: 'none', label: '无' },
+];
+const SUBJECT_AGE_OPTIONS: Array<{ value: ExploreSubjectAgeFilter; label: string }> = [
+  { value: 'all', label: '年龄' },
+  { value: 'child', label: '儿童' },
+  { value: 'teenager', label: '少年' },
+  { value: 'young_adult', label: '青年' },
+  { value: 'middle_aged', label: '中年' },
+  { value: 'elderly', label: '老年' },
+  { value: 'none', label: '无' },
+];
 
 function countHanCharacters(value: string) {
   return (value.match(/\p{Script=Han}/gu) ?? []).length;
+}
+
+function normalizeSourceValue(value: string | undefined | null) {
+  return value ? value.toLowerCase() : 'none';
+}
+
+function readSubjectMetadata(subject: ExploreCharacterOption) {
+  return (subject.metadata ?? {}) as ExploreSubjectMetadata;
 }
 
 interface ApiEnvelopeSuccess<T> {
@@ -66,6 +97,7 @@ export function ExplorePage() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<ContentTab>('短剧漫剧');
   const [promptText, setPromptText] = useState('');
+  const [selectedPresetTitle, setSelectedPresetTitle] = useState('');
   const [toastMsg, setToastMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [scriptSourceName, setScriptSourceName] = useState('');
@@ -87,8 +119,10 @@ export function ExplorePage() {
   const [characterLoading, setCharacterLoading] = useState(false);
   const [styleOptions, setStyleOptions] = useState<ExploreStyleOption[]>([]);
   const [styleLoading, setStyleLoading] = useState(false);
-  const [subjectScope, setSubjectScope] = useState<ExploreCatalogScope>('public');
+  const [subjectScope, setSubjectScope] = useState<ExploreCatalogScope>('all');
+  const [subjectTypeFilter, setSubjectTypeFilter] = useState<ExploreSubjectSourceType>('all');
   const [subjectGenderFilter, setSubjectGenderFilter] = useState<ExploreSubjectGenderFilter>('all');
+  const [subjectAgeFilter, setSubjectAgeFilter] = useState<ExploreSubjectAgeFilter>('all');
 
   // Auto-hide toast
   useEffect(() => {
@@ -97,6 +131,10 @@ export function ExplorePage() {
       return () => clearTimeout(timer);
     }
   }, [toastMsg]);
+
+  useEffect(() => {
+    setSelectedPresetTitle('');
+  }, [activeTab]);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,7 +175,7 @@ export function ExplorePage() {
           if (current && data.some((model) => model.slug === current)) {
             return current;
           }
-          return data.find((model) => model.isUserDefault)?.slug ?? data[0]?.slug ?? '';
+          return '';
         });
       })
       .catch(() => {
@@ -184,7 +222,7 @@ export function ExplorePage() {
           if (current && data.some((subject) => subject.slug === current)) {
             return current;
           }
-          return data[0]?.slug ?? '';
+          return '';
         });
       })
       .catch(() => {
@@ -231,7 +269,7 @@ export function ExplorePage() {
           if (current && data.some((style) => style.slug === current)) {
             return current;
           }
-          return data[0]?.slug ?? '';
+          return '';
         });
       })
       .catch(() => {
@@ -256,15 +294,28 @@ export function ExplorePage() {
   const selectedCharacterOption = characterOptions.find((subject) => subject.slug === selectedCharacter) ?? null;
   const selectedStyleOption = styleOptions.find((style) => style.slug === selectedModel) ?? null;
   const filteredCharacterOptions = characterOptions.filter((subject) => {
-    if (subjectScope === 'public' && subject.visibility !== 'public') {
+    const metadata = readSubjectMetadata(subject);
+    const sourceType = normalizeSourceValue(metadata.sourceType);
+    const sourceGender = normalizeSourceValue(metadata.sourceGender);
+    const sourceAgeGroup = normalizeSourceValue(metadata.sourceAgeGroup);
+
+    if (subjectScope === 'all') {
+      // pass
+    } else if (subjectScope === 'public' && subject.visibility !== 'public') {
+      return false;
+    } else if (subjectScope === 'personal' && subject.visibility !== 'personal') {
       return false;
     }
 
-    if (subjectScope === 'personal' && subject.visibility !== 'personal') {
+    if (subjectTypeFilter !== 'all' && sourceType !== subjectTypeFilter) {
       return false;
     }
 
-    if (subjectGenderFilter !== 'all' && subject.genderTag !== subjectGenderFilter) {
+    if (subjectGenderFilter !== 'all' && sourceGender !== subjectGenderFilter) {
+      return false;
+    }
+
+    if (subjectAgeFilter !== 'all' && sourceAgeGroup !== subjectAgeFilter) {
       return false;
     }
 
@@ -367,6 +418,7 @@ export function ExplorePage() {
         contentMode,
         creationConfig: {
           selectedTab: activeTab,
+          selectedSubtype: selectedPresetTitle || undefined,
           scriptSourceName: scriptSourceName || undefined,
           scriptContent: scriptSourceName ? normalizedPrompt : undefined,
           imageModelEndpointSlug: selectedImageModel || undefined,
@@ -447,9 +499,9 @@ export function ExplorePage() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v6m0 6v6M3 12h6m6 0h6" /></svg>
               接口配置
             </button>
-            <button className={styles.publishBtn} onClick={() => router.push('/settings/providers')}>
+            <button className={styles.publishBtn} onClick={() => router.push('/settings/catalogs')}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
-              配置模型
+              管理目录
             </button>
           </div>
         </header>
@@ -652,22 +704,34 @@ export function ExplorePage() {
 
                   {activePopover === 'character' && (
                     <div className={styles.popoverMenu}>
-                      <div className={styles.popoverHeader} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', gap: '16px' }}>
-                          <span style={{ color: subjectScope === 'public' ? 'var(--text-primary)' : undefined, cursor: 'pointer' }} onClick={() => setSubjectScope('public')}>公共</span>
-                          <span style={{ color: subjectScope === 'personal' ? 'var(--text-primary)' : undefined, cursor: 'pointer' }} onClick={() => setSubjectScope('personal')}>个人</span>
+                      <div className={styles.popoverHeaderRow}>
+                        <div className={styles.popoverTabs}>
+                          <span className={cx(styles.popoverTab, subjectScope === 'all' && styles.popoverTabActive)} onClick={() => setSubjectScope('all')}>全部</span>
+                          <span className={cx(styles.popoverTab, subjectScope === 'public' && styles.popoverTabActive)} onClick={() => setSubjectScope('public')}>公共</span>
+                          <span className={cx(styles.popoverTab, subjectScope === 'personal' && styles.popoverTabActive)} onClick={() => setSubjectScope('personal')}>个人</span>
                         </div>
-                        <span onClick={() => router.push('/projects/new-character')} className={styles.textLink}>+ 添加新主体</span>
+                        <span onClick={() => router.push('/settings/catalogs?tab=subjects')} className={styles.textLink}>+ 添加新主体</span>
                       </div>
 
                       <div className={styles.popoverFilterBar}>
-                        <span className={cx(subjectGenderFilter === 'all' ? styles.filterChipActive : styles.filterChip)} onClick={() => setSubjectGenderFilter('all')}>全部</span>
-                        <span className={cx(subjectGenderFilter === 'female' ? styles.filterChipActive : styles.filterChip)} onClick={() => setSubjectGenderFilter('female')}>女性</span>
-                        <span className={cx(subjectGenderFilter === 'male' ? styles.filterChipActive : styles.filterChip)} onClick={() => setSubjectGenderFilter('male')}>男性</span>
-                        <span className={cx(subjectGenderFilter === 'child' ? styles.filterChipActive : styles.filterChip)} onClick={() => setSubjectGenderFilter('child')}>小孩</span>
+                        <select className={styles.popoverSelect} value={subjectTypeFilter} onChange={(event) => setSubjectTypeFilter(event.target.value as ExploreSubjectSourceType)}>
+                          {SUBJECT_TYPE_OPTIONS.map((item) => (
+                            <option key={item.value} value={item.value}>{item.label}</option>
+                          ))}
+                        </select>
+                        <select className={styles.popoverSelect} value={subjectGenderFilter} onChange={(event) => setSubjectGenderFilter(event.target.value as ExploreSubjectGenderFilter)}>
+                          {SUBJECT_GENDER_OPTIONS.map((item) => (
+                            <option key={item.value} value={item.value}>{item.label}</option>
+                          ))}
+                        </select>
+                        <select className={styles.popoverSelect} value={subjectAgeFilter} onChange={(event) => setSubjectAgeFilter(event.target.value as ExploreSubjectAgeFilter)}>
+                          {SUBJECT_AGE_OPTIONS.map((item) => (
+                            <option key={item.value} value={item.value}>{item.label}</option>
+                          ))}
+                        </select>
                       </div>
 
-                      <div className={cx(styles.popoverGridCols4, styles.popoverGridScrollable)}>
+                      <div className={cx(styles.popoverGridCols6, styles.popoverGridScrollable)}>
                         {characterLoading ? <div className={styles.popoverEmpty}>正在加载主体列表...</div> : null}
                         {!characterLoading && filteredCharacterOptions.length === 0 ? <div className={styles.popoverEmpty}>暂无可用主体。</div> : null}
                         {filteredCharacterOptions.map((char) => (
@@ -754,7 +818,14 @@ export function ExplorePage() {
                   {/* Preset Gallery */}
                   <div className={styles.presetGallery}>
                     {activePresetCards.map((preset) => (
-                      <button key={preset.title} className={styles.presetCard} onClick={() => setPromptText(preset.seedPrompt)}>
+                      <button
+                        key={preset.title}
+                        className={styles.presetCard}
+                        onClick={() => {
+                          setPromptText(preset.seedPrompt);
+                          setSelectedPresetTitle(preset.title);
+                        }}
+                      >
                         <span className={styles.presetTitle}>{preset.title}</span>
                         <div className={styles.presetImages}>
                           {preset.previewUrls.map((imageUrl, index) => (

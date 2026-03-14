@@ -1,4 +1,32 @@
 import type { SekoActDraft, SekoImageCard, SekoPlanData } from './seko-plan-data';
+import type { PlannerOutlineDoc } from './planner-outline-doc';
+
+interface RuntimePlannerSubject {
+  id: string;
+  name: string;
+  prompt: string;
+}
+
+interface RuntimePlannerScene {
+  id: string;
+  name: string;
+  prompt: string;
+}
+
+interface RuntimePlannerShotScript {
+  id: string;
+  sceneId: string | null;
+  actKey: string;
+  actTitle: string;
+  shotNo: string;
+  title: string;
+  visualDescription: string;
+  composition: string;
+  cameraMotion: string;
+  voiceRole: string;
+  dialogue: string;
+  sortOrder: number;
+}
 
 export interface PlannerStructuredDoc {
   projectTitle: string;
@@ -107,4 +135,87 @@ export function toStructuredPlannerDoc(seed: SekoPlanData): PlannerStructuredDoc
       })),
     })),
   };
+}
+
+export function outlineToPreviewStructuredPlannerDoc(outline: PlannerOutlineDoc): PlannerStructuredDoc {
+  return {
+    projectTitle: outline.projectTitle,
+    episodeTitle: outline.storyArc[0]?.title ?? `${outline.projectTitle}·大纲`,
+    episodeCount: outline.episodeCount,
+    pointCost: 38,
+    summaryBullets: [outline.premise],
+    highlights: outline.storyArc.slice(0, 3).map((item) => ({
+      title: item.title,
+      description: item.summary,
+    })),
+    styleBullets: outline.toneStyle,
+    subjectBullets: outline.mainCharacters.map((item) => `${item.name}：${item.description}`),
+    subjects: outline.mainCharacters.map((item) => ({
+      title: item.name,
+      prompt: `${item.role}，${item.description}`,
+    })),
+    sceneBullets: outline.storyArc.map((item) => item.summary),
+    scenes: outline.storyArc.slice(0, 4).map((item) => ({
+      title: item.title,
+      prompt: item.summary,
+    })),
+    scriptSummary: outline.storyArc.map((item) => item.summary),
+    acts: [],
+  };
+}
+
+export function runtimeSubjectsToImageCards(subjects: RuntimePlannerSubject[], fallbackImages: string[]): SekoImageCard[] {
+  return subjects.map((subject, index) => ({
+    id: subject.id,
+    title: subject.name,
+    prompt: subject.prompt,
+    image: fallbackImages[index % fallbackImages.length] ?? '',
+  }));
+}
+
+export function runtimeScenesToImageCards(scenes: RuntimePlannerScene[], fallbackImages: string[]): SekoImageCard[] {
+  return scenes.map((scene, index) => ({
+    id: scene.id,
+    title: scene.name,
+    prompt: scene.prompt,
+    image: fallbackImages[index % fallbackImages.length] ?? '',
+  }));
+}
+
+export function runtimeShotScriptsToActs(
+  shotScripts: RuntimePlannerShotScript[],
+  scenes: RuntimePlannerScene[],
+): SekoActDraft[] {
+  const scenesById = new Map(scenes.map((scene) => [scene.id, scene]));
+  const acts = new Map<string, SekoActDraft>();
+
+  for (const shot of shotScripts.slice().sort((left, right) => left.sortOrder - right.sortOrder)) {
+    const existingAct = acts.get(shot.actKey);
+    const scene = shot.sceneId ? scenesById.get(shot.sceneId) : null;
+    const act =
+      existingAct
+      ?? {
+        id: shot.actKey,
+        title: shot.actTitle,
+        time: scene?.name ? '' : '',
+        location: scene?.name ?? '',
+        shots: [],
+      };
+
+    act.shots.push({
+      id: shot.id,
+      title: shot.title || shot.shotNo,
+      visual: shot.visualDescription,
+      composition: shot.composition,
+      motion: shot.cameraMotion,
+      voice: shot.voiceRole,
+      line: shot.dialogue,
+    });
+
+    if (!existingAct) {
+      acts.set(shot.actKey, act);
+    }
+  }
+
+  return Array.from(acts.values());
 }

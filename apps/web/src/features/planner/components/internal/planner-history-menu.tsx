@@ -6,7 +6,7 @@ import styles from '../planner-page.module.css';
 interface PlannerHistoryVersionItem {
   id: string;
   versionNumber: number;
-  trigger: 'confirm_outline' | 'rerun';
+  trigger: string;
   status: PlannerRefinementStatus;
   createdAt: number;
 }
@@ -38,8 +38,24 @@ function statusLabel(status: PlannerRefinementStatus) {
   return '完成';
 }
 
-function triggerLabel(trigger: 'confirm_outline' | 'rerun') {
-  return trigger === 'confirm_outline' ? '确认大纲' : '重新细化';
+function triggerLabel(trigger: string) {
+  if (trigger === 'confirm_outline') {
+    return '确认大纲';
+  }
+
+  if (trigger === 'generate_outline') {
+    return '生成大纲';
+  }
+
+  if (trigger === 'follow_up') {
+    return '继续细化';
+  }
+
+  if (trigger === 'generate_doc') {
+    return '开始细化';
+  }
+
+  return '重新细化';
 }
 
 export function PlannerHistoryMenu({ open, versions, activeVersionId, onToggle, onSelect }: PlannerHistoryMenuProps) {
@@ -60,7 +76,7 @@ export function PlannerHistoryMenu({ open, versions, activeVersionId, onToggle, 
       </button>
 
       {open ? (
-        <div className={styles.historyPopover} role="menu" aria-label="细化历史版本">
+        <div className={styles.historyPopover} role="menu" aria-label="历史版本">
           {versions.length ? (
             versions
               .slice()

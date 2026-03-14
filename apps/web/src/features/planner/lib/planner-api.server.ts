@@ -3,6 +3,7 @@ import { createRuntimeStudioFixture, getMockStudioProject } from '@aiv/mock-data
 import { requestAivApiFromServer } from '@/lib/aiv-api';
 
 import type { PlannerPageBootstrap, ApiPlannerWorkspace } from './planner-api';
+import { outlineToPreviewStructuredPlannerDoc } from './planner-structured-doc';
 
 interface ApiProjectDetail {
   id: string;
@@ -28,6 +29,21 @@ function buildPlannerStudio(project: ApiProjectDetail, workspace: ApiPlannerWork
     prompt: project.brief?.trim() || project.title,
     contentMode: project.contentMode,
   });
+  const runtimeMessages = (workspace.messages ?? [])
+    .map((message) => {
+      const content = message.content ?? {};
+      const text = typeof content.text === 'string' ? content.text : '';
+      if (!text) {
+        return null;
+      }
+
+      return {
+        id: message.id,
+        role: message.role === 'user' ? 'user' as const : 'assistant' as const,
+        content: text,
+      };
+    })
+    .filter((message): message is { id: string; role: 'user' | 'assistant'; content: string } => message !== null);
 
   return {
     ...baseStudio,
@@ -52,12 +68,7 @@ function buildPlannerStudio(project: ApiProjectDetail, workspace: ApiPlannerWork
       input: workspace.episode.summary ?? project.brief ?? '',
       submittedRequirement: workspace.episode.summary ?? project.brief ?? '',
       status: (workspace.plannerSession?.status === 'ready' ? 'ready' : workspace.plannerSession?.status === 'updating' ? 'updating' : 'idle') as 'idle' | 'updating' | 'ready',
-      messages: workspace.latestPlannerRun?.generatedText
-        ? [
-            { id: 'planner-api-user', role: 'user' as const, content: workspace.episode.summary ?? project.brief ?? '' },
-            { id: 'planner-api-assistant', role: 'assistant' as const, content: workspace.latestPlannerRun.generatedText },
-          ]
-        : baseStudio.planner.messages,
+      messages: runtimeMessages.length > 0 ? runtimeMessages : baseStudio.planner.messages,
     },
   };
 }
@@ -89,8 +100,13 @@ export async function fetchPlannerStudioProject(projectId: string): Promise<Plan
         episodeId: workspace.episode.id,
       },
       initialGeneratedText: workspace.latestPlannerRun?.generatedText ?? null,
-      initialStructuredDoc: workspace.latestPlannerRun?.structuredDoc ?? null,
+      initialStructuredDoc:
+        workspace.activeRefinement?.structuredDoc
+        ?? (workspace.activeOutline?.outlineDoc ? outlineToPreviewStructuredPlannerDoc(workspace.activeOutline.outlineDoc) : null)
+        ?? workspace.latestPlannerRun?.structuredDoc
+        ?? null,
       initialPlannerReady: workspace.plannerSession?.status === 'ready',
+      initialWorkspace: workspace,
     };
   } catch {
     return {

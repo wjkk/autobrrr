@@ -46,6 +46,47 @@ enum PlannerStatus {
   READY
 }
 
+enum PlannerMessageRole {
+  USER
+  ASSISTANT
+}
+
+enum PlannerMessageType {
+  USER_INPUT
+  ASSISTANT_TEXT
+  ASSISTANT_OUTLINE_CARD
+  ASSISTANT_STEPS
+  ASSISTANT_DOCUMENT_RECEIPT
+  SYSTEM_TRANSITION
+}
+
+enum PlannerOutlineStatus {
+  DRAFT
+  READY
+  FAILED
+}
+
+enum PlannerRefinementStatus {
+  DRAFT
+  RUNNING
+  READY
+  FAILED
+}
+
+enum PlannerStepStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum ProfileReleaseStatus {
+  DRAFT
+  ACTIVE
+  DEPRECATED
+  ARCHIVED
+}
+
 enum ShotStatus {
   PENDING
   QUEUED
@@ -154,6 +195,11 @@ model User {
   providerConfigs UserProviderConfig[]
   subjectProfiles SubjectProfile[]
   stylePresets StylePreset[]
+  plannerMessages PlannerMessage[]
+  plannerOutlineVersions PlannerOutlineVersion[]
+  plannerRefinementVersions PlannerRefinementVersion[]
+  plannerDebugRuns PlannerDebugRun[]
+  plannerSubAgentProfileReleases PlannerSubAgentProfileRelease[]
 
   @@map("users")
 }
@@ -240,10 +286,299 @@ model PlannerSession {
   episode         Episode       @relation(fields: [episodeId], references: [id], onDelete: Cascade)
   activeForEpisodes Episode[]   @relation("EpisodeActivePlannerSession")
   createdBy       User          @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  messages        PlannerMessage[]
+  outlineVersions PlannerOutlineVersion[]
+  refinementVersions PlannerRefinementVersion[]
 
   @@index([projectId, episodeId, createdAt])
   @@index([episodeId, isActive])
   @@map("planner_sessions")
+}
+
+model PlannerOutlineVersion {
+  id                String               @id @default(cuid())
+  plannerSessionId  String               @map("planner_session_id")
+  sourceRunId       String?              @map("source_run_id")
+  versionNumber     Int                  @map("version_number")
+  triggerType       String               @map("trigger_type") @db.VarChar(64)
+  status            PlannerOutlineStatus @default(DRAFT)
+  instruction       String?              @db.Text
+  assistantMessage  String?              @map("assistant_message") @db.Text
+  documentTitle     String?              @map("document_title") @db.VarChar(255)
+  generatedText     String?              @map("generated_text") @db.Text
+  outlineDocJson    Json?                @map("outline_doc_json")
+  inputSnapshotJson Json?                @map("input_snapshot_json")
+  modelSnapshotJson Json?                @map("model_snapshot_json")
+  operationsJson    Json?                @map("operations_json")
+  isActive          Boolean              @map("is_active") @default(false)
+  isConfirmed       Boolean              @map("is_confirmed") @default(false)
+  confirmedAt       DateTime?            @map("confirmed_at")
+  errorCode         String?              @map("error_code") @db.VarChar(120)
+  errorMessage      String?              @map("error_message") @db.Text
+  createdById       String?              @map("created_by_id")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+  plannerSession    PlannerSession       @relation(fields: [plannerSessionId], references: [id], onDelete: Cascade)
+  sourceRun         Run?                 @relation(fields: [sourceRunId], references: [id], onDelete: SetNull)
+  createdBy         User?                @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  messages          PlannerMessage[]
+
+  @@unique([plannerSessionId, versionNumber])
+  @@index([plannerSessionId, isActive, createdAt])
+  @@index([sourceRunId])
+  @@map("planner_outline_versions")
+}
+
+model PlannerAgentProfile {
+  id                        String                   @id @default(cuid())
+  slug                      String                   @unique @db.VarChar(120)
+  contentType               String                   @map("content_type") @db.VarChar(64)
+  displayName               String                   @map("display_name") @db.VarChar(120)
+  description               String?                  @db.Text
+  defaultSystemPrompt       String                   @map("default_system_prompt") @db.Text
+  defaultDeveloperPrompt    String?                  @map("default_developer_prompt") @db.Text
+  defaultStepDefinitionsJson Json?                   @map("default_step_definitions_json")
+  defaultOutputSchemaJson   Json?                    @map("default_output_schema_json")
+  defaultInputSchemaJson    Json?                    @map("default_input_schema_json")
+  enabled                   Boolean                  @default(true)
+  version                   Int                      @default(1)
+  status                    ProfileReleaseStatus     @default(ACTIVE)
+  publishedAt               DateTime?                @map("published_at")
+  archivedAt                DateTime?                @map("archived_at")
+  createdAt                 DateTime                 @default(now()) @map("created_at")
+  updatedAt                 DateTime                 @updatedAt @map("updated_at")
+  subAgentProfiles          PlannerSubAgentProfile[]
+  refinementVersions        PlannerRefinementVersion[]
+  debugRuns                 PlannerDebugRun[]
+
+  @@index([contentType, enabled, updatedAt])
+  @@map("planner_agent_profiles")
+}
+
+model PlannerSubAgentProfile {
+  id                          String                   @id @default(cuid())
+  agentProfileId              String                   @map("agent_profile_id")
+  slug                        String                   @unique @db.VarChar(120)
+  subtype                     String                   @db.VarChar(64)
+  displayName                 String                   @map("display_name") @db.VarChar(120)
+  description                 String?                  @db.Text
+  systemPromptOverride        String?                  @map("system_prompt_override") @db.Text
+  developerPromptOverride     String?                  @map("developer_prompt_override") @db.Text
+  stepDefinitionsJson         Json?                    @map("step_definitions_json")
+  outputSchemaJson            Json?                    @map("output_schema_json")
+  inputSchemaJson             Json?                    @map("input_schema_json")
+  toolPolicyJson              Json?                    @map("tool_policy_json")
+  defaultGenerationConfigJson Json?                    @map("default_generation_config_json")
+  enabled                     Boolean                  @default(true)
+  version                     Int                      @default(1)
+  status                      ProfileReleaseStatus     @default(ACTIVE)
+  publishedAt                 DateTime?                @map("published_at")
+  archivedAt                  DateTime?                @map("archived_at")
+  createdAt                   DateTime                 @default(now()) @map("created_at")
+  updatedAt                   DateTime                 @updatedAt @map("updated_at")
+  agentProfile                PlannerAgentProfile      @relation(fields: [agentProfileId], references: [id], onDelete: Cascade)
+  refinementVersions          PlannerRefinementVersion[]
+  debugRuns                   PlannerDebugRun[]
+  releases                    PlannerSubAgentProfileRelease[]
+
+  @@unique([agentProfileId, subtype])
+  @@index([subtype, enabled, updatedAt])
+  @@map("planner_sub_agent_profiles")
+}
+
+model PlannerSubAgentProfileRelease {
+  id                          String               @id @default(cuid())
+  subAgentProfileId           String               @map("sub_agent_profile_id")
+  releaseVersion              Int                  @map("release_version")
+  displayName                 String               @map("display_name") @db.VarChar(120)
+  description                 String?              @db.Text
+  systemPromptOverride        String?              @map("system_prompt_override") @db.LongText
+  developerPromptOverride     String?              @map("developer_prompt_override") @db.LongText
+  stepDefinitionsJson         Json?                @map("step_definitions_json")
+  outputSchemaJson            Json?                @map("output_schema_json")
+  inputSchemaJson             Json?                @map("input_schema_json")
+  toolPolicyJson              Json?                @map("tool_policy_json")
+  defaultGenerationConfigJson Json?                @map("default_generation_config_json")
+  publishedByUserId           String?              @map("published_by_user_id")
+  publishedAt                 DateTime             @map("published_at") @default(now())
+  subAgentProfile             PlannerSubAgentProfile @relation(fields: [subAgentProfileId], references: [id], onDelete: Cascade)
+  publishedBy                 User?                @relation(fields: [publishedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([subAgentProfileId, releaseVersion])
+  @@index([subAgentProfileId, publishedAt])
+  @@map("planner_sub_agent_profile_releases")
+}
+
+model PlannerMessage {
+  id                  String                   @id @default(cuid())
+  plannerSessionId    String                   @map("planner_session_id")
+  outlineVersionId    String?                  @map("outline_version_id")
+  refinementVersionId String?                  @map("refinement_version_id")
+  role                PlannerMessageRole
+  messageType         PlannerMessageType       @map("message_type")
+  contentJson         Json                     @map("content_json")
+  createdById         String?                  @map("created_by_id")
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  plannerSession      PlannerSession           @relation(fields: [plannerSessionId], references: [id], onDelete: Cascade)
+  outlineVersion      PlannerOutlineVersion?   @relation(fields: [outlineVersionId], references: [id], onDelete: SetNull)
+  refinementVersion   PlannerRefinementVersion? @relation(fields: [refinementVersionId], references: [id], onDelete: SetNull)
+  createdBy           User?                    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([plannerSessionId, createdAt])
+  @@index([outlineVersionId, createdAt])
+  @@index([refinementVersionId, createdAt])
+  @@map("planner_messages")
+}
+
+model PlannerRefinementVersion {
+  id                String                  @id @default(cuid())
+  plannerSessionId  String                  @map("planner_session_id")
+  agentProfileId    String?                 @map("agent_profile_id")
+  subAgentProfileId String?                 @map("sub_agent_profile_id")
+  sourceRunId       String?                 @map("source_run_id")
+  versionNumber     Int                     @map("version_number")
+  triggerType       String                  @map("trigger_type") @db.VarChar(64)
+  status            PlannerRefinementStatus @default(DRAFT)
+  instruction       String?                 @db.Text
+  assistantMessage  String?                 @map("assistant_message") @db.Text
+  documentTitle     String?                 @map("document_title") @db.VarChar(255)
+  generatedText     String?                 @map("generated_text") @db.Text
+  structuredDocJson Json?                   @map("structured_doc_json")
+  inputSnapshotJson Json?                   @map("input_snapshot_json")
+  modelSnapshotJson Json?                   @map("model_snapshot_json")
+  operationsJson    Json?                   @map("operations_json")
+  isActive          Boolean                 @map("is_active") @default(false)
+  errorCode         String?                 @map("error_code") @db.VarChar(120)
+  errorMessage      String?                 @map("error_message") @db.Text
+  createdById       String?                 @map("created_by_id")
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
+  plannerSession    PlannerSession          @relation(fields: [plannerSessionId], references: [id], onDelete: Cascade)
+  agentProfile      PlannerAgentProfile?    @relation(fields: [agentProfileId], references: [id], onDelete: SetNull)
+  subAgentProfile   PlannerSubAgentProfile? @relation(fields: [subAgentProfileId], references: [id], onDelete: SetNull)
+  sourceRun         Run?                    @relation(fields: [sourceRunId], references: [id], onDelete: SetNull)
+  createdBy         User?                   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  messages          PlannerMessage[]
+  stepAnalysis      PlannerStepAnalysis[]
+  subjects          PlannerSubject[]
+  scenes            PlannerScene[]
+  shotScripts       PlannerShotScript[]
+
+  @@unique([plannerSessionId, versionNumber])
+  @@index([plannerSessionId, isActive, createdAt])
+  @@index([sourceRunId])
+  @@map("planner_refinement_versions")
+}
+
+model PlannerSubject {
+  id                  String                   @id @default(cuid())
+  refinementVersionId String                   @map("refinement_version_id")
+  name                String                   @db.VarChar(120)
+  role                String                   @db.VarChar(120)
+  appearance          String                   @db.Text
+  personality         String?                  @db.Text
+  prompt              String                   @db.Text
+  negativePrompt      String?                  @map("negative_prompt") @db.Text
+  referenceAssetIdsJson Json?                  @map("reference_asset_ids_json")
+  generatedAssetIdsJson Json?                  @map("generated_asset_ids_json")
+  sortOrder           Int                      @map("sort_order") @default(100)
+  editable            Boolean                  @default(true)
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  updatedAt           DateTime                 @updatedAt @map("updated_at")
+  refinementVersion   PlannerRefinementVersion @relation(fields: [refinementVersionId], references: [id], onDelete: Cascade)
+
+  @@index([refinementVersionId, sortOrder])
+  @@map("planner_subjects")
+}
+
+model PlannerScene {
+  id                  String                   @id @default(cuid())
+  refinementVersionId String                   @map("refinement_version_id")
+  name                String                   @db.VarChar(120)
+  time                String                   @db.VarChar(120)
+  locationType        String                   @map("location_type") @db.VarChar(32)
+  description         String                   @db.Text
+  prompt              String                   @db.Text
+  negativePrompt      String?                  @map("negative_prompt") @db.Text
+  referenceAssetIdsJson Json?                  @map("reference_asset_ids_json")
+  generatedAssetIdsJson Json?                  @map("generated_asset_ids_json")
+  sortOrder           Int                      @map("sort_order") @default(100)
+  editable            Boolean                  @default(true)
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  updatedAt           DateTime                 @updatedAt @map("updated_at")
+  refinementVersion   PlannerRefinementVersion @relation(fields: [refinementVersionId], references: [id], onDelete: Cascade)
+  shotScripts         PlannerShotScript[]
+
+  @@index([refinementVersionId, sortOrder])
+  @@map("planner_scenes")
+}
+
+model PlannerShotScript {
+  id                  String                   @id @default(cuid())
+  refinementVersionId String                   @map("refinement_version_id")
+  sceneId             String?                  @map("scene_id")
+  actKey              String                   @map("act_key") @db.VarChar(120)
+  actTitle            String                   @map("act_title") @db.VarChar(255)
+  shotNo              String                   @map("shot_no") @db.VarChar(120)
+  title               String                   @db.VarChar(255)
+  durationSeconds     Int?                     @map("duration_seconds")
+  visualDescription   String                   @map("visual_description") @db.Text
+  composition         String                   @db.Text
+  cameraMotion        String                   @map("camera_motion") @db.Text
+  voiceRole           String                   @map("voice_role") @db.VarChar(120)
+  dialogue            String                   @db.Text
+  subjectBindingsJson Json?                    @map("subject_bindings_json")
+  sortOrder           Int                      @map("sort_order") @default(100)
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  updatedAt           DateTime                 @updatedAt @map("updated_at")
+  refinementVersion   PlannerRefinementVersion @relation(fields: [refinementVersionId], references: [id], onDelete: Cascade)
+  scene               PlannerScene?            @relation(fields: [sceneId], references: [id], onDelete: SetNull)
+
+  @@index([refinementVersionId, sortOrder])
+  @@index([sceneId, sortOrder])
+  @@map("planner_shot_scripts")
+}
+
+model PlannerDebugRun {
+  id                String                   @id @default(cuid())
+  userId            String                   @map("user_id")
+  agentProfileId    String?                  @map("agent_profile_id")
+  subAgentProfileId String?                  @map("sub_agent_profile_id")
+  compareGroupKey   String?                  @map("compare_group_key") @db.VarChar(191)
+  compareLabel      String?                  @map("compare_label") @db.VarChar(16)
+  executionMode     String                   @map("execution_mode") @db.VarChar(32)
+  modelSnapshotJson Json?                    @map("model_snapshot_json")
+  inputJson         Json?                    @map("input_json")
+  finalPrompt       String                   @map("final_prompt") @db.LongText
+  rawText           String?                  @map("raw_text") @db.LongText
+  providerOutputJson Json?                   @map("provider_output_json")
+  assistantPackageJson Json                  @map("assistant_package_json")
+  errorMessage      String?                  @map("error_message") @db.Text
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  user              User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agentProfile      PlannerAgentProfile?     @relation(fields: [agentProfileId], references: [id], onDelete: SetNull)
+  subAgentProfile   PlannerSubAgentProfile?  @relation(fields: [subAgentProfileId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([subAgentProfileId, createdAt])
+  @@index([compareGroupKey, createdAt])
+  @@map("planner_debug_runs")
+}
+
+model PlannerStepAnalysis {
+  id                  String                   @id @default(cuid())
+  refinementVersionId String                   @map("refinement_version_id")
+  stepKey             String                   @map("step_key") @db.VarChar(120)
+  title               String                   @db.VarChar(255)
+  status              PlannerStepStatus        @default(PENDING)
+  detailJson          Json?                    @map("detail_json")
+  sortOrder           Int                      @map("sort_order") @default(100)
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  refinementVersion   PlannerRefinementVersion @relation(fields: [refinementVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([refinementVersionId, stepKey])
+  @@index([refinementVersionId, sortOrder])
+  @@map("planner_step_analysis")
 }
 
 model Shot {
@@ -493,6 +828,7 @@ model ProjectCreationConfig {
   id                   String         @id @default(cuid())
   projectId            String         @unique @map("project_id")
   selectedTab          String         @map("selected_tab") @db.VarChar(64)
+  selectedSubtype      String?        @map("selected_subtype") @db.VarChar(64)
   scriptSourceName     String?        @map("script_source_name") @db.VarChar(255)
   scriptContent        String?        @map("script_content") @db.Text
   imageModelEndpointId String?        @map("image_model_endpoint_id")
@@ -543,6 +879,8 @@ model Run {
   modelFamily      ModelFamily?   @relation(fields: [modelFamilyId], references: [id], onDelete: SetNull)
   modelProvider    ModelProvider? @relation(fields: [modelProviderId], references: [id], onDelete: SetNull)
   modelEndpoint    ModelEndpoint? @relation(fields: [modelEndpointId], references: [id], onDelete: SetNull)
+  plannerOutlineVersions PlannerOutlineVersion[]
+  plannerRefinementVersions PlannerRefinementVersion[]
 
   @@index([projectId, runType, status, createdAt])
   @@index([episodeId, status, createdAt])

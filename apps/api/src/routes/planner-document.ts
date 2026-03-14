@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { requireUser } from '../lib/auth.js';
 import { plannerStructuredDocSchema } from '../lib/planner-doc.js';
 import { findOwnedEpisode } from '../lib/ownership.js';
+import { syncPlannerRefinementDerivedData } from '../lib/planner-refinement-sync.js';
 import { prisma } from '../lib/prisma.js';
 
 const paramsSchema = z.object({
@@ -92,6 +93,14 @@ export async function registerPlannerDocumentRoutes(app: FastifyInstance) {
     }
 
     const updatedRun = await prisma.$transaction(async (tx) => {
+      const activeRefinement = await tx.plannerRefinementVersion.findFirst({
+        where: {
+          plannerSessionId: plannerSession.id,
+          isActive: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
       await tx.project.update({
         where: { id: episode.project.id },
         data: {
@@ -107,6 +116,23 @@ export async function registerPlannerDocumentRoutes(app: FastifyInstance) {
           summary: payload.data.structuredDoc.summaryBullets[0] ?? episode.summary,
         },
       });
+
+      if (activeRefinement) {
+        await tx.plannerRefinementVersion.update({
+          where: { id: activeRefinement.id },
+          data: {
+            documentTitle: payload.data.structuredDoc.projectTitle,
+            structuredDocJson: payload.data.structuredDoc as Prisma.InputJsonValue,
+            updatedAt: new Date(),
+          },
+        });
+
+        await syncPlannerRefinementDerivedData({
+          db: tx,
+          refinementVersionId: activeRefinement.id,
+          structuredDoc: payload.data.structuredDoc,
+        });
+      }
 
       return tx.run.update({
         where: { id: latestRun.id },

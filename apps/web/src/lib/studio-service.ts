@@ -58,6 +58,7 @@ export interface CreateStudioProjectInput {
   contentMode: ProjectContentMode;
   creationConfig?: {
     selectedTab: '短剧漫剧' | '音乐MV' | '知识分享';
+    selectedSubtype?: string;
     scriptSourceName?: string;
     scriptContent?: string;
     imageModelEndpointSlug?: string;

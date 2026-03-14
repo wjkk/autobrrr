@@ -1,0 +1,362 @@
+[
+  {
+    "slug": "cinematic",
+    "name": "影视质感",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/cinematic.png",
+    "sortOrder": 1,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 48,
+      "sourceSeq": 1
+    }
+  },
+  {
+    "slug": "vivid-realism",
+    "name": "高饱和写实",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/vivid-realism.jpg",
+    "sortOrder": 2,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 49,
+      "sourceSeq": 2
+    }
+  },
+  {
+    "slug": "dreamy-realism",
+    "name": "唯美写实",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/dreamy-realism.png",
+    "sortOrder": 3,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 50,
+      "sourceSeq": 3
+    }
+  },
+  {
+    "slug": "guofeng-comic",
+    "name": "国风漫剧",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/guofeng-comic.jpg",
+    "sortOrder": 4,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 51,
+      "sourceSeq": 4
+    }
+  },
+  {
+    "slug": "anime-jp",
+    "name": "日漫二次元",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/anime-jp.png",
+    "sortOrder": 5,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 53,
+      "sourceSeq": 5
+    }
+  },
+  {
+    "slug": "anime-kr",
+    "name": "韩漫二次元",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/anime-kr.png",
+    "sortOrder": 6,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 54,
+      "sourceSeq": 6
+    }
+  },
+  {
+    "slug": "lavish-3d-2d",
+    "name": "华丽三渲二",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/lavish-3d-2d.jpg",
+    "sortOrder": 7,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 52,
+      "sourceSeq": 7
+    }
+  },
+  {
+    "slug": "ancient-china-2d",
+    "name": "2D古风",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/ancient-china-2d.png",
+    "sortOrder": 8,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 55,
+      "sourceSeq": 8
+    }
+  },
+  {
+    "slug": "ancient-china-3d",
+    "name": "3D古风",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/ancient-china-3d.png",
+    "sortOrder": 9,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 56,
+      "sourceSeq": 9
+    }
+  },
+  {
+    "slug": "ancient-china-live",
+    "name": "真人古风",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/ancient-china-live.jpg",
+    "sortOrder": 10,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 57,
+      "sourceSeq": 10
+    }
+  },
+  {
+    "slug": "noir-film",
+    "name": "黑白电影",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/noir-film.jpg",
+    "sortOrder": 11,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 58,
+      "sourceSeq": 11
+    }
+  },
+  {
+    "slug": "wong-kar-wai",
+    "name": "王家卫电影",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/wong-kar-wai.png",
+    "sortOrder": 12,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 59,
+      "sourceSeq": 12
+    }
+  },
+  {
+    "slug": "shunji-iwai",
+    "name": "岩井俊二电影",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/shunji-iwai.jpg",
+    "sortOrder": 13,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 60,
+      "sourceSeq": 13
+    }
+  },
+  {
+    "slug": "vintage-dv",
+    "name": "复古DV质感",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/vintage-dv.jpg",
+    "sortOrder": 14,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 61,
+      "sourceSeq": 14
+    }
+  },
+  {
+    "slug": "cartoon-3d",
+    "name": "3D卡通",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/cartoon-3d.jpg",
+    "sortOrder": 15,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 62,
+      "sourceSeq": 15
+    }
+  },
+  {
+    "slug": "ghibli",
+    "name": "吉卜力",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/ghibli.png",
+    "sortOrder": 16,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 63,
+      "sourceSeq": 16
+    }
+  },
+  {
+    "slug": "pixar",
+    "name": "皮克斯",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/pixar.png",
+    "sortOrder": 17,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 64,
+      "sourceSeq": 17
+    }
+  },
+  {
+    "slug": "sketch",
+    "name": "素描简笔画",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/sketch.png",
+    "sortOrder": 18,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 65,
+      "sourceSeq": 18
+    }
+  },
+  {
+    "slug": "watercolor",
+    "name": "水彩画",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/watercolor.jpg",
+    "sortOrder": 19,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 66,
+      "sourceSeq": 19
+    }
+  },
+  {
+    "slug": "gongbi",
+    "name": "中国工笔画",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/gongbi.png",
+    "sortOrder": 20,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 67,
+      "sourceSeq": 20
+    }
+  },
+  {
+    "slug": "oil-painting",
+    "name": "油画",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/oil-painting.jpg",
+    "sortOrder": 21,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 68,
+      "sourceSeq": 21
+    }
+  },
+  {
+    "slug": "felt",
+    "name": "毛毡",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/felt.jpg",
+    "sortOrder": 22,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 69,
+      "sourceSeq": 22
+    }
+  },
+  {
+    "slug": "clay",
+    "name": "黏土",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/clay.png",
+    "sortOrder": 23,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 70,
+      "sourceSeq": 23
+    }
+  },
+  {
+    "slug": "lego",
+    "name": "乐高",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/lego.jpg",
+    "sortOrder": 24,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 71,
+      "sourceSeq": 24
+    }
+  },
+  {
+    "slug": "surreal-fantasy",
+    "name": "超现实奇幻",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/surreal-fantasy.png",
+    "sortOrder": 25,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 78,
+      "sourceSeq": 25
+    }
+  },
+  {
+    "slug": "y2k-collage",
+    "name": "Y2K拼贴艺术",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/y2k-collage.jpg",
+    "sortOrder": 26,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 72,
+      "sourceSeq": 26
+    }
+  },
+  {
+    "slug": "kpop-stage",
+    "name": "K-pop舞台",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/kpop-stage.jpg",
+    "sortOrder": 27,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 73,
+      "sourceSeq": 27
+    }
+  },
+  {
+    "slug": "city-pop-modern",
+    "name": "City Pop现代都市",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/city-pop-modern.jpg",
+    "sortOrder": 28,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 74,
+      "sourceSeq": 28
+    }
+  },
+  {
+    "slug": "city-pop-retro-anime",
+    "name": "City Pop复古动漫",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/city-pop-retro-anime.jpg",
+    "sortOrder": 29,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 75,
+      "sourceSeq": 29
+    }
+  },
+  {
+    "slug": "futurism",
+    "name": "未来主义",
+    "visibility": "PUBLIC",
+    "previewImageUrl": "/seko-catalog/styles/futurism.jpg",
+    "sortOrder": 30,
+    "metadata": {
+      "sourceCatalog": "seko",
+      "sourceId": 76,
+      "sourceSeq": 30
+    }
+  }
+]

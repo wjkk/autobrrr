@@ -20,6 +20,7 @@ const createProjectSchema = z.object({
   contentMode: z.enum(['single', 'series']).default('single'),
   creationConfig: z.object({
     selectedTab: z.enum(['短剧漫剧', '音乐MV', '知识分享']).default('短剧漫剧'),
+    selectedSubtype: z.string().trim().min(1).max(64).optional(),
     scriptSourceName: z.string().trim().min(1).max(255).optional(),
     scriptContent: z.string().trim().min(1).max(100_000).refine(
       (value) => countHanCharacters(value) <= MAX_SCRIPT_HAN_CHAR_COUNT,
@@ -188,6 +189,7 @@ export async function registerStudioProjectRoutes(app: FastifyInstance) {
           data: {
             projectId: project.id,
             selectedTab: creationConfig.selectedTab,
+            selectedSubtype: creationConfig.selectedSubtype ?? null,
             scriptSourceName: creationConfig.scriptSourceName ?? null,
             scriptContent: creationConfig.scriptContent ?? null,
             imageModelEndpointId: imageModelEndpoint?.id ?? null,
@@ -332,6 +334,7 @@ export async function registerStudioProjectRoutes(app: FastifyInstance) {
         creationConfig: project.creationConfig
           ? {
               selectedTab: project.creationConfig.selectedTab,
+              selectedSubtype: project.creationConfig.selectedSubtype,
               scriptSourceName: project.creationConfig.scriptSourceName,
               hasScriptContent: Boolean(project.creationConfig.scriptContent),
               imageModelEndpoint: project.creationConfig.imageModelEndpoint,

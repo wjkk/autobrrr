@@ -9,11 +9,19 @@ interface PlannerRouteProps {
 
 export default async function PlannerRoute({ params }: PlannerRouteProps) {
   const { projectId } = await params;
-  const { studio, runtimeApi, initialGeneratedText, initialPlannerReady } = await fetchPlannerStudioProject(projectId);
+  const { studio, runtimeApi, initialGeneratedText, initialPlannerReady, initialWorkspace } = await fetchPlannerStudioProject(projectId);
 
   if (!studio) {
     notFound();
   }
 
-  return <PlannerPage studio={studio} runtimeApi={runtimeApi} initialGeneratedText={initialGeneratedText} initialPlannerReady={initialPlannerReady} />;
+  return (
+    <PlannerPage
+      studio={studio}
+      runtimeApi={runtimeApi}
+      initialGeneratedText={initialGeneratedText}
+      initialPlannerReady={initialPlannerReady}
+      initialWorkspace={initialWorkspace}
+    />
+  );
 }

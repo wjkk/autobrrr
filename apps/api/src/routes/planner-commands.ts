@@ -5,7 +5,8 @@ import { z } from 'zod';
 import { mapRun } from '../lib/api-mappers.js';
 import { requireUser } from '../lib/auth.js';
 import { resolveModelSelection } from '../lib/model-registry.js';
-import { buildPlannerGenerationPrompt } from '../lib/planner-doc.js';
+import { resolvePlannerAgentSelection } from '../lib/planner-agent-registry.js';
+import { buildPlannerGenerationPrompt, createPlannerUserMessage } from '../lib/planner-orchestrator.js';
 import { findOwnedEpisode } from '../lib/ownership.js';
 import { prisma } from '../lib/prisma.js';
 import { resolveUserDefaultModelSelection } from '../lib/user-model-defaults.js';
@@ -17,6 +18,7 @@ const paramsSchema = z.object({
 const payloadSchema = z.object({
   episodeId: z.string().min(1),
   prompt: z.string().trim().min(1).max(10000).optional(),
+  subtype: z.string().trim().min(1).max(64).optional(),
   modelFamily: z.string().trim().max(120).optional(),
   modelEndpoint: z.string().trim().max(120).optional(),
   idempotencyKey: z.string().trim().max(191).optional(),
@@ -108,11 +110,114 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
     }
 
     const plannerSession = await findOrCreateActivePlannerSession(episode.project.id, episode.id, user.id);
+    const creationConfig = await prisma.projectCreationConfig.findUnique({
+      where: {
+        projectId: episode.project.id,
+      },
+      include: {
+        subjectProfile: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        },
+        stylePreset: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        },
+        imageModelEndpoint: {
+          select: {
+            id: true,
+            slug: true,
+            label: true,
+          },
+        },
+      },
+    });
     const rawPrompt = payload.data.prompt ?? episode.summary ?? episode.project.title;
-    const effectivePrompt = buildPlannerGenerationPrompt({
+    const selectedContentType = creationConfig?.selectedTab ?? '短剧漫剧';
+    const selection = await resolvePlannerAgentSelection({
+      contentType: selectedContentType,
+      subtype: payload.data.subtype ?? creationConfig?.selectedSubtype,
+    });
+    if (!selection) {
+      return reply.code(409).send({
+        ok: false,
+        error: {
+          code: 'PLANNER_AGENT_NOT_CONFIGURED',
+          message: 'No active planner sub-agent matched the current content type and subtype.',
+        },
+      });
+    }
+
+    const recentMessages = await prisma.plannerMessage.findMany({
+      where: {
+        plannerSessionId: plannerSession.id,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+    });
+
+    const activeOutline = await prisma.plannerOutlineVersion.findFirst({
+      where: {
+        plannerSessionId: plannerSession.id,
+        isActive: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        versionNumber: true,
+        outlineDocJson: true,
+      },
+    });
+
+    const activeRefinement = await prisma.plannerRefinementVersion.findFirst({
+      where: {
+        plannerSessionId: plannerSession.id,
+        isActive: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        versionNumber: true,
+        structuredDocJson: true,
+      },
+    });
+
+    const targetStage: 'outline' | 'refinement' = plannerSession.outlineConfirmedAt ? 'refinement' : 'outline';
+    const triggerType = targetStage === 'outline'
+      ? (activeOutline ? 'update_outline' : 'generate_outline')
+      : (activeRefinement ? 'follow_up' : 'generate_doc');
+
+    const promptPackage = buildPlannerGenerationPrompt({
+      selection,
+      targetStage,
       userPrompt: rawPrompt,
       projectTitle: episode.project.title,
       episodeTitle: episode.title,
+      contentMode: episode.project.contentMode,
+      scriptContent: creationConfig?.scriptContent,
+      selectedSubjectName: creationConfig?.subjectProfile?.name,
+      selectedStyleName: creationConfig?.stylePreset?.name,
+      selectedImageModelLabel: creationConfig?.imageModelEndpoint?.label,
+      priorMessages: recentMessages
+        .reverse()
+        .map((message) => {
+          const content = message.contentJson && typeof message.contentJson === 'object' && !Array.isArray(message.contentJson)
+            ? (message.contentJson as Record<string, unknown>)
+            : {};
+
+          return {
+            role: message.role.toLowerCase(),
+            text: typeof content.text === 'string' ? content.text : JSON.stringify(content),
+          };
+        }),
+      currentOutlineDoc: activeOutline?.outlineDocJson,
+      currentStructuredDoc: activeRefinement?.structuredDocJson,
     });
 
     const result = await prisma.$transaction(async (tx) => {
@@ -121,6 +226,13 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
         data: {
           status: 'UPDATING',
         },
+      });
+
+      await createPlannerUserMessage({
+        db: tx,
+        plannerSessionId: plannerSession.id,
+        userId: user.id,
+        prompt: rawPrompt,
       });
 
       const run = await tx.run.create({
@@ -140,10 +252,47 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
             plannerSessionId: plannerSession.id,
             episodeId: episode.id,
             projectId: episode.project.id,
-            prompt: effectivePrompt,
+            prompt: promptPackage.promptText,
             rawPrompt,
             projectTitle: episode.project.title,
             episodeTitle: episode.title,
+            contentMode: episode.project.contentMode,
+            contentType: selection.contentType,
+            subtype: selection.subtype,
+            targetStage,
+            triggerType,
+            stepDefinitions: promptPackage.stepDefinitions,
+            agentProfile: selection.agentProfile,
+            subAgentProfile: selection.subAgentProfile,
+            contextSnapshot: {
+              selectedTab: creationConfig?.selectedTab ?? selection.contentType,
+              selectedSubtype: payload.data.subtype ?? creationConfig?.selectedSubtype ?? selection.subtype,
+              scriptSourceName: creationConfig?.scriptSourceName ?? null,
+              hasScriptContent: Boolean(creationConfig?.scriptContent),
+              selectedSubject: creationConfig?.subjectProfile,
+              selectedStyle: creationConfig?.stylePreset,
+              selectedImageModel: creationConfig?.imageModelEndpoint,
+              priorMessages: recentMessages.map((message) => ({
+                role: message.role.toLowerCase(),
+                messageType: message.messageType.toLowerCase(),
+                content: message.contentJson,
+                createdAt: message.createdAt.toISOString(),
+              })),
+              activeOutline: activeOutline
+                ? {
+                    id: activeOutline.id,
+                    versionNumber: activeOutline.versionNumber,
+                    outlineDoc: activeOutline.outlineDocJson,
+                  }
+                : null,
+              activeRefinement: activeRefinement
+                ? {
+                    id: activeRefinement.id,
+                    versionNumber: activeRefinement.versionNumber,
+                    structuredDoc: activeRefinement.structuredDocJson,
+                  }
+                : null,
+            },
             modelFamily: {
               id: resolvedModel.family.id,
               slug: resolvedModel.family.slug,
@@ -175,6 +324,8 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
           id: plannerSession.id,
           status: 'updating',
         },
+        targetStage,
+        triggerType,
         run: mapRun(result),
       },
     });

@@ -5,7 +5,22 @@ export type ExploreSidebarNav = 'home' | 'projects' | 'avatar' | 'voice';
 export type ExplorePopover = 'character' | 'model' | 'imageModel' | null;
 
 export type ExploreCatalogScope = 'all' | 'public' | 'personal';
-export type ExploreSubjectGenderFilter = 'all' | 'unknown' | 'female' | 'male' | 'child';
+export type ExploreSubjectGenderFilter = 'all' | 'female' | 'male' | 'none';
+export type ExploreSubjectAgeFilter = 'all' | 'child' | 'teenager' | 'young_adult' | 'middle_aged' | 'elderly' | 'none';
+export type ExploreSubjectSourceType = 'all' | 'character' | 'scene';
+
+export interface ExploreSubjectMetadata {
+  sourceCatalog?: string;
+  sourceId?: string;
+  sourceSeq?: number;
+  sourceType?: string;
+  sourceGender?: string;
+  sourceAgeGroup?: string;
+  sourceVisionStyleId?: number;
+  sourceIdentity?: string;
+  sourceCollectedFlag?: boolean;
+  sourceCreateTime?: number;
+}
 
 export interface ExploreCharacterOption {
   id: string;
@@ -19,7 +34,7 @@ export interface ExploreCharacterOption {
   promptTemplate?: string | null;
   negativePrompt?: string | null;
   tags?: unknown;
-  metadata?: unknown;
+  metadata?: ExploreSubjectMetadata | null;
   enabled?: boolean;
   sortOrder?: number;
   ownerUserId?: string | null;
@@ -35,7 +50,7 @@ export interface ExploreStyleOption {
   promptTemplate?: string | null;
   negativePrompt?: string | null;
   tags?: unknown;
-  metadata?: unknown;
+  metadata?: Record<string, unknown> | null;
   enabled?: boolean;
   sortOrder?: number;
   ownerUserId?: string | null;

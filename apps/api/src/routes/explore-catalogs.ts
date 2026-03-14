@@ -8,6 +8,14 @@ import { prisma } from '../lib/prisma.js';
 const visibilitySchema = z.enum(['public', 'personal']);
 const subjectTypeSchema = z.enum(['human', 'animal', 'creature', 'object']);
 const genderTagSchema = z.enum(['unknown', 'female', 'male', 'child']);
+const catalogImagePathSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(2048)
+  .refine((value) => value.startsWith('/') || z.url().safeParse(value).success, {
+    message: 'Expected an absolute URL or root-relative asset path.',
+  });
 
 const listSubjectsQuerySchema = z.object({
   scope: z.enum(['all', 'public', 'personal']).optional().default('all'),
@@ -24,8 +32,8 @@ const subjectPayloadSchema = z.object({
   visibility: visibilitySchema.default('public'),
   subjectType: subjectTypeSchema.default('human'),
   genderTag: genderTagSchema.default('unknown'),
-  previewImageUrl: z.url().max(2048),
-  referenceImageUrl: z.url().max(2048).optional(),
+  previewImageUrl: catalogImagePathSchema,
+  referenceImageUrl: catalogImagePathSchema.optional(),
   description: z.string().trim().max(5000).optional(),
   promptTemplate: z.string().trim().max(10000).optional(),
   negativePrompt: z.string().trim().max(10000).optional(),
@@ -39,7 +47,7 @@ const stylePayloadSchema = z.object({
   slug: z.string().trim().min(1).max(120),
   name: z.string().trim().min(1).max(120),
   visibility: visibilitySchema.default('public'),
-  previewImageUrl: z.url().max(2048),
+  previewImageUrl: catalogImagePathSchema,
   description: z.string().trim().max(5000).optional(),
   promptTemplate: z.string().trim().max(10000).optional(),
   negativePrompt: z.string().trim().max(10000).optional(),

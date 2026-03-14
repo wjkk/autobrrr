@@ -6,14 +6,14 @@ import type {
 
 export const CONTENT_TABS: Array<{ id: ContentTab; beta?: boolean }> = [
   { id: '短剧漫剧' },
-  { id: '音乐MV', beta: true },
+  { id: '音乐MV' },
   { id: '知识分享' },
 ];
 
 export const TAB_PLACEHOLDERS: Record<ContentTab, string> = {
   短剧漫剧: '输入你的灵感，AI 会为你自动策划内容生成视频',
-  音乐MV: '上传音乐, AI会帮你自动生成MV剧本',
-  知识分享: '输入你的主题, AI 会为你自动策划内容生成视频',
+  音乐MV: '上传音乐，AI 会帮你自动生成MV剧本',
+  知识分享: '输入你的主题，AI 会为你自动策划内容生成视频',
 };
 
 export const TAB_PREFIX_CLASS_SUFFIX: Record<ContentTab, 'drama' | 'mv' | 'edu'> = {
@@ -27,18 +27,18 @@ const DRAMA_PRESETS: ExplorePresetCard[] = [
     title: '对话剧情',
     seedPrompt: '对话剧情：',
     previewUrls: [
-      'https://images.unsplash.com/photo-1542204165-65bf26472b9b?auto=format&fit=crop&q=80&w=200',
-      'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&q=80&w=200',
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+      '/seko-explore-presets/drama/dialogue-1.png',
+      '/seko-explore-presets/drama/dialogue-2.png',
+      '/seko-explore-presets/drama/dialogue-3.png',
     ],
   },
   {
     title: '旁白解说',
     seedPrompt: '旁白解说：',
     previewUrls: [
-      'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=200',
-      'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&q=80&w=200',
-      'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&q=80&w=200',
+      '/seko-explore-presets/drama/narration-1.png',
+      '/seko-explore-presets/drama/narration-2.png',
+      '/seko-explore-presets/drama/narration-3.png',
     ],
   },
 ];
@@ -48,18 +48,36 @@ const MV_PRESETS: ExplorePresetCard[] = [
     title: '剧情MV',
     seedPrompt: '剧情MV：',
     previewUrls: [
-      'https://images.unsplash.com/photo-1516280440502-a2f011ba228b?auto=format&fit=crop&q=80&w=200',
-      'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&q=80&w=200',
-      'https://images.unsplash.com/photo-1506157786151-b8491531f063?auto=format&fit=crop&q=80&w=200',
+      '/seko-explore-presets/mv/plot-1.png',
+      '/seko-explore-presets/mv/plot-2.png',
+      '/seko-explore-presets/mv/plot-3.png',
     ],
   },
   {
     title: '表演MV',
     seedPrompt: '表演MV：',
     previewUrls: [
-      'https://images.unsplash.com/photo-1493225457124-b1f4862dc96f?auto=format&fit=crop&q=80&w=200',
-      'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&q=80&w=200',
-      'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?auto=format&fit=crop&q=80&w=200',
+      '/seko-explore-presets/mv/show-1.png',
+      '/seko-explore-presets/mv/show-2.png',
+      '/seko-explore-presets/mv/show-3.png',
+    ],
+  },
+  {
+    title: '演唱MV',
+    seedPrompt: '演唱MV：',
+    previewUrls: [
+      '/seko-explore-presets/mv/sing-1.png',
+      '/seko-explore-presets/mv/sing-2.png',
+      '/seko-explore-presets/mv/sing-3.png',
+    ],
+  },
+  {
+    title: '氛围MV',
+    seedPrompt: '氛围MV：',
+    previewUrls: [
+      '/seko-explore-presets/mv/view-1.png',
+      '/seko-explore-presets/mv/view-2.png',
+      '/seko-explore-presets/mv/view-3.png',
     ],
   },
 ];
@@ -69,36 +87,36 @@ const EDUCATION_PRESETS: ExplorePresetCard[] = [
     title: '知识科普',
     seedPrompt: '知识科普：',
     previewUrls: [
-      'https://images.unsplash.com/photo-1518364538176-bfddf9dafeaf?auto=format&fit=crop&q=80&w=200',
-      'https://images.unsplash.com/photo-1473091534298-04dcbce3278c?auto=format&fit=crop&q=80&w=200',
-      'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=200',
+      '/seko-explore-presets/knowledge/science-1.png',
+      '/seko-explore-presets/knowledge/science-2.png',
+      '/seko-explore-presets/knowledge/science-3.png',
     ],
   },
   {
     title: '情感哲言',
     seedPrompt: '情感哲言：',
     previewUrls: [
-      'https://images.unsplash.com/photo-1499209974431-9dddcece7f88?auto=format&fit=crop&q=80&w=200',
-      'https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&q=80&w=200',
-      'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=200',
+      '/seko-explore-presets/knowledge/emotion-1.png',
+      '/seko-explore-presets/knowledge/emotion-2.png',
+      '/seko-explore-presets/knowledge/emotion-3.png',
     ],
   },
   {
     title: '旅游宣传',
     seedPrompt: '旅游宣传：',
     previewUrls: [
-      'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&q=80&w=200',
-      'https://images.unsplash.com/photo-1504280650505-89f929388f6c?auto=format&fit=crop&q=80&w=200',
-      'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&q=80&w=200',
+      '/seko-explore-presets/knowledge/travel-1.png',
+      '/seko-explore-presets/knowledge/travel-2.png',
+      '/seko-explore-presets/knowledge/travel-3.png',
     ],
   },
   {
     title: '历史文化',
     seedPrompt: '历史文化：',
     previewUrls: [
-      'https://images.unsplash.com/photo-1590856029826-c7a73142bbf1?auto=format&fit=crop&q=80&w=200',
-      'https://images.unsplash.com/photo-1518998053401-b20fbfbc76a4?auto=format&fit=crop&q=80&w=200',
-      'https://images.unsplash.com/photo-1520037130009-ebcc652a92c3?auto=format&fit=crop&q=80&w=200',
+      '/seko-explore-presets/knowledge/history-1.png',
+      '/seko-explore-presets/knowledge/history-2.png',
+      '/seko-explore-presets/knowledge/history-3.png',
     ],
   },
 ];

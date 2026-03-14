@@ -193,11 +193,12 @@ async function main() {
       contentMode: 'single',
       creationConfig: {
         selectedTab: '短剧漫剧',
+        selectedSubtype: '对话剧情',
         scriptSourceName: 'smoke-script.md',
         scriptContent: '# Smoke Script\n\n机械猫在雨夜城市中寻找失落的记忆。',
         imageModelEndpointSlug: 'proxy-seko-image-v1',
         subjectProfileSlug: 'little-fox',
-        stylePresetSlug: 'ink-oriental',
+        stylePresetSlug: 'cinematic',
         settings: {
           multiEpisode: false,
         },
@@ -217,6 +218,7 @@ async function main() {
     currentEpisodeId: string | null;
     creationConfig: {
       selectedTab: string;
+      selectedSubtype: string | null;
       scriptSourceName: string | null;
       hasScriptContent: boolean;
       imageModelEndpoint: { slug: string } | null;
@@ -231,7 +233,8 @@ async function main() {
   if (
     project.data.creationConfig?.imageModelEndpoint?.slug !== 'proxy-seko-image-v1'
     || project.data.creationConfig?.subjectProfile?.slug !== 'little-fox'
-    || project.data.creationConfig?.stylePreset?.slug !== 'ink-oriental'
+    || project.data.creationConfig?.stylePreset?.slug !== 'cinematic'
+    || project.data.creationConfig?.selectedSubtype !== '对话剧情'
     || project.data.creationConfig?.hasScriptContent !== true
   ) {
     throw new Error('Project creation config snapshot was not persisted correctly.');
@@ -261,6 +264,9 @@ async function main() {
   await request('/api/model-endpoints?familySlug=doubao-text', { cookie });
   console.log('[smoke] text model endpoints ok');
 
+  await request('/api/planner/agent-profiles?contentType=短剧漫剧', { cookie });
+  console.log('[smoke] planner agent profiles ok');
+
   await request('/api/model-resolution/resolve', {
     method: 'POST',
     cookie,
@@ -272,7 +278,7 @@ async function main() {
   });
   console.log('[smoke] model resolution ok');
 
-  const plannerRun = await request<{ run: { id: string; status: string } }>(
+  const outlineRun = await request<{ targetStage: string; run: { id: string; status: string } }>(
     `/api/projects/${createdProject.data.projectId}/planner/generate-doc`,
     {
       method: 'POST',
@@ -284,33 +290,205 @@ async function main() {
       }),
     },
   );
-  console.log(`[smoke] planner run created: ${plannerRun.data.run.id}`);
+  console.log(`[smoke] outline run created: ${outlineRun.data.run.id}`);
 
-  const plannerProcessed = await processUntilMatch(
-    (processed) => !!processed && processed.runId === plannerRun.data.run.id && processed.action === 'processed',
+  const outlineProcessed = await processUntilMatch(
+    (processed) => !!processed && processed.runId === outlineRun.data.run.id && processed.action === 'processed',
+    20,
   );
-  if (!plannerProcessed) {
-    throw new Error('Worker did not complete the planner run.');
+  if (!outlineProcessed) {
+    throw new Error('Worker did not complete the outline run.');
   }
-  console.log('[smoke] planner worker completed run');
+  console.log('[smoke] outline worker completed run');
 
-  const plannerRunDetail = await request<{ status: string; output: { generatedText?: string } | null }>(
-    `/api/runs/${plannerRun.data.run.id}`,
+  const outlineRunDetail = await request<{ status: string; output: { generatedText?: string; outlineDoc?: Record<string, unknown> } | null }>(
+    `/api/runs/${outlineRun.data.run.id}`,
     { cookie },
   );
-  if (plannerRunDetail.data.status !== 'completed' || !plannerRunDetail.data.output?.generatedText) {
-    throw new Error('Expected planner run to complete with generated text.');
+  if (outlineRunDetail.data.status !== 'completed' || !outlineRunDetail.data.output?.generatedText || !outlineRunDetail.data.output?.outlineDoc) {
+    throw new Error('Expected outline run to complete with generated text and outline doc.');
   }
-  console.log('[smoke] planner run completed ok');
+  console.log('[smoke] outline run completed ok');
 
-  const plannerWorkspaceAfterRun = await request<{ plannerSession: { status: string } | null; latestPlannerRun: { generatedText: string | null } | null }>(
+  const plannerWorkspaceAfterRun = await request<{
+    plannerSession: { status: string; outlineConfirmedAt: string | null; stage?: string } | null;
+    latestPlannerRun: { generatedText: string | null } | null;
+    messages: Array<{ role: string; messageType: string }>;
+    activeOutline: { id: string; outlineDoc: Record<string, unknown> | null } | null;
+    outlineVersions: Array<{ id: string }>;
+    activeRefinement: { structuredDoc: Record<string, unknown> | null; subAgentProfile: { subtype: string } | null } | null;
+  }>(
     `/api/projects/${createdProject.data.projectId}/planner/workspace?episodeId=${episodeId}`,
     { cookie },
   );
-  if (plannerWorkspaceAfterRun.data.plannerSession?.status !== 'ready' || !plannerWorkspaceAfterRun.data.latestPlannerRun?.generatedText) {
-    throw new Error('Planner workspace did not reflect generated planner text.');
+  if (
+    plannerWorkspaceAfterRun.data.plannerSession?.status !== 'ready'
+    || plannerWorkspaceAfterRun.data.plannerSession?.outlineConfirmedAt !== null
+    || plannerWorkspaceAfterRun.data.plannerSession?.stage !== 'outline'
+    || !plannerWorkspaceAfterRun.data.latestPlannerRun?.generatedText
+    || !plannerWorkspaceAfterRun.data.activeOutline?.outlineDoc
+    || plannerWorkspaceAfterRun.data.activeRefinement
+    || plannerWorkspaceAfterRun.data.messages.length < 3
+  ) {
+    throw new Error('Planner workspace did not reflect generated outline.');
   }
-  console.log('[smoke] planner workspace reflects generated doc');
+  console.log('[smoke] planner workspace reflects generated outline');
+
+  const revisedOutlineRun = await request<{ targetStage: string; run: { id: string; status: string } }>(
+    `/api/projects/${createdProject.data.projectId}/planner/generate-doc`,
+    {
+      method: 'POST',
+      cookie,
+      body: JSON.stringify({
+        episodeId,
+        prompt: '保持雨夜机械猫主题，但大纲改成双主角并增强追逐感。',
+        idempotencyKey: `smoke-planner-outline-update-${Date.now()}`,
+      }),
+    },
+  );
+  if (revisedOutlineRun.data.targetStage !== 'outline') {
+    throw new Error(`Expected second planner stage to remain outline, got ${revisedOutlineRun.data.targetStage}.`);
+  }
+  console.log(`[smoke] outline update run created: ${revisedOutlineRun.data.run.id}`);
+
+  const revisedOutlineProcessed = await processUntilMatch(
+    (processed) => !!processed && processed.runId === revisedOutlineRun.data.run.id && processed.action === 'processed',
+    20,
+  );
+  if (!revisedOutlineProcessed) {
+    throw new Error('Worker did not complete the revised outline run.');
+  }
+  console.log('[smoke] outline update worker completed run');
+
+  const revisedOutlineWorkspace = await request<{
+    plannerSession: { status: string; outlineConfirmedAt: string | null; stage?: string } | null;
+    activeOutline: { id: string; outlineDoc: Record<string, unknown> | null } | null;
+    outlineVersions: Array<{ id: string }>;
+    activeRefinement: { structuredDoc: Record<string, unknown> | null } | null;
+  }>(`/api/projects/${createdProject.data.projectId}/planner/workspace?episodeId=${episodeId}`, { cookie });
+  if (
+    revisedOutlineWorkspace.data.plannerSession?.stage !== 'outline'
+    || revisedOutlineWorkspace.data.plannerSession?.outlineConfirmedAt !== null
+    || !revisedOutlineWorkspace.data.activeOutline?.outlineDoc
+    || revisedOutlineWorkspace.data.outlineVersions.length < 2
+    || revisedOutlineWorkspace.data.activeRefinement
+  ) {
+    throw new Error('Planner outline update did not remain in outline stage.');
+  }
+  console.log('[smoke] outline update remains in outline stage');
+
+  await request<{ outlineVersionId: string; isConfirmed: boolean; confirmedAt: string | null }>(
+    `/api/projects/${createdProject.data.projectId}/planner/outline-versions/${revisedOutlineWorkspace.data.activeOutline.id}/confirm`,
+    {
+      method: 'POST',
+      cookie,
+      body: JSON.stringify({
+        episodeId,
+      }),
+    },
+  );
+  console.log('[smoke] outline confirm ok');
+
+  const refinementRun = await request<{ targetStage: string; run: { id: string; status: string } }>(
+    `/api/projects/${createdProject.data.projectId}/planner/generate-doc`,
+    {
+      method: 'POST',
+      cookie,
+      body: JSON.stringify({
+        episodeId,
+        prompt: '开始细化剧情内容，并输出主体、场景和3个分镜。',
+        idempotencyKey: `smoke-planner-refinement-${Date.now()}`,
+      }),
+    },
+  );
+  console.log(`[smoke] refinement run created: ${refinementRun.data.run.id}`);
+
+  const refinementProcessed = await processUntilMatch(
+    (processed) => !!processed && processed.runId === refinementRun.data.run.id && processed.action === 'processed',
+    20,
+  );
+  if (!refinementProcessed) {
+    throw new Error('Worker did not complete the refinement run.');
+  }
+  console.log('[smoke] refinement worker completed run');
+
+  const refinementWorkspace = await request<{
+    plannerSession: { status: string; outlineConfirmedAt: string | null; stage?: string } | null;
+    activeRefinement: { structuredDoc: Record<string, unknown> | null; subAgentProfile: { subtype: string } | null } | null;
+    subjects: Array<{ id: string; name: string }>;
+    scenes: Array<{ id: string; name: string }>;
+    shotScripts: Array<{ id: string; title: string }>;
+  }>(
+    `/api/projects/${createdProject.data.projectId}/planner/workspace?episodeId=${episodeId}`,
+    { cookie },
+  );
+  if (
+    !refinementWorkspace.data.plannerSession?.outlineConfirmedAt
+    || refinementWorkspace.data.plannerSession?.stage !== 'refinement'
+    || !refinementWorkspace.data.activeRefinement?.structuredDoc
+    || refinementWorkspace.data.activeRefinement.subAgentProfile?.subtype !== '对话剧情'
+    || refinementWorkspace.data.subjects.length === 0
+    || refinementWorkspace.data.scenes.length === 0
+    || refinementWorkspace.data.shotScripts.length === 0
+  ) {
+    throw new Error('Planner refinement did not become active after outline confirmation.');
+  }
+  console.log('[smoke] refinement workspace reflects generated doc');
+
+  const firstSubject = refinementWorkspace.data.subjects[0];
+  const firstScene = refinementWorkspace.data.scenes[0];
+  const firstShotScript = refinementWorkspace.data.shotScripts[0];
+
+  await request(`/api/projects/${createdProject.data.projectId}/planner/subjects/${firstSubject.id}`, {
+    method: 'PATCH',
+    cookie,
+    body: JSON.stringify({
+      episodeId,
+      name: `${firstSubject.name}-修订`,
+      appearance: '更新后的主体外观描述',
+      prompt: '更新后的主体提示词',
+    }),
+  });
+
+  await request(`/api/projects/${createdProject.data.projectId}/planner/scenes/${firstScene.id}`, {
+    method: 'PATCH',
+    cookie,
+    body: JSON.stringify({
+      episodeId,
+      name: `${firstScene.name}-修订`,
+      description: '更新后的场景描述',
+      prompt: '更新后的场景提示词',
+    }),
+  });
+
+  await request(`/api/projects/${createdProject.data.projectId}/planner/shot-scripts/${firstShotScript.id}`, {
+    method: 'PATCH',
+    cookie,
+    body: JSON.stringify({
+      episodeId,
+      visualDescription: '更新后的分镜画面描述',
+      composition: '更新后的分镜构图',
+      cameraMotion: '更新后的分镜运镜',
+      dialogue: '更新后的分镜台词',
+    }),
+  });
+
+  const plannerWorkspaceAfterEntityUpdates = await request<{
+    subjects: Array<{ id: string; name: string; prompt: string }>;
+    scenes: Array<{ id: string; name: string; description: string }>;
+    shotScripts: Array<{ id: string; visualDescription: string; composition: string; cameraMotion: string; dialogue: string }>;
+    activeRefinement: { structuredDoc: { subjects: Array<{ title: string; prompt: string }>; scenes: Array<{ title: string; prompt: string }>; acts: Array<{ shots: Array<{ visual: string; composition: string; motion: string; line: string }> }> } | null } | null;
+  }>(`/api/projects/${createdProject.data.projectId}/planner/workspace?episodeId=${episodeId}`, { cookie });
+
+  if (
+    plannerWorkspaceAfterEntityUpdates.data.subjects[0]?.name !== `${firstSubject.name}-修订`
+    || plannerWorkspaceAfterEntityUpdates.data.scenes[0]?.name !== `${firstScene.name}-修订`
+    || plannerWorkspaceAfterEntityUpdates.data.shotScripts[0]?.visualDescription !== '更新后的分镜画面描述'
+    || plannerWorkspaceAfterEntityUpdates.data.activeRefinement?.structuredDoc?.subjects[0]?.title !== `${firstSubject.name}-修订`
+  ) {
+    throw new Error('Planner entity-level updates were not reflected in workspace.');
+  }
+  console.log('[smoke] planner entity updates reflected in workspace');
 
   const createdShot = await request<{
     id: string;

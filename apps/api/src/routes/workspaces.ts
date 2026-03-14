@@ -29,6 +29,12 @@ async function requireOwnedEpisode(projectId: string, episodeId: string, userId:
           status: true,
           contentMode: true,
           currentEpisodeId: true,
+          creationConfig: {
+            select: {
+              selectedTab: true,
+              selectedSubtype: true,
+            },
+          },
         },
       },
     },
@@ -102,6 +108,114 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
         })
       : null;
 
+    const [messages, activeOutline, outlineVersions, activeRefinement, refinementVersions] = plannerSession
+      ? await Promise.all([
+          prisma.plannerMessage.findMany({
+            where: {
+              plannerSessionId: plannerSession.id,
+            },
+            orderBy: { createdAt: 'asc' },
+            select: {
+              id: true,
+              role: true,
+              messageType: true,
+              contentJson: true,
+              createdAt: true,
+              outlineVersionId: true,
+              refinementVersionId: true,
+            },
+          }),
+          prisma.plannerOutlineVersion.findFirst({
+            where: {
+              plannerSessionId: plannerSession.id,
+              isActive: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              versionNumber: true,
+              triggerType: true,
+              status: true,
+              documentTitle: true,
+              assistantMessage: true,
+              generatedText: true,
+              outlineDocJson: true,
+              isConfirmed: true,
+              confirmedAt: true,
+              isActive: true,
+              createdAt: true,
+            },
+          }),
+          prisma.plannerOutlineVersion.findMany({
+            where: {
+              plannerSessionId: plannerSession.id,
+            },
+            orderBy: { versionNumber: 'desc' },
+            take: 10,
+            select: {
+              id: true,
+              versionNumber: true,
+              triggerType: true,
+              status: true,
+              documentTitle: true,
+              isConfirmed: true,
+              isActive: true,
+              createdAt: true,
+            },
+          }),
+          prisma.plannerRefinementVersion.findFirst({
+            where: {
+              plannerSessionId: plannerSession.id,
+              isActive: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            include: {
+              stepAnalysis: {
+                orderBy: { sortOrder: 'asc' },
+              },
+              subjects: {
+                orderBy: { sortOrder: 'asc' },
+              },
+              scenes: {
+                orderBy: { sortOrder: 'asc' },
+              },
+              shotScripts: {
+                orderBy: { sortOrder: 'asc' },
+              },
+              subAgentProfile: {
+                select: {
+                  id: true,
+                  slug: true,
+                  subtype: true,
+                  displayName: true,
+                },
+              },
+            },
+          }),
+          prisma.plannerRefinementVersion.findMany({
+            where: {
+              plannerSessionId: plannerSession.id,
+            },
+            orderBy: { versionNumber: 'desc' },
+            take: 10,
+            select: {
+              id: true,
+              versionNumber: true,
+              triggerType: true,
+              status: true,
+              documentTitle: true,
+              isActive: true,
+              createdAt: true,
+            },
+          }),
+        ])
+      : [[], null, [], null, []];
+
+    const plannerStage = plannerSession?.outlineConfirmedAt ? 'refinement' : activeOutline ? 'outline' : 'idle';
+    const refinementSubjects = activeRefinement?.subjects ?? [];
+    const refinementScenes = activeRefinement?.scenes ?? [];
+    const refinementShotScripts = activeRefinement?.shotScripts ?? [];
+
     return reply.send({
       ok: true,
       data: {
@@ -111,6 +225,12 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
           status: episode.project.status.toLowerCase(),
           contentMode: episode.project.contentMode.toLowerCase(),
           currentEpisodeId: episode.project.currentEpisodeId,
+          creationConfig: episode.project.creationConfig
+            ? {
+                selectedTab: episode.project.creationConfig.selectedTab,
+                selectedSubtype: episode.project.creationConfig.selectedSubtype,
+              }
+            : null,
         },
         episode: {
           id: episode.id,
@@ -123,6 +243,7 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
           ? {
               id: plannerSession.id,
               status: plannerSession.status.toLowerCase(),
+              stage: plannerStage,
               outlineConfirmedAt: plannerSession.outlineConfirmedAt?.toISOString() ?? null,
               createdAt: plannerSession.createdAt.toISOString(),
               updatedAt: plannerSession.updatedAt.toISOString(),
@@ -147,6 +268,163 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
               finishedAt: latestPlannerRun.finishedAt?.toISOString() ?? null,
             }
           : null,
+        messages: messages.map((message) => ({
+          id: message.id,
+          role: message.role.toLowerCase(),
+          messageType: message.messageType.toLowerCase(),
+          content: message.contentJson,
+          outlineVersionId: message.outlineVersionId,
+          refinementVersionId: message.refinementVersionId,
+          createdAt: message.createdAt.toISOString(),
+        })),
+        activeOutline: activeOutline
+          ? {
+              id: activeOutline.id,
+              versionNumber: activeOutline.versionNumber,
+              triggerType: activeOutline.triggerType,
+              status: activeOutline.status.toLowerCase(),
+              documentTitle: activeOutline.documentTitle,
+              assistantMessage: activeOutline.assistantMessage,
+              generatedText: activeOutline.generatedText,
+              outlineDoc: activeOutline.outlineDocJson,
+              isConfirmed: activeOutline.isConfirmed,
+              confirmedAt: activeOutline.confirmedAt?.toISOString() ?? null,
+              isActive: activeOutline.isActive,
+              createdAt: activeOutline.createdAt.toISOString(),
+            }
+          : null,
+        outlineVersions: outlineVersions.map((version) => ({
+          id: version.id,
+          versionNumber: version.versionNumber,
+          triggerType: version.triggerType,
+          status: version.status.toLowerCase(),
+          documentTitle: version.documentTitle,
+          isConfirmed: version.isConfirmed,
+          isActive: version.isActive,
+          createdAt: version.createdAt.toISOString(),
+        })),
+        activeRefinement: activeRefinement
+          ? {
+              id: activeRefinement.id,
+              versionNumber: activeRefinement.versionNumber,
+              triggerType: activeRefinement.triggerType,
+              status: activeRefinement.status.toLowerCase(),
+              documentTitle: activeRefinement.documentTitle,
+              assistantMessage: activeRefinement.assistantMessage,
+              generatedText: activeRefinement.generatedText,
+              structuredDoc: activeRefinement.structuredDocJson,
+              subAgentProfile: activeRefinement.subAgentProfile
+                ? {
+                    id: activeRefinement.subAgentProfile.id,
+                    slug: activeRefinement.subAgentProfile.slug,
+                    subtype: activeRefinement.subAgentProfile.subtype,
+                    displayName: activeRefinement.subAgentProfile.displayName,
+                  }
+                : null,
+              subjects: refinementSubjects.map((subject) => ({
+                id: subject.id,
+                name: subject.name,
+                role: subject.role,
+                appearance: subject.appearance,
+                personality: subject.personality,
+                prompt: subject.prompt,
+                negativePrompt: subject.negativePrompt,
+                referenceAssetIds: Array.isArray(subject.referenceAssetIdsJson) ? subject.referenceAssetIdsJson : [],
+                generatedAssetIds: Array.isArray(subject.generatedAssetIdsJson) ? subject.generatedAssetIdsJson : [],
+                sortOrder: subject.sortOrder,
+                editable: subject.editable,
+              })),
+              scenes: refinementScenes.map((scene) => ({
+                id: scene.id,
+                name: scene.name,
+                time: scene.time,
+                locationType: scene.locationType,
+                description: scene.description,
+                prompt: scene.prompt,
+                negativePrompt: scene.negativePrompt,
+                referenceAssetIds: Array.isArray(scene.referenceAssetIdsJson) ? scene.referenceAssetIdsJson : [],
+                generatedAssetIds: Array.isArray(scene.generatedAssetIdsJson) ? scene.generatedAssetIdsJson : [],
+                sortOrder: scene.sortOrder,
+                editable: scene.editable,
+              })),
+              shotScripts: refinementShotScripts.map((shot) => ({
+                id: shot.id,
+                sceneId: shot.sceneId,
+                actKey: shot.actKey,
+                actTitle: shot.actTitle,
+                shotNo: shot.shotNo,
+                title: shot.title,
+                durationSeconds: shot.durationSeconds,
+                visualDescription: shot.visualDescription,
+                composition: shot.composition,
+                cameraMotion: shot.cameraMotion,
+                voiceRole: shot.voiceRole,
+                dialogue: shot.dialogue,
+                subjectBindings: Array.isArray(shot.subjectBindingsJson) ? shot.subjectBindingsJson : [],
+                sortOrder: shot.sortOrder,
+              })),
+              stepAnalysis: activeRefinement.stepAnalysis.map((step) => ({
+                id: step.id,
+                stepKey: step.stepKey,
+                title: step.title,
+                status: step.status.toLowerCase(),
+                detail: step.detailJson,
+                sortOrder: step.sortOrder,
+              })),
+              createdAt: activeRefinement.createdAt.toISOString(),
+            }
+          : null,
+        subjects: refinementSubjects.map((subject) => ({
+          id: subject.id,
+          name: subject.name,
+          role: subject.role,
+          appearance: subject.appearance,
+          personality: subject.personality,
+          prompt: subject.prompt,
+          negativePrompt: subject.negativePrompt,
+          referenceAssetIds: Array.isArray(subject.referenceAssetIdsJson) ? subject.referenceAssetIdsJson : [],
+          generatedAssetIds: Array.isArray(subject.generatedAssetIdsJson) ? subject.generatedAssetIdsJson : [],
+          sortOrder: subject.sortOrder,
+          editable: subject.editable,
+        })),
+        scenes: refinementScenes.map((scene) => ({
+          id: scene.id,
+          name: scene.name,
+          time: scene.time,
+          locationType: scene.locationType,
+          description: scene.description,
+          prompt: scene.prompt,
+          negativePrompt: scene.negativePrompt,
+          referenceAssetIds: Array.isArray(scene.referenceAssetIdsJson) ? scene.referenceAssetIdsJson : [],
+          generatedAssetIds: Array.isArray(scene.generatedAssetIdsJson) ? scene.generatedAssetIdsJson : [],
+          sortOrder: scene.sortOrder,
+          editable: scene.editable,
+        })),
+        shotScripts: refinementShotScripts.map((shot) => ({
+          id: shot.id,
+          sceneId: shot.sceneId,
+          actKey: shot.actKey,
+          actTitle: shot.actTitle,
+          shotNo: shot.shotNo,
+          title: shot.title,
+          durationSeconds: shot.durationSeconds,
+          visualDescription: shot.visualDescription,
+          composition: shot.composition,
+          cameraMotion: shot.cameraMotion,
+          voiceRole: shot.voiceRole,
+          dialogue: shot.dialogue,
+          subjectBindings: Array.isArray(shot.subjectBindingsJson) ? shot.subjectBindingsJson : [],
+          sortOrder: shot.sortOrder,
+        })),
+        refinementVersions: refinementVersions.map((version) => ({
+          id: version.id,
+          versionNumber: version.versionNumber,
+          triggerType: version.triggerType,
+          status: version.status.toLowerCase(),
+          documentTitle: version.documentTitle,
+          isActive: version.isActive,
+          createdAt: version.createdAt.toISOString(),
+        })),
       },
     });
   });

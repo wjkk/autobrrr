@@ -310,6 +310,7 @@ export async function registerPlannerPartialRerunRoutes(app: FastifyInstance) {
             targetEntityId: payload.data.targetId,
             targetEntity: targetEntity as Prisma.InputJsonValue,
             stepDefinitions: promptPackage.stepDefinitions,
+            promptSnapshot: promptPackage.promptSnapshot,
             agentProfile: selection.agentProfile,
             subAgentProfile: selection.subAgentProfile,
             contextSnapshot: {

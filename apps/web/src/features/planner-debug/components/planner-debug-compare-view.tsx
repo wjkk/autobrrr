@@ -34,6 +34,19 @@ function previewCoverage(items: PlannerPreviewCardItem[]) {
   return items.filter((item) => Boolean(item.imageUrl)).length;
 }
 
+function usageLabel(result: PlannerDebugRunResponse) {
+  if (!result.usage) {
+    return '未记录';
+  }
+
+  const costLabel =
+    result.usage.cost !== null
+      ? `${result.usage.currency ?? 'USD'} ${result.usage.cost.toFixed(4)}`
+      : (result.usage.source === 'estimated' ? '仅估算 token' : '未返回价格');
+
+  return `${result.usage.totalTokens} tokens · ${costLabel}`;
+}
+
 function renderPreviewSection(title: string, items: PlannerPreviewCardItem[]) {
   if (!items.length) {
     return null;
@@ -87,7 +100,7 @@ function ResultColumn({
         <div className={styles.compareStatCard}><span>Prompt</span><strong>{promptStats.charCount} 字</strong></div>
         <div className={styles.compareStatCard}><span>输出字段</span><strong>{summary.outputKeys.length}</strong></div>
         <div className={styles.compareStatCard}><span>主体 / 场景 / 分镜</span><strong>{summary.subjectCount} / {summary.sceneCount} / {summary.shotCount}</strong></div>
-        <div className={styles.compareStatCard}><span>操作项</span><strong>{summary.operationsCount}</strong></div>
+        <div className={styles.compareStatCard}><span>完整度 / 步骤</span><strong>{summary.completenessScore}% / {summary.stepCount}</strong></div>
       </div>
 
       <div className={styles.compareBlock}>
@@ -102,7 +115,15 @@ function ResultColumn({
           <div className={styles.summaryCard}><span>标题</span><strong>{summary.documentTitle}</strong></div>
           <div className={styles.summaryCard}><span>字段集合</span><strong>{summary.outputKeys.join(', ') || '-'}</strong></div>
           <div className={styles.summaryCard}><span>助手文案</span><strong>{summary.assistantMessage || '-'}</strong></div>
+          <div className={styles.summaryCard}><span>步骤</span><strong>{summary.stepTitles.join(' / ') || '-'}</strong></div>
+          <div className={styles.summaryCard}><span>Token / Cost</span><strong>{usageLabel(result)}</strong></div>
         </div>
+        {summary.missingFields.length ? (
+          <details className={styles.jsonPreview}>
+            <summary className={styles.jsonPreviewSummary}>查看缺失字段</summary>
+            <pre className={styles.pre}>{summary.missingFields.join('\n')}</pre>
+          </details>
+        ) : null}
       </div>
 
       <div className={styles.compareBlock}>
@@ -129,7 +150,10 @@ export function PlannerDebugCompareView({ compareResult }: { compareResult: Plan
   const diffItems = [
     `Prompt 长度差异：A ${leftPrompt.charCount} 字，B ${rightPrompt.charCount} 字。`,
     outputFieldDiffLabel(leftSummary.outputKeys, rightSummary.outputKeys),
+    `步骤差异：A ${leftSummary.stepTitles.join(' / ') || '-'}；B ${rightSummary.stepTitles.join(' / ') || '-'}.`,
     `结构化结果：A ${leftSummary.subjectCount}/${leftSummary.sceneCount}/${leftSummary.shotCount}，B ${rightSummary.subjectCount}/${rightSummary.sceneCount}/${rightSummary.shotCount}。`,
+    `字段完整度：A ${leftSummary.completenessScore}%（缺 ${leftSummary.missingFields.length} 项），B ${rightSummary.completenessScore}%（缺 ${rightSummary.missingFields.length} 项）。`,
+    `Token / Cost：A ${usageLabel(compareResult.left)}，B ${usageLabel(compareResult.right)}。`,
     `主图覆盖：A ${previewCoverage(leftPreview.subjects) + previewCoverage(leftPreview.scenes) + previewCoverage(leftPreview.shots)} 张，B ${previewCoverage(rightPreview.subjects) + previewCoverage(rightPreview.scenes) + previewCoverage(rightPreview.shots)} 张。`,
   ];
 

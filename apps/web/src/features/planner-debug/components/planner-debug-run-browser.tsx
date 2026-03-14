@@ -23,20 +23,16 @@ interface EnvelopeFailure {
 type Envelope<T> = EnvelopeSuccess<T> | EnvelopeFailure;
 
 function executionModeLabel(mode: string) {
-  switch (mode) {
-    case 'compare':
-      return '对比';
-    case 'replay':
-      return '回放';
-    default:
-      return '单次调试';
-  }
+  return mode === 'live' ? '真实模型' : '回退生成';
 }
 
-async function requestJson<T>(path: string) {
+async function requestJson<T>(path: string, init?: RequestInit) {
   const response = await fetch(path, {
+    ...init,
     headers: {
       Accept: 'application/json',
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.headers ?? {}),
     },
   });
 
@@ -56,6 +52,7 @@ export function PlannerDebugRunBrowser({ initialRunId }: PlannerDebugRunBrowserP
   const [runs, setRuns] = useState<PlannerDebugRunListItem[]>([]);
   const [selectedRun, setSelectedRun] = useState<PlannerDebugRunDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [replaying, setReplaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -101,6 +98,31 @@ export function PlannerDebugRunBrowser({ initialRunId }: PlannerDebugRunBrowserP
       setError(nextError instanceof Error ? nextError.message : '加载调试详情失败。');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleReplay = async () => {
+    if (!selectedRun) {
+      return;
+    }
+
+    setReplaying(true);
+    setError(null);
+    try {
+      const replayed = await requestJson<{ debugRunId: string }>(
+        `/api/planner/debug/runs/${encodeURIComponent(selectedRun.id)}/replay`,
+        { method: 'POST' },
+      );
+      const [runList, runDetail] = await Promise.all([
+        requestJson<PlannerDebugRunListItem[]>('/api/planner/debug/runs'),
+        requestJson<PlannerDebugRunDetail>(`/api/planner/debug/runs/${encodeURIComponent(replayed.debugRunId)}`),
+      ]);
+      setRuns(runList);
+      setSelectedRun(runDetail);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : '重放调试运行失败。');
+    } finally {
+      setReplaying(false);
     }
   };
 
@@ -154,6 +176,9 @@ export function PlannerDebugRunBrowser({ initialRunId }: PlannerDebugRunBrowserP
                 <h2 className={styles.panelTitle}>运行详情</h2>
                 <p className={styles.panelHint}>查看持久化的 prompt、原始输出和结构化结果。</p>
               </div>
+              <button type="button" className={styles.buttonGhost} onClick={handleReplay} disabled={!selectedRun || replaying}>
+                {replaying ? '重放中…' : '按当前 run 重放'}
+              </button>
             </div>
             <div className={styles.panelBody}>
               {loading ? <div className={styles.fieldHint}>正在加载…</div> : null}
@@ -167,11 +192,53 @@ export function PlannerDebugRunBrowser({ initialRunId }: PlannerDebugRunBrowserP
                       compareGroupKey: selectedRun.compareGroupKey,
                       compareLabel: selectedRun.compareLabel,
                       executionMode: selectedRun.executionMode,
+                      replaySourceRunId: selectedRun.replaySourceRunId ?? null,
                       createdAt: selectedRun.createdAt,
                       agentProfile: selectedRun.agentProfile,
                       subAgentProfile: selectedRun.subAgentProfile,
                     }, null, 2)}</pre>
                   </div>
+                  {selectedRun.usage ? (
+                    <div className={styles.resultBlock}>
+                      <h3 className={styles.resultTitle}>Token / Cost</h3>
+                      <div className={styles.summaryGrid}>
+                        <div className={styles.summaryCard}><span>Prompt Tokens</span><strong>{selectedRun.usage.promptTokens}</strong></div>
+                        <div className={styles.summaryCard}><span>Completion Tokens</span><strong>{selectedRun.usage.completionTokens}</strong></div>
+                        <div className={styles.summaryCard}><span>Total Tokens</span><strong>{selectedRun.usage.totalTokens}</strong></div>
+                        <div className={styles.summaryCard}>
+                          <span>Cost</span>
+                          <strong>
+                            {selectedRun.usage.cost !== null
+                              ? `${selectedRun.usage.currency ?? 'USD'} ${selectedRun.usage.cost.toFixed(4)}`
+                              : `${selectedRun.usage.source === 'estimated' ? '未配置价格，仅估算 token' : '未返回价格'}`}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                  {selectedRun.promptSnapshot ? (
+                    <div className={styles.resultBlock}>
+                      <h3 className={styles.resultTitle}>Prompt 快照</h3>
+                      <div className={styles.compareStack}>
+                        <details className={styles.jsonPreview}>
+                          <summary className={styles.jsonPreviewSummary}>System Prompt</summary>
+                          <pre className={styles.pre}>{selectedRun.promptSnapshot.systemPromptFinal}</pre>
+                        </details>
+                        <details className={styles.jsonPreview}>
+                          <summary className={styles.jsonPreviewSummary}>Developer Prompt</summary>
+                          <pre className={styles.pre}>{selectedRun.promptSnapshot.developerPromptFinal}</pre>
+                        </details>
+                        <details className={styles.jsonPreview}>
+                          <summary className={styles.jsonPreviewSummary}>Messages Final</summary>
+                          <pre className={styles.pre}>{JSON.stringify(selectedRun.promptSnapshot.messagesFinal, null, 2)}</pre>
+                        </details>
+                        <details className={styles.jsonPreview}>
+                          <summary className={styles.jsonPreviewSummary}>Input Context Snapshot</summary>
+                          <pre className={styles.pre}>{JSON.stringify(selectedRun.promptSnapshot.inputContextSnapshot, null, 2)}</pre>
+                        </details>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className={styles.resultBlock}>
                     <h3 className={styles.resultTitle}>最终提示词</h3>
                     <pre className={styles.pre}>{selectedRun.finalPrompt}</pre>

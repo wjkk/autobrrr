@@ -4,6 +4,14 @@
 日期：2026-03-13  
 状态：后端开工接口基线
 
+当前阅读说明：
+
+1. Planner 接口部分已在 2026-03-14 按现有代码主干更新。
+2. 若涉及 Planner Agent / Debug / Outline-Refinement 双阶段，请同时参考：
+   - `docs/specs/planner-agent-orchestration-spec-v0.1.md`
+   - `docs/specs/planner-workflow-and-document-spec-v0.1.md`
+   - `docs/reviews/planner-agent-doc-code-gap-review-2026-03-14.md`
+
 ## 1. 范围
 
 定义 Web/客户端 <-> 后端 API，覆盖：
@@ -158,40 +166,82 @@ interface CreateProjectResponse {
 
 ## 5. Planner 接口
 
-### `POST /api/projects/:projectId/planner/submit`
+### `POST /api/projects/:projectId/planner/generate-doc`
 
 用途：
 
-1. 确认大纲并启动细化
-2. 或已确认大纲后的重新细化
+1. 若当前尚未确认大纲，则生成 `outline`
+2. 若当前大纲已确认，则生成或更新 `refinement`
+3. 所有结果都进入统一的 `Run + PlannerSession + Version` 闭环
 
 请求：
 
 ```ts
-interface PlannerSubmitRequest {
+interface PlannerGenerateDocRequest {
   episodeId: string;
-  instruction?: string;
+  prompt?: string;
+  subtype?: string;
+  modelFamily?: string;
+  modelEndpoint?: string;
   idempotencyKey?: string;
 }
 ```
 
-### `POST /api/projects/:projectId/planner/generate-storyboard`
+### `GET /api/projects/:projectId/planner/workspace`
 
 用途：
 
-1. 基于 planner 结果生成 storyboard
+1. 返回主流程 planner 所需聚合工作区
+2. 同时包含 `plannerSession / messages / activeOutline / activeRefinement / version lists`
 
-### `PATCH /api/projects/:projectId/planner/config`
+### `POST /api/projects/:projectId/planner/outline-versions/:versionId/activate`
+
+用途：
+
+1. 切换当前激活大纲版本
+2. 在细化尚未开始前允许回切旧大纲
+
+### `POST /api/projects/:projectId/planner/outline-versions/:versionId/confirm`
+
+用途：
+
+1. 确认某个大纲版本
+2. 使 plannerSession 进入可细化状态
+
+### `POST /api/projects/:projectId/planner/refinement-versions/:versionId/activate`
+
+用途：
+
+1. 切换当前激活细化版本
+2. 让右侧文档与派生实体同步到指定 refinement 版本
+
+### `POST /api/projects/:projectId/planner/partial-rerun`
+
+用途：
+
+1. 对 `subject / scene / shots` 做局部重跑
+2. 在不重做整篇 refinement 的前提下，重算局部结构化结果
 
 请求：
 
 ```ts
-interface PatchPlannerConfigRequest {
+interface PlannerPartialRerunRequest {
   episodeId: string;
-  storyboardModelFamilyId?: string;
-  aspectRatio?: '16:9' | '9:16' | '4:3' | '3:4';
+  scope: 'subject_only' | 'scene_only' | 'shots_only';
+  targetId: string;
+  prompt?: string;
+  modelFamily?: string;
+  modelEndpoint?: string;
+  idempotencyKey?: string;
 }
 ```
+
+### `PUT /api/projects/:projectId/planner/document`
+
+用途：
+
+1. 人工回写当前 refinement 文档
+2. 将编辑结果固化为新的 refinement version
 
 ## 6. Creation 接口
 

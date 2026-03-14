@@ -58,12 +58,32 @@ export interface PlannerSubAgentReleaseItem {
   publishedAt: string;
 }
 
+export interface PlannerPromptSnapshot {
+  systemPromptFinal: string;
+  developerPromptFinal: string;
+  messagesFinal: Array<{
+    role: string;
+    content: string;
+  }>;
+  inputContextSnapshot: Record<string, unknown>;
+}
+
+export interface PlannerUsageSummary {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cost: number | null;
+  currency: string | null;
+  source: 'provider' | 'estimated';
+}
+
 export interface PlannerDebugRunResponse {
   debugRunId: string;
   createdAt: string;
   executionMode: 'live' | 'fallback';
   configSource: 'draft' | 'published';
   releaseVersion: number | null;
+  replaySourceRunId?: string | null;
   input: Record<string, unknown>;
   agentProfile: {
     id: string;
@@ -92,12 +112,15 @@ export interface PlannerDebugRunResponse {
       slug: string;
       label: string;
       remoteModelKey: string;
+      costConfig?: Record<string, unknown> | null;
     };
   };
   finalPrompt: string;
+  promptSnapshot?: PlannerPromptSnapshot | null;
   rawText: string | null;
   providerOutput: Record<string, unknown> | null;
   assistantPackage: Record<string, unknown>;
+  usage?: PlannerUsageSummary;
   diffSummary?: string[];
   errorMessage?: string | null;
 }
@@ -125,10 +148,13 @@ export interface PlannerDebugRunListItem {
 export interface PlannerDebugRunDetail extends PlannerDebugRunListItem {
   model: Record<string, unknown> | null;
   input: Record<string, unknown> | null;
+  replaySourceRunId?: string | null;
   finalPrompt: string;
+  promptSnapshot?: PlannerPromptSnapshot | null;
   rawText: string | null;
   providerOutput: Record<string, unknown> | null;
   assistantPackage: Record<string, unknown> | null;
+  usage?: PlannerUsageSummary;
   diffSummary?: string[];
 }
 

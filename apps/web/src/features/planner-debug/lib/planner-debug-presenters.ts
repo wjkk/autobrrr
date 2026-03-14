@@ -26,10 +26,14 @@ export interface PlannerResultSummary {
   documentTitle: string;
   assistantMessage: string;
   outputKeys: string[];
+  stepTitles: string[];
+  stepCount: number;
   subjectCount: number;
   sceneCount: number;
   shotCount: number;
   operationsCount: number;
+  completenessScore: number;
+  missingFields: string[];
 }
 
 export function readObject(value: unknown): Record<string, unknown> {
@@ -144,21 +148,80 @@ export function buildPlannerResultSummary(assistantPackage: unknown): PlannerRes
   const record = readObject(assistantPackage);
   const structuredDoc = readObject(record.structuredDoc);
   const acts = Array.isArray(structuredDoc.acts) ? structuredDoc.acts : [];
+  const stepAnalysis = Array.isArray(record.stepAnalysis) ? record.stepAnalysis : [];
   const shotCount = acts.reduce((total, act) => {
     const shots = readObject(act).shots;
     return total + (Array.isArray(shots) ? shots.length : 0);
   }, 0);
-  const operations = Array.isArray(record.operations) ? record.operations : [];
+  const operations = readObject(record.operations);
+  const requiredPackageFields = record.stage === 'outline'
+    ? ['stage', 'assistantMessage', 'documentTitle', 'outlineDoc', 'operations']
+    : ['stage', 'assistantMessage', 'stepAnalysis', 'documentTitle', 'structuredDoc', 'operations'];
+  const requiredStructuredDocFields =
+    record.stage === 'outline'
+      ? []
+      : ['projectTitle', 'episodeTitle', 'summaryBullets', 'highlights', 'styleBullets', 'subjectBullets', 'subjects', 'sceneBullets', 'scenes', 'scriptSummary', 'acts'];
+  const requiredShotFields = ['title', 'visual', 'composition', 'motion', 'voice', 'line'];
+  const missingFields: string[] = [];
+  let totalChecks = 0;
+  let passedChecks = 0;
+
+  for (const field of requiredPackageFields) {
+    totalChecks += 1;
+    const value = record[field];
+    const present = Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== '';
+    if (present) {
+      passedChecks += 1;
+    } else {
+      missingFields.push(field);
+    }
+  }
+
+  for (const field of requiredStructuredDocFields) {
+    totalChecks += 1;
+    const value = structuredDoc[field];
+    const present = Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== '';
+    if (present) {
+      passedChecks += 1;
+    } else {
+      missingFields.push(`structuredDoc.${field}`);
+    }
+  }
+
+  for (const [actIndex, act] of acts.entries()) {
+    const shots = Array.isArray(readObject(act).shots) ? (readObject(act).shots as unknown[]) : [];
+    for (const [shotIndex, shot] of shots.entries()) {
+      const shotRecord = readObject(shot);
+      for (const field of requiredShotFields) {
+        totalChecks += 1;
+        const value = shotRecord[field];
+        const present = typeof value === 'string' ? value.trim().length > 0 : value !== undefined && value !== null;
+        if (present) {
+          passedChecks += 1;
+        } else {
+          missingFields.push(`acts[${actIndex}].shots[${shotIndex}].${field}`);
+        }
+      }
+    }
+  }
 
   return {
     stage: typeof record.stage === 'string' ? record.stage : '-',
     documentTitle: typeof record.documentTitle === 'string' ? record.documentTitle : '-',
     assistantMessage: typeof record.assistantMessage === 'string' ? record.assistantMessage : '',
     outputKeys: Object.keys(record),
+    stepTitles: stepAnalysis
+      .map((item, index) => {
+        const next = readObject(item);
+        return typeof next.title === 'string' && next.title.trim().length > 0 ? next.title : `步骤 ${index + 1}`;
+      }),
+    stepCount: stepAnalysis.length,
     subjectCount: Array.isArray(structuredDoc.subjects) ? structuredDoc.subjects.length : 0,
     sceneCount: Array.isArray(structuredDoc.scenes) ? structuredDoc.scenes.length : 0,
     shotCount,
-    operationsCount: operations.length,
+    operationsCount: Object.keys(operations).length,
+    completenessScore: totalChecks > 0 ? Math.round((passedChecks / totalChecks) * 100) : 100,
+    missingFields,
   };
 }
 

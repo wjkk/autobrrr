@@ -456,7 +456,15 @@ export function ExplorePage() {
             <button className={cx(styles.navBtn, activeSidebarNav === 'home' && styles.navBtnActive)} aria-label="首页" title="首页" onClick={() => setActiveSidebarNav('home')}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 10L12 3l9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path><line x1="12" y1="12" x2="12" y2="18"></line></svg>
             </button>
-            <button className={cx(styles.navBtn, activeSidebarNav === 'projects' && styles.navBtnActive)} aria-label="作品" title="我的资产" onClick={() => setActiveSidebarNav('projects')}>
+            <button
+              className={cx(styles.navBtn, activeSidebarNav === 'projects' && styles.navBtnActive)}
+              aria-label="我的空间"
+              title="我的空间"
+              onClick={() => {
+                setActiveSidebarNav('projects');
+                router.push('/my-space');
+              }}
+            >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="9" y1="14" x2="15" y2="14"></line></svg>
             </button>
             <button className={cx(styles.navBtn, activeSidebarNav === 'avatar' && styles.navBtnActive)} aria-label="资产" title="数字分身" onClick={() => setActiveSidebarNav('avatar')}>

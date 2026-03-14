@@ -262,6 +262,7 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
             targetStage,
             triggerType,
             stepDefinitions: promptPackage.stepDefinitions,
+            promptSnapshot: promptPackage.promptSnapshot,
             agentProfile: selection.agentProfile,
             subAgentProfile: selection.subAgentProfile,
             contextSnapshot: {

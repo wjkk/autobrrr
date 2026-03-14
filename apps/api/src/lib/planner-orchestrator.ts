@@ -78,6 +78,113 @@ export function resolvePlannerStepDefinitions(selection: ResolvedPlannerAgentSel
   return agentSteps;
 }
 
+export interface PlannerPromptSnapshot {
+  systemPromptFinal: string;
+  developerPromptFinal: string;
+  messagesFinal: Array<{
+    role: 'system' | 'developer' | 'user' | 'assistant';
+    content: string;
+  }>;
+  inputContextSnapshot: Record<string, unknown>;
+}
+
+function buildPlannerPromptSnapshot(args: {
+  selection: ResolvedPlannerAgentSelection;
+  targetStage: 'outline' | 'refinement';
+  userPrompt: string;
+  projectTitle: string;
+  episodeTitle: string;
+  contentMode?: string | null;
+  scriptContent?: string | null;
+  selectedSubjectName?: string | null;
+  selectedStyleName?: string | null;
+  selectedImageModelLabel?: string | null;
+  priorMessages: Array<{ role: string; text: string }>;
+  currentOutlineDoc?: unknown;
+  currentStructuredDoc?: unknown;
+  stepDefinitions: PlannerStepAnalysisItem[];
+}) {
+  const systemPromptFinal = [
+    '你是短片策划阶段的专业编排代理。',
+    `当前目标阶段：${args.targetStage === 'outline' ? '策划剧本大纲' : '细化剧情内容'}`,
+    `当前一级类型：${args.selection.contentType}`,
+    `当前二级子类型：${args.selection.subtype}`,
+    args.selection.agentProfile.defaultSystemPrompt,
+    args.selection.subAgentProfile.systemPromptOverride ?? '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const developerPromptFinal = [
+    args.selection.agentProfile.defaultDeveloperPrompt ?? '',
+    args.selection.subAgentProfile.developerPromptOverride ?? '',
+    '请输出严格 JSON，不要输出 markdown，不要输出额外解释。',
+    args.targetStage === 'outline'
+      ? '输出格式必须包含 stage、assistantMessage、documentTitle、outlineDoc、operations。outlineDoc 用于可确认的大纲。'
+      : '输出格式必须包含 stage、assistantMessage、stepAnalysis、documentTitle、structuredDoc、operations。structuredDoc 用于右侧细化文档。',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const userContextSections = [
+    `项目标题：${args.projectTitle}`,
+    `集标题：${args.episodeTitle}`,
+    args.contentMode ? `项目模式：${args.contentMode}` : '',
+    args.scriptContent ? `剧本原文：${args.scriptContent}` : '',
+    args.selectedSubjectName ? `当前主体：${args.selectedSubjectName}` : '',
+    args.selectedStyleName ? `当前画风：${args.selectedStyleName}` : '',
+    args.selectedImageModelLabel ? `当前主体图模型：${args.selectedImageModelLabel}` : '',
+    args.currentOutlineDoc && args.targetStage === 'outline'
+      ? `当前激活大纲：${JSON.stringify(args.currentOutlineDoc)}`
+      : '',
+    args.currentStructuredDoc ? `当前激活文档：${JSON.stringify(args.currentStructuredDoc)}` : '',
+    `步骤定义：${JSON.stringify(args.stepDefinitions)}`,
+    `用户最新需求：${args.userPrompt}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return {
+    systemPromptFinal,
+    developerPromptFinal,
+    messagesFinal: [
+      {
+        role: 'system' as const,
+        content: systemPromptFinal,
+      },
+      {
+        role: 'developer' as const,
+        content: developerPromptFinal,
+      },
+      ...args.priorMessages.map((message) => ({
+        role:
+          message.role === 'assistant'
+            ? ('assistant' as const)
+            : ('user' as const),
+        content: message.text,
+      })),
+      {
+        role: 'user' as const,
+        content: userContextSections,
+      },
+    ],
+    inputContextSnapshot: {
+      projectTitle: args.projectTitle,
+      episodeTitle: args.episodeTitle,
+      contentMode: args.contentMode ?? null,
+      scriptContent: args.scriptContent ?? null,
+      selectedSubjectName: args.selectedSubjectName ?? null,
+      selectedStyleName: args.selectedStyleName ?? null,
+      selectedImageModelLabel: args.selectedImageModelLabel ?? null,
+      priorMessages: args.priorMessages,
+      currentOutlineDoc: args.currentOutlineDoc ?? null,
+      currentStructuredDoc: args.currentStructuredDoc ?? null,
+      stepDefinitions: args.stepDefinitions,
+      userPrompt: args.userPrompt,
+    } satisfies Record<string, unknown>,
+  } satisfies PlannerPromptSnapshot;
+}
+
 export function buildPlannerGenerationPrompt(args: {
   selection: ResolvedPlannerAgentSelection;
   targetStage: 'outline' | 'refinement';
@@ -94,20 +201,16 @@ export function buildPlannerGenerationPrompt(args: {
   currentStructuredDoc?: unknown;
 }) {
   const stepDefinitions = resolvePlannerStepDefinitions(args.selection);
-  const outputFormatHint = args.targetStage === 'outline'
-    ? '输出格式必须包含 stage、assistantMessage、documentTitle、outlineDoc、operations。outlineDoc 用于可确认的大纲。'
-    : '输出格式必须包含 stage、assistantMessage、stepAnalysis、documentTitle、structuredDoc、operations。structuredDoc 用于右侧细化文档。';
+  const promptSnapshot = buildPlannerPromptSnapshot({
+    ...args,
+    stepDefinitions,
+  });
   const promptSections = [
-    '你是短片策划阶段的专业编排代理。',
-    `当前目标阶段：${args.targetStage === 'outline' ? '策划剧本大纲' : '细化剧情内容'}`,
-    `当前一级类型：${args.selection.contentType}`,
-    `当前二级子类型：${args.selection.subtype}`,
-    args.selection.agentProfile.defaultSystemPrompt,
-    args.selection.agentProfile.defaultDeveloperPrompt ?? '',
-    args.selection.subAgentProfile.systemPromptOverride ?? '',
-    args.selection.subAgentProfile.developerPromptOverride ?? '',
-    '请输出严格 JSON，不要输出 markdown，不要输出额外解释。',
-    outputFormatHint,
+    promptSnapshot.systemPromptFinal,
+    promptSnapshot.developerPromptFinal,
+    args.priorMessages.length > 0
+      ? `最近对话：${JSON.stringify(args.priorMessages, null, 2)}`
+      : '',
     `项目标题：${args.projectTitle}`,
     `集标题：${args.episodeTitle}`,
     args.contentMode ? `项目模式：${args.contentMode}` : '',
@@ -115,9 +218,6 @@ export function buildPlannerGenerationPrompt(args: {
     args.selectedSubjectName ? `当前主体：${args.selectedSubjectName}` : '',
     args.selectedStyleName ? `当前画风：${args.selectedStyleName}` : '',
     args.selectedImageModelLabel ? `当前主体图模型：${args.selectedImageModelLabel}` : '',
-    args.priorMessages.length > 0
-      ? `最近对话：${JSON.stringify(args.priorMessages, null, 2)}`
-      : '',
     args.currentOutlineDoc && args.targetStage === 'outline'
       ? `当前激活大纲：${JSON.stringify(args.currentOutlineDoc)}`
       : '',
@@ -131,6 +231,7 @@ export function buildPlannerGenerationPrompt(args: {
   return {
     promptText: promptSections.filter(Boolean).join('\n'),
     stepDefinitions,
+    promptSnapshot,
   };
 }
 

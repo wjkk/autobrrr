@@ -4,6 +4,13 @@
 日期：2026-03-14  
 状态：专项设计稿（待并入 v0.3 基线）
 
+当前阅读说明：
+
+1. 本文中的 Outline / Refinement 两阶段模型已与当前主实现进行过一次对齐。
+2. 如需确认剩余未完成项与最终边界，请同时参考：
+   - `docs/reviews/planner-agent-doc-code-gap-review-2026-03-14.md`
+   - `docs/reviews/planner-agent-final-decisions-2026-03-14.md`
+
 ## 1. 文档目的
 
 本文件用于基于 [`plan.html`](/Users/jiankunwu/project/aiv/plan.html) 中复制自 Seko 规划页的真实内容，反推策划阶段的产品流程、结构化产物和后端实现方式。
@@ -767,4 +774,3 @@ interface PlannerWorkspaceDto {
 5. 用户修改必须生成新版本，不能覆盖旧版。
 6. 调试能力继续留在独立内部页，不进入主流程。
 7. 运行时配置继续以数据库表为唯一真相来源。
-

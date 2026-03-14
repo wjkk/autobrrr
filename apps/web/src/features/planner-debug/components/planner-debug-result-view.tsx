@@ -73,6 +73,45 @@ export function PlannerDebugResultView(props: {
         </div>
       ) : null}
 
+      {props.debugResult.usage ? (
+        <div className={styles.resultBlock}>
+          <h3 className={styles.resultTitle}>Token / Cost</h3>
+          <div className={styles.summaryGrid}>
+            <div className={styles.summaryCard}><span>Prompt Tokens</span><strong>{props.debugResult.usage.promptTokens}</strong></div>
+            <div className={styles.summaryCard}><span>Completion Tokens</span><strong>{props.debugResult.usage.completionTokens}</strong></div>
+            <div className={styles.summaryCard}><span>Total Tokens</span><strong>{props.debugResult.usage.totalTokens}</strong></div>
+            <div className={styles.summaryCard}>
+              <span>Cost</span>
+              <strong>
+                {props.debugResult.usage.cost !== null
+                  ? `${props.debugResult.usage.currency ?? 'USD'} ${props.debugResult.usage.cost.toFixed(4)}`
+                  : `${props.debugResult.usage.source === 'estimated' ? '未配置价格，仅估算 token' : '未返回价格'}`}
+              </strong>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {props.debugResult.promptSnapshot ? (
+        <div className={styles.resultBlock}>
+          <h3 className={styles.resultTitle}>Prompt 快照</h3>
+          <div className={styles.compareStack}>
+            <details className={styles.jsonPreview}>
+              <summary className={styles.jsonPreviewSummary}>System Prompt</summary>
+              <pre className={styles.pre}>{props.debugResult.promptSnapshot.systemPromptFinal}</pre>
+            </details>
+            <details className={styles.jsonPreview}>
+              <summary className={styles.jsonPreviewSummary}>Developer Prompt</summary>
+              <pre className={styles.pre}>{props.debugResult.promptSnapshot.developerPromptFinal}</pre>
+            </details>
+            <details className={styles.jsonPreview}>
+              <summary className={styles.jsonPreviewSummary}>Messages Final</summary>
+              <pre className={styles.pre}>{JSON.stringify(props.debugResult.promptSnapshot.messagesFinal, null, 2)}</pre>
+            </details>
+          </div>
+        </div>
+      ) : null}
+
       <div className={styles.resultBlock}>
         <h3 className={styles.resultTitle}>最终提示词</h3>
         <pre className={styles.pre}>{props.debugResult.finalPrompt}</pre>

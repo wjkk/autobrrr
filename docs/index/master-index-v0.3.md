@@ -14,6 +14,11 @@
 2. 若多份文档冲突，以本索引列出的 `v0.3` 文档为准。
 3. `v0.2` 文档保留供回溯，不再作为后端开工基线。
 
+补充口径：
+
+1. Planner Agent 相关内容已在 2026-03-14 做过一轮“文档 vs 代码”精确对齐。
+2. 若涉及 Planner Agent / Planner Debug / Outline-Refinement 两阶段工作流，除主规格外，还应同时参考本索引列出的两份 review 文档。
+
 ## 2. 代码真相源
 
 当前文档以以下代码为事实来源：
@@ -50,14 +55,21 @@
 6. `docs/specs/planner-workflow-and-document-spec-v0.1.md`  
    说明：基于 Seko 规划页反推的两阶段策划工作流、Outline/Refinement 文档结构、主体/场景生命周期与实施顺序。
 
-### 3.3 状态与实施
+### 3.3 Planner 专项复盘与裁决
+
+1. `docs/reviews/planner-agent-doc-code-gap-review-2026-03-14.md`  
+   说明：Planner Agent 相关文档与代码的逐项差异复盘，标注哪些应改文档、哪些应改代码。
+2. `docs/reviews/planner-agent-final-decisions-2026-03-14.md`  
+   说明：对剩余口径问题的最终裁决，统一 `assistant_error`、profile 创建边界、planner 规划期图片能力等说法。
+
+### 3.4 状态与实施
 
 1. `docs/specs/state-machine-and-error-code-spec-v0.3.md`  
    说明：项目、分镜、任务、配方执行等状态流转与错误码。
 2. `docs/specs/backend-implementation-checklist-v0.3.md`  
    说明：按阶段拆分的实施清单、DoD、联调顺序与回归场景。
 
-### 3.4 历史基线
+### 3.5 历史基线
 
 以下文档保留为上一个阶段的历史参考：
 
@@ -78,3 +90,5 @@
 8. `backend-implementation-checklist-v0.3.md`
 9. `planner-agent-orchestration-spec-v0.1.md`
 10. `planner-workflow-and-document-spec-v0.1.md`
+11. `planner-agent-doc-code-gap-review-2026-03-14.md`
+12. `planner-agent-final-decisions-2026-03-14.md`

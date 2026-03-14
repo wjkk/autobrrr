@@ -128,8 +128,166 @@ function readObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
+function readString(value: unknown) {
+  return typeof value === 'string' ? value : null;
+}
+
+function readNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 function readStructuredDoc(value: unknown): PlannerStructuredDoc | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as PlannerStructuredDoc) : null;
+}
+
+function estimateTokens(text: string | null | undefined) {
+  if (!text) {
+    return 0;
+  }
+
+  return Math.max(1, Math.ceil(text.length / 4));
+}
+
+function findUsageLikeObject(value: unknown): Record<string, unknown> | null {
+  const queue: unknown[] = [value];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const record = readObject(current);
+    if (!Object.keys(record).length) {
+      continue;
+    }
+
+    if (
+      'input_tokens' in record ||
+      'output_tokens' in record ||
+      'prompt_tokens' in record ||
+      'completion_tokens' in record ||
+      'total_tokens' in record
+    ) {
+      return record;
+    }
+
+    for (const next of Object.values(record)) {
+      if (next && typeof next === 'object') {
+        queue.push(next);
+      }
+    }
+  }
+
+  return null;
+}
+
+function readCostRate(costConfig: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = readNumber(costConfig[key]);
+    if (value !== null) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function buildUsageSummary(args: {
+  providerOutput: unknown;
+  prompt: string;
+  rawText: string | null;
+  modelSnapshot: unknown;
+}) {
+  const usage = findUsageLikeObject(args.providerOutput);
+  const promptTokens =
+    readNumber(usage?.['input_tokens']) ??
+    readNumber(usage?.['prompt_tokens']) ??
+    readNumber(usage?.['inputTokens']) ??
+    readNumber(usage?.['promptTokens']);
+  const completionTokens =
+    readNumber(usage?.['output_tokens']) ??
+    readNumber(usage?.['completion_tokens']) ??
+    readNumber(usage?.['outputTokens']) ??
+    readNumber(usage?.['completionTokens']);
+  const totalTokens =
+    readNumber(usage?.['total_tokens']) ??
+    readNumber(usage?.['totalTokens']) ??
+    (promptTokens !== null || completionTokens !== null
+      ? (promptTokens ?? 0) + (completionTokens ?? 0)
+      : null);
+
+  const modelSnapshot = readObject(args.modelSnapshot);
+  const endpoint = readObject(modelSnapshot.endpoint);
+  const costConfig = readObject(endpoint.costConfig);
+  const inputRate = readCostRate(costConfig, [
+    'inputPer1kTokens',
+    'input_per_1k_tokens',
+    'promptPer1kTokens',
+    'prompt_per_1k_tokens',
+  ]);
+  const outputRate = readCostRate(costConfig, [
+    'outputPer1kTokens',
+    'output_per_1k_tokens',
+    'completionPer1kTokens',
+    'completion_per_1k_tokens',
+  ]);
+  const currency = readString(costConfig.currency);
+
+  const promptTokenValue = promptTokens ?? estimateTokens(args.prompt);
+  const completionTokenValue = completionTokens ?? estimateTokens(args.rawText);
+  const totalTokenValue = totalTokens ?? promptTokenValue + completionTokenValue;
+  const hasProviderUsage = promptTokens !== null || completionTokens !== null || totalTokens !== null;
+  const cost =
+    inputRate !== null || outputRate !== null
+      ? ((promptTokenValue / 1000) * (inputRate ?? 0)) + ((completionTokenValue / 1000) * (outputRate ?? 0))
+      : null;
+
+  return {
+    promptTokens: promptTokenValue,
+    completionTokens: completionTokenValue,
+    totalTokens: totalTokenValue,
+    cost,
+    currency,
+    source: hasProviderUsage ? ('provider' as const) : ('estimated' as const),
+  };
+}
+
+function readPromptSnapshot(value: unknown) {
+  const record = readObject(value);
+  const messages = Array.isArray(record.messagesFinal)
+    ? record.messagesFinal
+        .map((item) => {
+          const next = readObject(item);
+          const role = readString(next.role);
+          const content = readString(next.content);
+          if (!role || !content) {
+            return null;
+          }
+
+          return {
+            role,
+            content,
+          };
+        })
+        .filter((item): item is { role: string; content: string } => item !== null)
+    : [];
+
+  if (!messages.length) {
+    return null;
+  }
+
+  return {
+    systemPromptFinal: readString(record.systemPromptFinal) ?? '',
+    developerPromptFinal: readString(record.developerPromptFinal) ?? '',
+    messagesFinal: messages,
+    inputContextSnapshot: readObject(record.inputContextSnapshot),
+  };
+}
+
+function parseStoredDebugInput(value: unknown) {
+  const parsed = debugRunSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new Error('Stored planner debug run input is invalid.');
+  }
+
+  return parsed.data;
 }
 
 function deriveDiffSummary(args: {
@@ -302,6 +460,7 @@ async function executePlannerDebugRun(args: {
   modelEndpoint?: string;
   compareGroupKey?: string;
   compareLabel?: string;
+  replaySourceRunId?: string;
 }) {
   const selection = await resolvePlannerDebugSelection({
     contentType: args.contentType,
@@ -426,6 +585,7 @@ async function executePlannerDebugRun(args: {
           slug: resolvedModel.endpoint.slug,
           label: resolvedModel.endpoint.label,
           remoteModelKey: resolvedModel.endpoint.remoteModelKey,
+          costConfig: resolvedModel.endpoint.costConfigJson ?? null,
         },
       },
       inputJson: {
@@ -447,6 +607,8 @@ async function executePlannerDebugRun(args: {
         currentStructuredDoc: args.currentStructuredDoc ?? null,
         targetEntity: args.targetEntity ?? null,
         plannerAssets: args.plannerAssets ?? [],
+        replaySourceRunId: args.replaySourceRunId ?? null,
+        promptSnapshot: promptPackage.promptSnapshot,
       } as Prisma.InputJsonValue,
       finalPrompt: promptPackage.promptText,
       rawText,
@@ -466,6 +628,7 @@ async function executePlannerDebugRun(args: {
     executionMode,
     configSource: selection.sourceMetadata.configSource,
     releaseVersion: selection.sourceMetadata.releaseVersion,
+    replaySourceRunId: args.replaySourceRunId ?? null,
     errorMessage,
     agentProfile: {
       id: selection.agentProfile.id,
@@ -494,9 +657,11 @@ async function executePlannerDebugRun(args: {
         slug: resolvedModel.endpoint.slug,
         label: resolvedModel.endpoint.label,
         remoteModelKey: resolvedModel.endpoint.remoteModelKey,
+        costConfig: resolvedModel.endpoint.costConfigJson ?? null,
       },
     },
     finalPrompt: promptPackage.promptText,
+    promptSnapshot: promptPackage.promptSnapshot,
     rawText,
     providerOutput,
     assistantPackage,
@@ -518,6 +683,16 @@ async function executePlannerDebugRun(args: {
       targetEntity: args.targetEntity ?? null,
       plannerAssets: args.plannerAssets ?? [],
     },
+    usage: buildUsageSummary({
+      providerOutput,
+      prompt: promptPackage.promptText,
+      rawText,
+      modelSnapshot: {
+        endpoint: {
+          costConfig: resolvedModel.endpoint.costConfigJson ?? null,
+        },
+      },
+    }),
     diffSummary,
   };
 }
@@ -649,14 +824,22 @@ export async function registerPlannerDebugRoutes(app: FastifyInstance) {
         executionMode: run.executionMode.toLowerCase(),
         createdAt: run.createdAt.toISOString(),
         errorMessage: run.errorMessage,
+        replaySourceRunId: readString(readObject(run.inputJson).replaySourceRunId),
         agentProfile: run.agentProfile,
         subAgentProfile: run.subAgentProfile,
         model: run.modelSnapshotJson,
         input: run.inputJson,
         finalPrompt: run.finalPrompt,
+        promptSnapshot: readPromptSnapshot(readObject(run.inputJson).promptSnapshot),
         rawText: run.rawText,
         providerOutput: run.providerOutputJson,
         assistantPackage: run.assistantPackageJson,
+        usage: buildUsageSummary({
+          providerOutput: run.providerOutputJson,
+          prompt: run.finalPrompt,
+          rawText: run.rawText,
+          modelSnapshot: run.modelSnapshotJson,
+        }),
         diffSummary: deriveDiffSummary({
           targetStage: readObject(run.inputJson).targetStage === 'outline' ? 'outline' : 'refinement',
           partialRerunScope:
@@ -671,6 +854,67 @@ export async function registerPlannerDebugRoutes(app: FastifyInstance) {
         }),
       },
     });
+  });
+
+  app.post('/api/planner/debug/runs/:id/replay', async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) {
+      return;
+    }
+
+    const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+    if (!params.success) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'INVALID_ARGUMENT',
+          message: 'Invalid planner debug replay run id.',
+        },
+      });
+    }
+
+    const run = await prisma.plannerDebugRun.findFirst({
+      where: {
+        id: params.data.id,
+        userId: user.id,
+      },
+      select: {
+        id: true,
+        inputJson: true,
+      },
+    });
+
+    if (!run) {
+      return reply.code(404).send({
+        ok: false,
+        error: {
+          code: 'PLANNER_DEBUG_RUN_NOT_FOUND',
+          message: 'Planner debug run not found.',
+        },
+      });
+    }
+
+    try {
+      const input = parseStoredDebugInput(run.inputJson);
+      const result = await executePlannerDebugRun({
+        userId: user.id,
+        ...input,
+        replaySourceRunId: run.id,
+      });
+
+      return reply.send({
+        ok: true,
+        data: result,
+      });
+    } catch (error) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'PLANNER_DEBUG_REPLAY_FAILED',
+          message: error instanceof Error ? error.message : 'Planner debug replay failed.',
+        },
+      });
+    }
   });
 
   app.post('/api/planner/debug/run', async (request, reply) => {

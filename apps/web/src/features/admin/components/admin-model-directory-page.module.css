@@ -35,6 +35,7 @@
 }
 
 .groupList {
+  margin-top: 18px;
   display: grid;
   gap: 18px;
 }

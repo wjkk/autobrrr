@@ -53,6 +53,19 @@
   /* Transitions */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Shared Collection Toolbar */
+  --collection-toolbar-gap: 16px;
+  --collection-toolbar-group-gap-x: 12px;
+  --collection-toolbar-chip-gap: 6px;
+  --collection-toolbar-pill-height: 35px;
+  --collection-toolbar-pill-padding-x: 13px;
+  --collection-toolbar-field-height: 39px;
+  --collection-toolbar-search-width: 300px;
+  --collection-toolbar-font-size: 12px;
+  --collection-toolbar-meta-size: 11px;
+  --collection-toolbar-radius-pill: 9999px;
+  --collection-toolbar-radius-field: 16px;
 }
 
 /* Base Reset & Modern Defaults */

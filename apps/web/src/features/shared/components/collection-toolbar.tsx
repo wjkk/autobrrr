@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
 
 import styles from './collection-toolbar.module.css';
@@ -101,4 +102,20 @@ export function CollectionToolbarAction(props: ButtonHTMLAttributes<HTMLButtonEl
 
 export function CollectionToolbarMeta(props: { children: ReactNode }) {
   return <div className={styles.meta}>{props.children}</div>;
+}
+
+export function CollectionToolbarTag(props: { children: ReactNode; className?: string }) {
+  return <span className={joinClasses(styles.tag, props.className)}>{props.children}</span>;
+}
+
+export function CollectionToolbarLink(props: {
+  href: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Link href={props.href} className={joinClasses(styles.link, props.className)}>
+      {props.children}
+    </Link>
+  );
 }

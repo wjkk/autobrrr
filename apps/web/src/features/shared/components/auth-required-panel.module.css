@@ -1,0 +1,49 @@
+.shell {
+  padding: 92px 32px 48px;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.eyebrow {
+  color: #98a2b3;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin-top: 10px;
+  color: #101828;
+  font-size: 34px;
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+}
+
+.subtitle {
+  max-width: 760px;
+  margin-top: 10px;
+  color: #667085;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.body {
+  margin-top: 22px;
+}
+
+@media (max-width: 1080px) {
+  .shell {
+    padding: 92px 20px 36px;
+  }
+
+  .hero {
+    flex-direction: column;
+  }
+}

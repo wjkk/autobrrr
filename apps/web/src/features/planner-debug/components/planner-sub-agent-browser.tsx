@@ -2,6 +2,16 @@
 
 import Link from 'next/link';
 
+import {
+  CollectionToolbar,
+  CollectionToolbarChips,
+  CollectionToolbarGroup,
+  CollectionToolbarMeta,
+  CollectionToolbarPill,
+  CollectionToolbarSearch,
+  CollectionToolbarSelect,
+} from '@/features/shared/components/collection-toolbar';
+
 import styles from './planner-agent-debug-page.module.css';
 
 import type { PlannerSubAgentCatalogEntry } from '../lib/planner-agent-debug-types';
@@ -75,51 +85,50 @@ export function PlannerSubAgentBrowser({
       </div>
       <div className={styles.panelBody}>
         <div className={styles.stack}>
-          <div className={styles.filterGrid}>
-            <div className={styles.fieldGroup}>
-              <label className={styles.fieldLabel}>搜索</label>
-              <input
-                className={styles.input}
+          <CollectionToolbar>
+            <CollectionToolbarGroup>
+              <CollectionToolbarSearch
+                width={200}
                 placeholder="名称 / 子类型 / 标识"
                 value={searchTerm}
                 onChange={(event) => onSearchTermChange(event.target.value)}
               />
-            </div>
-            <div className={styles.fieldGroup}>
-              <label className={styles.fieldLabel}>内容类型</label>
-              <select className={styles.select} value={contentTypeFilter} onChange={(event) => onContentTypeFilterChange(event.target.value)}>
-                <option value="all">全部</option>
+              <CollectionToolbarSelect value={contentTypeFilter} onChange={(event) => onContentTypeFilterChange(event.target.value)}>
+                <option value="all">全部类型</option>
                 {availableContentTypes.map((contentType) => (
                   <option key={contentType} value={contentType}>
                     {contentType}
                   </option>
                 ))}
-              </select>
-            </div>
-            <div className={styles.fieldGroup}>
-              <label className={styles.fieldLabel}>状态</label>
-              <select className={styles.select} value={statusFilter} onChange={(event) => onStatusFilterChange(event.target.value)}>
-                <option value="all">全部</option>
+              </CollectionToolbarSelect>
+              <CollectionToolbarSelect value={statusFilter} onChange={(event) => onStatusFilterChange(event.target.value)}>
+                <option value="all">全部状态</option>
                 <option value="active">已生效</option>
                 <option value="draft">草稿</option>
                 <option value="deprecated">已弃用</option>
                 <option value="archived">已归档</option>
-              </select>
-            </div>
-          </div>
+              </CollectionToolbarSelect>
+            </CollectionToolbarGroup>
 
-          <div className={styles.catalogListMeta}>
-            <span>共 {entries.length} 个子 Agent</span>
-            {(searchTerm || contentTypeFilter !== 'all' || statusFilter !== 'all') ? (
-              <button type="button" className={styles.inlineButton} onClick={() => {
-                onSearchTermChange('');
-                onContentTypeFilterChange('all');
-                onStatusFilterChange('all');
-              }}>
-                清空筛选
-              </button>
-            ) : null}
-          </div>
+            <CollectionToolbarGroup align="end" nowrap>
+              <CollectionToolbarMeta>{`共 ${entries.length} 个子 Agent`}</CollectionToolbarMeta>
+              {(searchTerm || contentTypeFilter !== 'all' || statusFilter !== 'all') ? (
+                <CollectionToolbarChips>
+                  <CollectionToolbarPill
+                    active={false}
+                    inactiveStyle="outlined"
+                    onClick={() => {
+                      onSearchTermChange('');
+                      onContentTypeFilterChange('all');
+                      onStatusFilterChange('all');
+                    }}
+                  >
+                    清空筛选
+                  </CollectionToolbarPill>
+                </CollectionToolbarChips>
+              ) : null}
+            </CollectionToolbarGroup>
+          </CollectionToolbar>
 
           <div className={styles.catalogList}>
             {loading ? <div className={styles.fieldHint}>正在加载配置…</div> : null}

@@ -6,6 +6,8 @@ import { useMemo, useState } from 'react';
 import styles from './my-space-page.module.css';
 
 import type { MySpaceProjectItem } from '../lib/my-space-api.server';
+import { AuthRequiredPanel } from '../../shared/components/auth-required-panel';
+import { CollectionCardMedia } from '../../shared/components/collection-card-media';
 import {
   CollectionToolbar,
   CollectionToolbarChips,
@@ -140,7 +142,7 @@ const stageFilters: Array<{ id: StageFilter; label: string }> = [
   { id: 'publish', label: '发布' },
 ];
 
-export function MySpacePage(props: { projects: MySpaceProjectItem[]; error?: string | null }) {
+export function MySpacePage(props: { projects: MySpaceProjectItem[]; error?: string | null; authRequired?: boolean }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
   const [contentFilter, setContentFilter] = useState<ContentFilter>('all');
@@ -182,6 +184,16 @@ export function MySpacePage(props: { projects: MySpaceProjectItem[]; error?: str
       badge={{ strong: String(props.projects.length), label: '继续创作', href: '/explore' }}
     >
         <div className={styles.contentShell}>
+          {props.authRequired ? (
+            <AuthRequiredPanel
+              eyebrow="My Space"
+              title="先登录，再进入你的项目空间"
+              description="登录后这里会展示你创建过的全部项目，并可直接继续策划、分片生成或发布。"
+            />
+          ) : null}
+
+          {!props.authRequired ? (
+            <>
           {props.error ? <div className={styles.errorPanel}>{props.error}</div> : null}
 
           {!props.error ? (
@@ -271,13 +283,14 @@ export function MySpacePage(props: { projects: MySpaceProjectItem[]; error?: str
                     <Link href={stageHref} className={styles.cardOverlay} aria-label={`打开项目 ${project.title}`} />
 
                     <div className={`${styles.cardCover} ${coverTone(project)}`}>
-                      {project.previewAsset?.sourceUrl ? (
-                        <img
-                          src={project.previewAsset.sourceUrl}
-                          alt={project.title}
-                          className={styles.coverImage}
-                        />
-                      ) : null}
+                      <CollectionCardMedia
+                        imageUrl={project.previewAsset?.sourceUrl ?? null}
+                        alt={project.title}
+                        aspectRatio="1.08 / 1"
+                        className={styles.coverMedia}
+                        imageClassName={styles.coverImage}
+                        hoverScale="parent"
+                      />
                       <div className={styles.coverGlass} />
                       <div className={`${styles.coverPattern} ${cardPattern(stage)}`} />
                       <div className={styles.coverHeader}>
@@ -317,6 +330,8 @@ export function MySpacePage(props: { projects: MySpaceProjectItem[]; error?: str
                 );
               })}
             </section>
+          ) : null}
+            </>
           ) : null}
         </div>
     </SystemShell>

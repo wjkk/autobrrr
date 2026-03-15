@@ -13,19 +13,14 @@ import type {
   SubjectType,
 } from '../lib/catalog-management-api';
 import styles from './catalog-management-page.module.css';
-import {
-  CollectionToolbar,
-  CollectionToolbarAction,
-  CollectionToolbarChips,
-  CollectionToolbarGroup,
-  CollectionToolbarMeta,
-  CollectionToolbarPill,
-  CollectionToolbarSearch,
-  CollectionToolbarSelect,
-} from '../../shared/components/collection-toolbar';
+import { AuthRequiredPanel } from '../../shared/components/auth-required-panel';
 import { SystemShell } from '../../shared/components/system-shell';
-import { Dialog } from '../../shared/components/dialog';
 import { buildUserShellNavItems } from '../../shared/lib/user-shell-nav';
+import { CatalogCardGrid } from './catalog-card-grid';
+import type { StyleDraft, SubjectDraft } from './catalog-management-editor-types';
+import { CatalogLibraryToolbar } from './catalog-library-toolbar';
+import { CatalogStyleDialog } from './catalog-style-dialog';
+import { CatalogSubjectDialog } from './catalog-subject-dialog';
 
 interface CatalogManagementPageProps {
   currentUser: SettingsAuthUser | null;
@@ -44,39 +39,6 @@ interface ApiErrorPayload {
 type ApiEnvelope<T> =
   | { ok: true; data: T }
   | { ok: false; error: ApiErrorPayload };
-
-interface SubjectDraft {
-  id: string | null;
-  slug: string;
-  name: string;
-  visibility: CatalogVisibility;
-  subjectType: SubjectType;
-  genderTag: SubjectGenderTag;
-  imageUrl: string;
-  referenceImageUrl: string;
-  description: string;
-  promptTemplate: string;
-  negativePrompt: string;
-  tags: string;
-  metadata: string;
-  enabled: boolean;
-  sortOrder: number;
-}
-
-interface StyleDraft {
-  id: string | null;
-  slug: string;
-  name: string;
-  visibility: CatalogVisibility;
-  imageUrl: string;
-  description: string;
-  promptTemplate: string;
-  negativePrompt: string;
-  tags: string;
-  metadata: string;
-  enabled: boolean;
-  sortOrder: number;
-}
 
 function parseApiEnvelope<T>(payload: unknown): ApiEnvelope<T> {
   return payload as ApiEnvelope<T>;
@@ -182,36 +144,6 @@ function styleToDraft(style: CatalogStyleItem): StyleDraft {
     enabled: style.enabled ?? true,
     sortOrder: style.sortOrder ?? 100,
   };
-}
-
-function visibilityLabel(value: CatalogVisibility) {
-  return value === 'public' ? '公共' : '个人';
-}
-
-function subjectTypeLabel(value: SubjectType) {
-  switch (value) {
-    case 'animal':
-      return '动物';
-    case 'creature':
-      return '幻想生物';
-    case 'object':
-      return '物体';
-    default:
-      return '人物';
-  }
-}
-
-function genderLabel(value: SubjectGenderTag) {
-  switch (value) {
-    case 'female':
-      return '女性';
-    case 'male':
-      return '男性';
-    case 'child':
-      return '儿童';
-    default:
-      return '未知';
-  }
 }
 
 function nextImageFeedbackTone(message: string, isError: boolean): 'idle' | 'pending' | 'success' | 'error' {
@@ -647,13 +579,12 @@ export function CatalogManagementPage(props: CatalogManagementPageProps) {
         navItems={[]}
         topActions={[{ key: 'home', label: adminMode ? '返回后台首页' : '返回首页', href: adminMode ? '/admin' : '/explore' }]}
       >
-        <div className={styles.contentShell}>
-            <section className={styles.authHero}>
-              <div className={styles.headerEyebrow}>Characters</div>
-              <h1 className={styles.headerTitle}>先登录，再管理你的主体库与画风库</h1>
-              <p className={styles.headerSubtitle}>目录项写入当前用户对应的数据表。登录后，你就能像素材库一样浏览主体卡片，同时继续编辑 prompt 模板和参考图配置。</p>
-            </section>
-
+        <AuthRequiredPanel
+          eyebrow="Characters"
+          title="先登录，再管理你的主体库与画风库"
+          description="目录项写入当前用户对应的数据表。登录后，你就能像素材库一样浏览主体卡片，同时继续编辑 prompt 模板和参考图配置。"
+        >
+          <div className={styles.contentShell}>
             <section className={styles.authCard}>
               <div className={styles.authTabs}>
                 <button type="button" className={`${styles.authTab} ${authMode === 'login' ? styles.authTabActive : ''}`} onClick={() => setAuthMode('login')}>登录</button>
@@ -671,7 +602,8 @@ export function CatalogManagementPage(props: CatalogManagementPageProps) {
                 {authSubmitting ? '提交中...' : authMode === 'login' ? '登录' : '注册并登录'}
               </button>
             </section>
-        </div>
+          </div>
+        </AuthRequiredPanel>
       </SystemShell>
     );
   }
@@ -684,278 +616,69 @@ export function CatalogManagementPage(props: CatalogManagementPageProps) {
       badge={{ strong: String(renderingSubjects ? subjects.length : stylesList.length), label: renderingSubjects ? '主体目录' : '画风目录', onClick: () => setActiveTab(renderingSubjects ? 'styles' : 'subjects') }}
     >
       <div className={styles.contentShell}>
-          <CollectionToolbar>
-            <CollectionToolbarGroup nowrap>
-              <CollectionToolbarChips>
-                <CollectionToolbarPill
-                  active={renderingSubjects}
-                  activeTone="dark"
-                  inactiveStyle="plain"
-                  onClick={() => setActiveTab('subjects')}
-                >
-                  主体库
-                </CollectionToolbarPill>
-                <CollectionToolbarPill
-                  active={!renderingSubjects}
-                  activeTone="dark"
-                  inactiveStyle="plain"
-                  onClick={() => setActiveTab('styles')}
-                >
-                  画风库
-                </CollectionToolbarPill>
-              </CollectionToolbarChips>
-
-              <CollectionToolbarChips>
-                <CollectionToolbarPill
-                  active={visibilityFilter === 'public'}
-                  activeTone="warm"
-                  inactiveStyle="outlined"
-                  onClick={() => setVisibilityFilter('public')}
-                >
-                  公共{renderingSubjects ? '主体' : '画风'}
-                </CollectionToolbarPill>
-                {!publicOnly ? (
-                  <CollectionToolbarPill
-                    active={visibilityFilter === 'personal'}
-                    activeTone="warm"
-                    inactiveStyle="outlined"
-                    onClick={() => setVisibilityFilter('personal')}
-                  >
-                    个人添加
-                  </CollectionToolbarPill>
-                ) : null}
-              </CollectionToolbarChips>
-
-              {renderingSubjects ? (
-                <CollectionToolbarSelect width={148} value={subjectTypeFilter} onChange={(event) => setSubjectTypeFilter(event.target.value as 'all' | SubjectType)}>
-                  <option value="all">类别</option>
-                  <option value="human">人物</option>
-                  <option value="animal">动物</option>
-                  <option value="creature">幻想生物</option>
-                  <option value="object">物体</option>
-                </CollectionToolbarSelect>
-              ) : null}
-            </CollectionToolbarGroup>
-
-            <CollectionToolbarGroup align="end" nowrap>
-              <CollectionToolbarSearch
-                width={208}
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder={`输入${renderingSubjects ? '主体' : '画风'}名称进行搜索`}
-              />
-              <CollectionToolbarAction onClick={startNew}>{renderingSubjects ? '新建主体' : '新建画风'}</CollectionToolbarAction>
-              <CollectionToolbarMeta>{`已展示 ${visibleItemsCount} 个${renderingSubjects ? '主体' : '画风'}`}</CollectionToolbarMeta>
-            </CollectionToolbarGroup>
-          </CollectionToolbar>
+          <CatalogLibraryToolbar
+            activeTab={activeTab}
+            visibilityFilter={visibilityFilter}
+            publicOnly={publicOnly}
+            subjectTypeFilter={subjectTypeFilter}
+            searchTerm={searchTerm}
+            visibleItemsCount={visibleItemsCount}
+            onTabChange={setActiveTab}
+            onVisibilityFilterChange={setVisibilityFilter}
+            onSubjectTypeFilterChange={setSubjectTypeFilter}
+            onSearchTermChange={setSearchTerm}
+            onCreate={startNew}
+          />
 
           <section className={styles.workspace}>
             <div className={styles.galleryPane}>
-              <div className={`${styles.cardGrid} ${renderingSubjects ? styles.cardGridSubjects : styles.cardGridStyles}`}>
-                {renderingSubjects ? (
-                  filteredSubjects.length > 0 ? filteredSubjects.map((item) => (
-                    <button key={item.id} type="button" className={`${styles.card} ${styles.cardSubject} ${selectedSubjectId === item.id ? styles.cardActive : ''}`} onClick={() => selectSubject(item)}>
-                      <div className={styles.cardMediaWrap}>
-                        <img src={item.imageUrl} alt={item.name} className={styles.cardMedia} />
-                      </div>
-                      <div className={styles.cardTitleRow}>
-                        <span className={styles.cardName}>{item.name}</span>
-                        <span className={styles.cardSlug}>{item.slug}</span>
-                      </div>
-                      <div className={styles.cardMetaRow}>
-                        <span className={styles.cardMetaPill}>{visibilityLabel(item.visibility)}</span>
-                        <span className={styles.cardMetaPill}>{subjectTypeLabel(item.subjectType)}</span>
-                      </div>
-                    </button>
-                  )) : <div className={styles.emptyState}>当前筛选条件下没有主体，试试切换公共 / 个人或调整搜索词。</div>
-                ) : (
-                  filteredStyles.length > 0 ? filteredStyles.map((item) => (
-                    <button key={item.id} type="button" className={`${styles.card} ${styles.cardStyle} ${selectedStyleId === item.id ? styles.cardActive : ''}`} onClick={() => selectStyle(item)}>
-                      <div className={styles.cardMediaWrap}>
-                        <img src={item.imageUrl} alt={item.name} className={styles.cardMedia} />
-                      </div>
-                      <div className={styles.cardTitleRow}>
-                        <span className={styles.cardName}>{item.name}</span>
-                        <span className={styles.cardSlug}>{item.slug}</span>
-                      </div>
-                      <div className={styles.cardMetaRow}>
-                        <span className={styles.cardMetaPill}>{visibilityLabel(item.visibility)}</span>
-                      </div>
-                    </button>
-                  )) : <div className={styles.emptyState}>当前筛选条件下没有画风，试试切换公共 / 个人或调整搜索词。</div>
-                )}
-              </div>
+              <CatalogCardGrid
+                tab={activeTab}
+                selectedSubjectId={selectedSubjectId}
+                selectedStyleId={selectedStyleId}
+                filteredSubjects={filteredSubjects}
+                filteredStyles={filteredStyles}
+                onSelectSubject={selectSubject}
+                onSelectStyle={selectStyle}
+              />
             </div>
           </section>
-
-          <Dialog
-            open={editorOpen}
-            title={renderingSubjects ? (subjectDraft.id ? `编辑主体：${subjectDraft.name || subjectDraft.slug}` : '创建主体') : (styleDraft.id ? `编辑画风：${styleDraft.name || styleDraft.slug}` : '创建画风')}
-            description={renderingSubjects ? '在弹层里集中维护主体信息，并可直接使用当前主体继续创作。' : '在弹层里集中维护画风信息与 prompt 模板。'}
-            size="wide"
-            onClose={closeEditor}
-            footer={(
-              <div className={styles.dialogFooter}>
-                <div className={styles.dialogFooterInfo}>
-                  <div className={styles.dialogFooterTitle}>{renderingSubjects ? '下一步动作' : '保存当前配置'}</div>
-                  <div className={`${styles.feedback} ${feedbackError ? styles.feedbackError : ''}`}>
-                    {feedback || (renderingSubjects ? '先完善主体信息，再选择继续创作或保存入库。' : '保存后会立即更新画风库卡片与 prompt 模板。')}
-                  </div>
-                </div>
-                <div className={styles.dialogFooterActions}>
-                  {renderingSubjects ? <button type="button" className={styles.secondaryButton} onClick={useSubjectForCreation}>使用主体创作</button> : null}
-                  <button type="button" className={styles.ghostButton} onClick={renderingSubjects ? () => setSubjectDraft(makeEmptySubjectDraft()) : () => setStyleDraft(makeEmptyStyleDraft())}>清空</button>
-                  <button type="button" className={styles.primaryButton} disabled={saving} onClick={renderingSubjects ? saveSubject : saveStyle}>{saving ? '保存中...' : renderingSubjects ? (subjectDraft.id ? '保存主体' : '创建主体') : (styleDraft.id ? '保存画风' : '创建画风')}</button>
-                </div>
-              </div>
-            )}
-          >
-            {renderingSubjects ? (
-              <div className={styles.dialogLayout}>
-                <div className={styles.dialogPreviewColumn}>
-                  <div className={`${styles.previewHero} ${imagePreviewPulse ? styles.previewHeroPulse : ''}`}>
-                    <img src={subjectDraft.imageUrl || subjectDraft.referenceImageUrl || 'https://placehold.co/640x720/e5e7eb/111827?text=Subject'} alt={subjectDraft.name || 'subject'} className={styles.previewHeroImage} />
-                    <div className={styles.previewHeroMeta}>
-                      <span className={styles.previewPill}>{visibilityLabel(subjectDraft.visibility)}</span>
-                      <span className={styles.previewPill}>{subjectTypeLabel(subjectDraft.subjectType)}</span>
-                      <span className={styles.previewPill}>{genderLabel(subjectDraft.genderTag)}</span>
-                      {imageSubmitting ? <span className={`${styles.previewPill} ${styles.previewPillPending}`}>{subjectImageMode === 'upload' ? '上传中' : '生成中'}</span> : null}
-                    </div>
-                  </div>
-                  <div className={styles.imageToolCard}>
-                    <div className={styles.imageToolHeader}>
-                      <div>
-                        <div className={styles.imageToolEyebrow}>主体图工具</div>
-                        <div className={styles.imageToolTitle}>默认按 3:4 主体封面处理</div>
-                      </div>
-                      <span className={styles.imageToolRatio}>3:4</span>
-                    </div>
-                    <div className={styles.imageModeTabs}>
-                      <button type="button" className={`${styles.imageModeTab} ${subjectImageMode === 'upload' ? styles.imageModeTabActive : ''}`} onClick={() => setSubjectImageMode('upload')}>
-                        本地上传
-                      </button>
-                      <button type="button" className={`${styles.imageModeTab} ${subjectImageMode === 'ai' ? styles.imageModeTabActive : ''}`} onClick={() => setSubjectImageMode('ai')}>
-                        AI 生成
-                      </button>
-                    </div>
-                    {subjectImageMode === 'upload' ? (
-                      <label className={styles.uploadBox}>
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp"
-                          className={styles.hiddenFileInput}
-                          onChange={(event) => {
-                            const file = event.target.files?.[0];
-                            event.currentTarget.value = '';
-                            if (file) {
-                              void uploadSubjectImage(file);
-                            }
-                          }}
-                        />
-                        <span className={styles.uploadBoxIcon}>+</span>
-                        <span className={styles.uploadBoxTitle}>{imageSubmitting ? '上传中…' : '上传主体图'}</span>
-                        <span className={styles.uploadBoxHint}>支持 PNG / JPG / WEBP，建议使用干净背景、完整主体的 3:4 竖图。</span>
-                      </label>
-                    ) : (
-                      <div className={styles.aiToolStack}>
-                        <div className={styles.aiPromptExamples}>
-                          {[
-                            '温柔知性的年轻女老师，浅米色背景，半写实，完整半身到全身',
-                            '可爱拟人狐狸侦探，暖色工作室灯光，童话质感，完整主体',
-                            '未来感机甲少年，干净科技背景，角色海报感，完整人物',
-                          ].map((example) => (
-                            <button
-                              key={example}
-                              type="button"
-                              className={styles.examplePromptChip}
-                              onClick={() => setSubjectImagePrompt(example)}
-                            >
-                              {example}
-                            </button>
-                          ))}
-                        </div>
-                        <textarea
-                          className={`${styles.textarea} ${styles.imageToolTextarea}`}
-                          value={subjectImagePrompt}
-                          onChange={(event) => setSubjectImagePrompt(event.target.value)}
-                          placeholder="输入你对主体图的描述；留空则默认使用主体描述字段。"
-                        />
-                        <button type="button" className={styles.primaryButton} disabled={imageSubmitting} onClick={generateSubjectImage}>
-                          {imageSubmitting ? '生成中…' : 'AI 生成主体图'}
-                        </button>
-                      </div>
-                    )}
-                    {imageFeedback ? (
-                      <div
-                        className={`${styles.inlineFeedback} ${
-                          imageFeedbackTone === 'error'
-                            ? styles.inlineFeedbackError
-                            : imageFeedbackTone === 'pending'
-                              ? styles.inlineFeedbackPending
-                              : styles.inlineFeedbackSuccess
-                        }`}
-                      >
-                        {imageFeedback}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-                <div className={styles.dialogFormColumn}>
-                  <div className={styles.formGrid}>
-                    <div className={styles.field}><label className={styles.label}>名称</label><input className={styles.input} value={subjectDraft.name} onChange={(event) => setSubjectDraft((current) => ({ ...current, name: event.target.value }))} /></div>
-                    <div className={styles.field}><label className={styles.label}>Slug</label><input className={styles.input} value={subjectDraft.slug} onChange={(event) => setSubjectDraft((current) => ({ ...current, slug: event.target.value }))} /></div>
-                    {!publicOnly ? <div className={styles.field}><label className={styles.label}>可见性</label><select className={styles.select} value={subjectDraft.visibility} onChange={(event) => setSubjectDraft((current) => ({ ...current, visibility: event.target.value as CatalogVisibility }))}><option value="public">公共</option><option value="personal">个人</option></select></div> : null}
-                    <div className={styles.field}><label className={styles.label}>主体类型</label><select className={styles.select} value={subjectDraft.subjectType} onChange={(event) => setSubjectDraft((current) => ({ ...current, subjectType: event.target.value as SubjectType }))}><option value="human">人物</option><option value="animal">动物</option><option value="creature">幻想生物</option><option value="object">物体</option></select></div>
-                    <div className={styles.field}><label className={styles.label}>性别标签</label><select className={styles.select} value={subjectDraft.genderTag} onChange={(event) => setSubjectDraft((current) => ({ ...current, genderTag: event.target.value as SubjectGenderTag }))}><option value="unknown">未知</option><option value="female">女性</option><option value="male">男性</option><option value="child">儿童</option></select></div>
-                    <div className={styles.field}><label className={styles.label}>排序</label><input className={styles.input} type="number" value={subjectDraft.sortOrder} onChange={(event) => setSubjectDraft((current) => ({ ...current, sortOrder: Number(event.target.value) || 0 }))} /></div>
-                    <div className={styles.fieldFull}><label className={styles.label}>封面图 URL</label><input className={styles.input} value={subjectDraft.imageUrl} onChange={(event) => setSubjectDraft((current) => ({ ...current, imageUrl: event.target.value }))} /></div>
-                    <div className={styles.fieldFull}><label className={styles.label}>参考图 URL</label><input className={styles.input} value={subjectDraft.referenceImageUrl} onChange={(event) => setSubjectDraft((current) => ({ ...current, referenceImageUrl: event.target.value }))} /></div>
-                    <div className={styles.fieldFull}><label className={styles.label}>描述</label><textarea className={styles.textarea} value={subjectDraft.description} onChange={(event) => setSubjectDraft((current) => ({ ...current, description: event.target.value }))} /></div>
-                    <div className={styles.fieldFull}><label className={styles.label}>正向 Prompt 模板</label><textarea className={styles.textarea} value={subjectDraft.promptTemplate} onChange={(event) => setSubjectDraft((current) => ({ ...current, promptTemplate: event.target.value }))} /></div>
-                    <div className={styles.fieldFull}><label className={styles.label}>负向 Prompt 模板</label><textarea className={styles.textarea} value={subjectDraft.negativePrompt} onChange={(event) => setSubjectDraft((current) => ({ ...current, negativePrompt: event.target.value }))} /></div>
-                    <div className={styles.field}><label className={styles.label}>标签</label><input className={styles.input} value={subjectDraft.tags} onChange={(event) => setSubjectDraft((current) => ({ ...current, tags: event.target.value }))} placeholder="狐狸, 童话, 可爱" /></div>
-                    <div className={styles.field}><label className={styles.label}>启用状态</label><div className={styles.checkboxRow}><input type="checkbox" checked={subjectDraft.enabled} onChange={(event) => setSubjectDraft((current) => ({ ...current, enabled: event.target.checked }))} /><span className={styles.hint}>关闭后首页不会显示该主体</span></div></div>
-                    <div className={styles.fieldFull}><label className={styles.label}>扩展 Metadata(JSON)</label><textarea className={styles.textarea} value={subjectDraft.metadata} onChange={(event) => setSubjectDraft((current) => ({ ...current, metadata: event.target.value }))} placeholder='{"identityKey":"fox-main","voiceProfileId":"vp_123"}' /></div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className={styles.dialogLayout}>
-                <div className={styles.dialogPreviewColumn}>
-                  <div className={styles.previewHero}>
-                    <img src={styleDraft.imageUrl || 'https://placehold.co/640x720/e5e7eb/111827?text=Style'} alt={styleDraft.name || 'style'} className={styles.previewHeroImage} />
-                    <div className={styles.previewHeroMeta}>
-                      <span className={styles.previewPill}>{visibilityLabel(styleDraft.visibility)}</span>
-                    </div>
-                  </div>
-                  <div className={styles.imageToolCard}>
-                    <div className={styles.imageModeTabs}>
-                      <button type="button" className={`${styles.imageModeTab} ${styles.imageModeTabActive}`}>风格封面</button>
-                    </div>
-                    <div className={styles.styleHelperCard}>
-                      <div className={styles.styleHelperTitle}>封面作用</div>
-                      <div className={styles.styleHelperText}>画风封面主要用于列表识别与风格气质传达。真正决定生成效果的仍然是描述、正向 prompt 与负向 prompt 模板。</div>
-                    </div>
-                  </div>
-                </div>
-                <div className={styles.dialogFormColumn}>
-                  <div className={styles.formGrid}>
-                    <div className={styles.field}><label className={styles.label}>名称</label><input className={styles.input} value={styleDraft.name} onChange={(event) => setStyleDraft((current) => ({ ...current, name: event.target.value }))} /></div>
-                    <div className={styles.field}><label className={styles.label}>Slug</label><input className={styles.input} value={styleDraft.slug} onChange={(event) => setStyleDraft((current) => ({ ...current, slug: event.target.value }))} /></div>
-                    {!publicOnly ? <div className={styles.field}><label className={styles.label}>可见性</label><select className={styles.select} value={styleDraft.visibility} onChange={(event) => setStyleDraft((current) => ({ ...current, visibility: event.target.value as CatalogVisibility }))}><option value="public">公共</option><option value="personal">个人</option></select></div> : null}
-                    <div className={styles.field}><label className={styles.label}>排序</label><input className={styles.input} type="number" value={styleDraft.sortOrder} onChange={(event) => setStyleDraft((current) => ({ ...current, sortOrder: Number(event.target.value) || 0 }))} /></div>
-                    <div className={styles.fieldFull}><label className={styles.label}>封面图 URL</label><input className={styles.input} value={styleDraft.imageUrl} onChange={(event) => setStyleDraft((current) => ({ ...current, imageUrl: event.target.value }))} /></div>
-                    <div className={styles.fieldFull}><label className={styles.label}>描述</label><textarea className={styles.textarea} value={styleDraft.description} onChange={(event) => setStyleDraft((current) => ({ ...current, description: event.target.value }))} /></div>
-                    <div className={styles.fieldFull}><label className={styles.label}>正向 Prompt 模板</label><textarea className={styles.textarea} value={styleDraft.promptTemplate} onChange={(event) => setStyleDraft((current) => ({ ...current, promptTemplate: event.target.value }))} /></div>
-                    <div className={styles.fieldFull}><label className={styles.label}>负向 Prompt 模板</label><textarea className={styles.textarea} value={styleDraft.negativePrompt} onChange={(event) => setStyleDraft((current) => ({ ...current, negativePrompt: event.target.value }))} /></div>
-                    <div className={styles.field}><label className={styles.label}>标签</label><input className={styles.input} value={styleDraft.tags} onChange={(event) => setStyleDraft((current) => ({ ...current, tags: event.target.value }))} placeholder="国风, 水墨, 留白" /></div>
-                    <div className={styles.field}><label className={styles.label}>启用状态</label><div className={styles.checkboxRow}><input type="checkbox" checked={styleDraft.enabled} onChange={(event) => setStyleDraft((current) => ({ ...current, enabled: event.target.checked }))} /><span className={styles.hint}>关闭后首页不会显示该画风</span></div></div>
-                    <div className={styles.fieldFull}><label className={styles.label}>扩展 Metadata(JSON)</label><textarea className={styles.textarea} value={styleDraft.metadata} onChange={(event) => setStyleDraft((current) => ({ ...current, metadata: event.target.value }))} placeholder='{"recommendedModelFamily":"seko-image"}' /></div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </Dialog>
+          {renderingSubjects ? (
+            <CatalogSubjectDialog
+              open={editorOpen}
+              draft={subjectDraft}
+              saving={saving}
+              feedback={feedback}
+              feedbackError={feedbackError}
+              imageSubmitting={imageSubmitting}
+              imageFeedback={imageFeedback}
+              imageFeedbackTone={imageFeedbackTone}
+              imageMode={subjectImageMode}
+              imagePrompt={subjectImagePrompt}
+              imagePreviewPulse={imagePreviewPulse}
+              onClose={closeEditor}
+              onUseForCreation={useSubjectForCreation}
+              onClear={() => setSubjectDraft(makeEmptySubjectDraft())}
+              onSave={saveSubject}
+              onDraftChange={(updater) => setSubjectDraft(updater)}
+              onImageModeChange={setSubjectImageMode}
+              onImagePromptChange={setSubjectImagePrompt}
+              onUploadImage={(file) => void uploadSubjectImage(file)}
+              onGenerateImage={() => void generateSubjectImage()}
+            />
+          ) : (
+            <CatalogStyleDialog
+              open={editorOpen}
+              draft={styleDraft}
+              saving={saving}
+              feedback={feedback}
+              feedbackError={feedbackError}
+              onClose={closeEditor}
+              onClear={() => setStyleDraft(makeEmptyStyleDraft())}
+              onSave={saveStyle}
+              onDraftChange={(updater) => setStyleDraft(updater)}
+            />
+          )}
       </div>
     </SystemShell>
   );

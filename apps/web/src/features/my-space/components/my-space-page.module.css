@@ -336,6 +336,11 @@
   overflow: hidden;
 }
 
+.coverMedia {
+  position: absolute;
+  inset: 0;
+}
+
 .coverImage {
   position: absolute;
   inset: 0;

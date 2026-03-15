@@ -2,11 +2,20 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 import styles from './my-space-page.module.css';
 
 import type { MySpaceProjectItem } from '../lib/my-space-api.server';
+import {
+  CollectionToolbar,
+  CollectionToolbarChips,
+  CollectionToolbarGroup,
+  CollectionToolbarMeta,
+  CollectionToolbarPill,
+  CollectionToolbarSearch,
+} from '../../shared/components/collection-toolbar';
+import { SystemShell } from '../../shared/components/system-shell';
+import { buildUserShellNavItems } from '../../shared/lib/user-shell-nav';
 import { resolveProjectStage } from '../../shared/lib/project-stage';
 
 type StageFilter = 'all' | 'planner' | 'creation' | 'publish';
@@ -132,7 +141,6 @@ const stageFilters: Array<{ id: StageFilter; label: string }> = [
 ];
 
 export function MySpacePage(props: { projects: MySpaceProjectItem[]; error?: string | null }) {
-  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
   const [contentFilter, setContentFilter] = useState<ContentFilter>('all');
@@ -163,134 +171,75 @@ export function MySpacePage(props: { projects: MySpaceProjectItem[]; error?: str
     });
   }, [contentFilter, props.projects, searchTerm, stageFilter]);
 
-  const plannerCount = props.projects.filter((project) => resolveProjectStage(project.status as Parameters<typeof resolveProjectStage>[0]) === 'planner').length;
-  const creationCount = props.projects.filter((project) => resolveProjectStage(project.status as Parameters<typeof resolveProjectStage>[0]) === 'creation').length;
-  const publishCount = props.projects.filter((project) => resolveProjectStage(project.status as Parameters<typeof resolveProjectStage>[0]) === 'publish').length;
-
   return (
-    <div className={styles.page}>
-      <aside className={styles.globalSidebar}>
-        <div className={styles.sidebarGroup}>
-          <div className={styles.brandMark} onClick={() => router.push('/explore')}>
-            <span className={styles.brandLetter}>S</span>
-          </div>
-          <button className={styles.navBtn} aria-label="首页" title="首页" onClick={() => router.push('/explore')}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 10L12 3l9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><line x1="12" y1="12" x2="12" y2="18"></line></svg>
-          </button>
-          <button className={`${styles.navBtn} ${styles.navBtnActive}`} aria-label="我的空间" title="我的空间" onClick={() => router.push('/my-space')}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="9" y1="14" x2="15" y2="14"></line></svg>
-          </button>
-          <button className={styles.navBtn} aria-label="资产" title="数字分身" onClick={() => router.push('/settings/catalogs')}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" /><path d="M4 21v-2a4 4 0 0 1 4-4h4" /><path d="M19 6l1-1 1 1-1 1-1-1z" /><path d="M16 3l.5-.5.5.5-.5.5-.5-.5z" /></svg>
-          </button>
-          <button className={styles.navBtn} aria-label="社区" title="声音克隆" onClick={() => router.push('/settings/providers')}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" /><path d="M4 21v-2a4 4 0 0 1 4-4h4" /><line x1="16" y1="16" x2="16" y2="20" /><line x1="19" y1="15" x2="19" y2="21" /><line x1="22" y1="17" x2="22" y2="19" /></svg>
-          </button>
-        </div>
-
-        <div className={styles.sidebarGroup}>
-          <button className={styles.vipBadge} onClick={() => router.push('/explore')}>
-            <strong>{props.projects.length}</strong>
-            <span>继续创作</span>
-          </button>
-          <button className={styles.utilBtn} aria-label="Profile" onClick={() => router.push('/profile')}>
-            <div className={styles.avatar}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
-            </div>
-          </button>
-          <button className={styles.utilBtn} aria-label="Notifications" onClick={() => router.push('/notifications')}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-          </button>
-          <button className={styles.utilBtn} aria-label="Feedback" onClick={() => router.push('/feedback')}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><circle cx="9" cy="10" r="1.5" fill="currentColor"></circle><circle cx="12" cy="10" r="1.5" fill="currentColor"></circle><circle cx="15" cy="10" r="1.5" fill="currentColor"></circle></svg>
-          </button>
-        </div>
-      </aside>
-
-      <header className={styles.topBar}>
-        <div className={styles.topBarLeft}>
-          <span className={styles.brandTitle}>AIV Studio</span>
-          <span className={styles.divider}>/</span>
-          <span className={styles.pageTitle}>我的空间</span>
-        </div>
-        <div className={styles.topBarRight}>
-          <button className={styles.publishBtn} onClick={() => router.push('/settings/providers')}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v6m0 6v6M3 12h6m6 0h6" /></svg>
-            接口配置
-          </button>
-          <button className={styles.publishBtn} onClick={() => router.push('/settings/catalogs')}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
-            管理目录
-          </button>
-        </div>
-      </header>
-
-      <div className={styles.pageScrollContainer}>
+    <SystemShell
+      pageTitle="我的空间"
+      navItems={buildUserShellNavItems('projects')}
+      topActions={[
+        { key: 'providers', label: '接口配置', href: '/settings/providers', icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v6m0 6v6M3 12h6m6 0h6" /></svg> },
+        { key: 'catalogs', label: '管理目录', href: '/settings/catalogs', icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg> },
+      ]}
+      badge={{ strong: String(props.projects.length), label: '继续创作', href: '/explore' }}
+    >
         <div className={styles.contentShell}>
-          <section className={styles.headerArea}>
-            <div className={styles.headerIdentity}>
-              <div className={styles.headerEyebrow}>My Space</div>
-              <h1 className={styles.headerTitle}>继续你已经开始的项目</h1>
-              <p className={styles.headerSubtitle}>更接近作品空间，而不是后台列表。先筛选，再从卡片直接回到策划或分片生成。</p>
-            </div>
-            <div className={styles.headerMeta}>
-              <div className={styles.metricCard}><span>策划</span><strong>{plannerCount}</strong></div>
-              <div className={styles.metricCard}><span>分片生成</span><strong>{creationCount}</strong></div>
-              <div className={styles.metricCard}><span>发布</span><strong>{publishCount}</strong></div>
-            </div>
-          </section>
-
           {props.error ? <div className={styles.errorPanel}>{props.error}</div> : null}
 
           {!props.error ? (
             <>
-              <section className={styles.controlBar}>
-                <div className={styles.contentTabs}>
-                  {contentFilters.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={`${styles.contentTab} ${contentFilter === item.id ? styles.contentTabActive : ''}`}
-                      onClick={() => setContentFilter(item.id)}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
+              <CollectionToolbar>
+                <CollectionToolbarGroup nowrap>
+                  <CollectionToolbarChips>
+                    {contentFilters.map((item) => (
+                      <CollectionToolbarPill
+                        key={item.id}
+                        active={contentFilter === item.id}
+                        activeTone="dark"
+                        inactiveStyle="plain"
+                        onClick={() => setContentFilter(item.id)}
+                      >
+                        {item.label}
+                      </CollectionToolbarPill>
+                    ))}
+                  </CollectionToolbarChips>
 
-                <div className={styles.searchWrap}>
-                  <svg className={styles.searchIcon} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
-                  <input
-                    className={styles.searchInput}
+                  <CollectionToolbarChips>
+                    {stageFilters.map((item) => (
+                      <CollectionToolbarPill
+                        key={item.id}
+                        active={stageFilter === item.id}
+                        activeTone="warm"
+                        inactiveStyle="outlined"
+                        onClick={() => setStageFilter(item.id)}
+                      >
+                        {item.label}
+                      </CollectionToolbarPill>
+                    ))}
+                  </CollectionToolbarChips>
+
+                  <CollectionToolbarSearch
+                    width={300}
                     value={searchTerm}
                     onChange={(event) => setSearchTerm(event.target.value)}
                     placeholder="输入策划案名称或子类型搜索"
                   />
-                </div>
-              </section>
+                </CollectionToolbarGroup>
 
-              <section className={styles.subControlBar}>
-                <div className={styles.stageFilters}>
-                  {stageFilters.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={`${styles.stageFilter} ${stageFilter === item.id ? styles.stageFilterActive : ''}`}
-                      onClick={() => setStageFilter(item.id)}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-                <div className={styles.resultsMeta}>{`已展示 ${filteredProjects.length} / ${props.projects.length}`}</div>
-              </section>
+                <CollectionToolbarGroup align="end" nowrap>
+                  <CollectionToolbarMeta>{`已展示 ${filteredProjects.length} / ${props.projects.length}`}</CollectionToolbarMeta>
+                </CollectionToolbarGroup>
+              </CollectionToolbar>
             </>
           ) : null}
 
           {!props.error && props.projects.length === 0 ? (
             <section className={styles.emptyPanel}>
               <h2 className={styles.emptyTitle}>你的空间里还没有项目</h2>
-              <p className={styles.emptyDescription}>从创作广场开始第一个项目，创建后它会自动出现在这里，方便你继续策划或进入分片生成。</p>
+              <p className={styles.emptyDescription}>这里会按作品卡片的方式展示你已经创建过的项目。现在还没有内容时，建议先从创作广场开始一个短剧、MV 或知识分享项目。</p>
+              <div className={styles.emptyPreviewRow}>
+                <div className={`${styles.emptyPreviewCard} ${styles.emptyPreviewWarm}`}></div>
+                <div className={`${styles.emptyPreviewCard} ${styles.emptyPreviewCool}`}></div>
+                <div className={`${styles.emptyPreviewCard} ${styles.emptyPreviewNeutral}`}></div>
+              </div>
               <div className={styles.emptyActions}>
                 <Link href="/explore" className={styles.primaryAction}>去创建第一个项目</Link>
               </div>
@@ -370,7 +319,6 @@ export function MySpacePage(props: { projects: MySpaceProjectItem[]; error?: str
             </section>
           ) : null}
         </div>
-      </div>
-    </div>
+    </SystemShell>
   );
 }

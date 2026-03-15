@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { cx, Tooltip, TooltipProvider } from '@aiv/ui';
 
 import styles from './explore-page.module.css';
+import { SystemShell } from '../../shared/components/system-shell';
+import { buildUserShellNavItems } from '../../shared/lib/user-shell-nav';
 
 import { createStudioProject } from '@/lib/studio-service';
 import {
@@ -18,7 +20,6 @@ import type {
   ExploreCatalogScope,
   ExploreCharacterOption,
   ExplorePopover,
-  ExploreSidebarNav,
   ExploreSubjectAgeFilter,
   ExploreStyleOption,
   ExploreSubjectGenderFilter,
@@ -89,7 +90,7 @@ interface ExploreImageModelOption {
 
 type ExploreCatalogResponse<T> = T[];
 
-export function ExplorePage() {
+export function ExplorePage(props: { initialSubjectSlug?: string }) {
   const router = useRouter();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -103,7 +104,6 @@ export function ExplorePage() {
   const [scriptSourceName, setScriptSourceName] = useState('');
 
   // Prototype UI States
-  const [activeSidebarNav, setActiveSidebarNav] = useState<ExploreSidebarNav>('home');
   const [isMultiEpisode, setIsMultiEpisode] = useState(false);
 
   // Popover state for toolbar
@@ -123,6 +123,7 @@ export function ExplorePage() {
   const [subjectTypeFilter, setSubjectTypeFilter] = useState<ExploreSubjectSourceType>('all');
   const [subjectGenderFilter, setSubjectGenderFilter] = useState<ExploreSubjectGenderFilter>('all');
   const [subjectAgeFilter, setSubjectAgeFilter] = useState<ExploreSubjectAgeFilter>('all');
+  const preselectedSubjectSlug = props.initialSubjectSlug?.trim() ?? '';
 
   // Auto-hide toast
   useEffect(() => {
@@ -242,6 +243,21 @@ export function ExplorePage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!preselectedSubjectSlug || !characterOptions.length) {
+      return;
+    }
+
+    const matched = characterOptions.find((subject) => subject.slug === preselectedSubjectSlug);
+    if (!matched) {
+      return;
+    }
+
+    setSelectedCharacter(matched.slug);
+    setIsExpanded(true);
+    triggerToast(`已为你预选主体：${matched.name}`);
+  }, [characterOptions, preselectedSubjectSlug]);
 
   useEffect(() => {
     let cancelled = false;
@@ -442,80 +458,15 @@ export function ExplorePage() {
 
   return (
     <TooltipProvider>
-      <div className={styles.page}>
-
-
-
-        {/* Global Sidebar (Seko replica) */}
-        <aside className={styles.globalSidebar}>
-          {/* Top Icons */}
-          <div className={styles.sidebarGroup}>
-            <div className={styles.brandMark} onClick={() => router.push('/explore')}>
-              <span style={{ fontWeight: 800, fontSize: 18, fontStyle: 'italic', color: 'var(--text-primary)' }}>S</span>
-            </div>
-            <button className={cx(styles.navBtn, activeSidebarNav === 'home' && styles.navBtnActive)} aria-label="首页" title="首页" onClick={() => setActiveSidebarNav('home')}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 10L12 3l9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path><line x1="12" y1="12" x2="12" y2="18"></line></svg>
-            </button>
-            <button
-              className={cx(styles.navBtn, activeSidebarNav === 'projects' && styles.navBtnActive)}
-              aria-label="我的空间"
-              title="我的空间"
-              onClick={() => {
-                setActiveSidebarNav('projects');
-                router.push('/my-space');
-              }}
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="9" y1="14" x2="15" y2="14"></line></svg>
-            </button>
-            <button className={cx(styles.navBtn, activeSidebarNav === 'avatar' && styles.navBtnActive)} aria-label="资产" title="数字分身" onClick={() => setActiveSidebarNav('avatar')}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" /><path d="M4 21v-2a4 4 0 0 1 4-4h4" /><path d="M19 6l1-1 1 1-1 1-1-1z" /><path d="M16 3l.5-.5.5.5-.5.5-.5-.5z" /></svg>
-            </button>
-            <button className={cx(styles.navBtn, activeSidebarNav === 'voice' && styles.navBtnActive)} aria-label="社区" title="声音克隆" onClick={() => setActiveSidebarNav('voice')}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" /><path d="M4 21v-2a4 4 0 0 1 4-4h4" /><line x1="16" y1="16" x2="16" y2="20" /><line x1="19" y1="15" x2="19" y2="21" /><line x1="22" y1="17" x2="22" y2="19" /></svg>
-            </button>
-          </div>
-
-          {/* Bottom User Area */}
-          <div className={styles.sidebarGroup}>
-            <button className={styles.vipBadge} onClick={() => router.push('/vip')}>
-              <strong>✦ 99</strong>
-              <span>开通会员</span>
-            </button>
-            <button className={styles.utilBtn} aria-label="Profile" onClick={() => router.push('/profile')}>
-              <div className={styles.avatar}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
-              </div>
-            </button>
-            <button className={styles.utilBtn} aria-label="Notifications" onClick={() => router.push('/notifications')}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-            </button>
-            <button className={styles.utilBtn} aria-label="Feedback" onClick={() => router.push('/feedback')}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><circle cx="9" cy="10" r="1.5" fill="currentColor"></circle><circle cx="12" cy="10" r="1.5" fill="currentColor"></circle><circle cx="15" cy="10" r="1.5" fill="currentColor"></circle></svg>
-            </button>
-          </div>
-        </aside>
-
-        {/* Global Top Nav Workspace Bar */}
-        <header className={styles.topBar}>
-          <div className={styles.topBarLeft}>
-            <span className={styles.brandTitle}>AIV Studio</span>
-            <span className={styles.divider}>/</span>
-            <span className={styles.pageTitle}>灵感创作台</span>
-          </div>
-          <div className={styles.topBarRight}>
-            <button className={styles.publishBtn} onClick={() => router.push('/settings/providers')}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v6m0 6v6M3 12h6m6 0h6" /></svg>
-              接口配置
-            </button>
-            <button className={styles.publishBtn} onClick={() => router.push('/settings/catalogs')}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
-              管理目录
-            </button>
-          </div>
-        </header>
-
-        {/* The Page Scroll Container for natural layout flow */}
-        <div className={styles.pageScrollContainer}>
+      <SystemShell
+        pageTitle="灵感创作台"
+        navItems={buildUserShellNavItems('home')}
+        topActions={[
+          { key: 'providers', label: '接口配置', href: '/settings/providers', icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v6m0 6v6M3 12h6m6 0h6" /></svg> },
+          { key: 'catalogs', label: '管理目录', href: '/settings/catalogs', icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg> },
+        ]}
+        badge={{ strong: '✦ 99', label: '开通会员', href: '/vip' }}
+      >
 
           {/* The Hero Composer Layer */}
           <div className={cx(styles.composerSection, isExpanded && styles.composerSectionExpanded)}>
@@ -1011,15 +962,13 @@ export function ExplorePage() {
               </div>
             </div>
           </div>
-        </div>
-
         {/* Simple Global UI Toast for feedback */}
         {toastMsg && (
           <div className={styles.globalToast}>
             {toastMsg}
           </div>
         )}
-      </div>
+      </SystemShell>
     </TooltipProvider>
   );
 }

@@ -1,4 +1,4 @@
-import { PlannerAgentDebugPage } from '@/features/planner-debug/components/planner-agent-debug-page';
+import { redirect } from 'next/navigation';
 
 interface PageProps {
   params: Promise<{ subAgentSlug: string }>;
@@ -8,12 +8,8 @@ interface PageProps {
 export default async function InternalPlannerDebugDetailPage({ params, searchParams }: PageProps) {
   const { subAgentSlug } = await params;
   const nextSearchParams = searchParams ? await searchParams : undefined;
-  return (
-    <PlannerAgentDebugPage
-      initialSubAgentSlug={decodeURIComponent(subAgentSlug)}
-      mode="debug"
-      initialReplayRunId={nextSearchParams?.replayRunId}
-      initialAutoRun={nextSearchParams?.autoRun === '1'}
-    />
-  );
+  const query = new URLSearchParams();
+  if (nextSearchParams?.replayRunId) query.set('replayRunId', nextSearchParams.replayRunId);
+  if (nextSearchParams?.autoRun) query.set('autoRun', nextSearchParams.autoRun);
+  redirect(`/admin/planner-debug/${encodeURIComponent(subAgentSlug)}${query.toString() ? `?${query}` : ''}`);
 }

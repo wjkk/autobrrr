@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { requireUser } from '../lib/auth.js';
+import { catalogSubjectImageGenerationSchema, generateCatalogSubjectImageForUser } from '../lib/catalog-subject-image.js';
 import { prisma } from '../lib/prisma.js';
 
 const visibilitySchema = z.enum(['public', 'personal']);
@@ -239,6 +240,45 @@ export async function registerExploreCatalogRoutes(app: FastifyInstance) {
       ok: true,
       data: mapSubject(subject),
     });
+  });
+
+  app.post('/api/explore/subjects/generate-image', async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) {
+      return;
+    }
+
+    const payload = catalogSubjectImageGenerationSchema.safeParse(request.body);
+    if (!payload.success) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'INVALID_ARGUMENT',
+          message: 'Invalid catalog subject image generation payload.',
+          details: payload.error.flatten(),
+        },
+      });
+    }
+
+    try {
+      const result = await generateCatalogSubjectImageForUser({
+        userId: user.id,
+        input: payload.data,
+      });
+
+      return reply.send({
+        ok: true,
+        data: result,
+      });
+    } catch (error) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'CATALOG_SUBJECT_IMAGE_GENERATION_FAILED',
+          message: error instanceof Error ? error.message : 'Catalog subject image generation failed.',
+        },
+      });
+    }
   });
 
   app.patch('/api/explore/subjects/:itemId', async (request, reply) => {

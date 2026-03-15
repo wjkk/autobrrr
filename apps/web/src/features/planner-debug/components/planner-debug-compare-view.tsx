@@ -73,9 +73,11 @@ function renderPreviewSection(title: string, items: PlannerPreviewCardItem[]) {
 function ResultColumn({
   label,
   result,
+  runBasePath,
 }: {
   label: string;
   result: PlannerDebugRunResponse;
+  runBasePath: string;
 }) {
   const summary = useMemo(() => buildPlannerResultSummary(result.assistantPackage), [result.assistantPackage]);
   const preview = useMemo(() => buildPlannerResultPreview(result.input, result.assistantPackage), [result.assistantPackage, result.input]);
@@ -91,7 +93,7 @@ function ResultColumn({
             {result.subAgentProfile.subtype} · {result.executionMode === 'live' ? '真实模型' : '回退生成'}
           </p>
         </div>
-        <Link href={`/internal/planner-debug/runs/${encodeURIComponent(result.debugRunId)}`} className={styles.inlineLinkPill}>
+        <Link href={`${runBasePath}/${encodeURIComponent(result.debugRunId)}`} className={styles.inlineLinkPill}>
           打开完整回放
         </Link>
       </div>
@@ -139,7 +141,14 @@ function ResultColumn({
   );
 }
 
-export function PlannerDebugCompareView({ compareResult }: { compareResult: PlannerDebugCompareResponse }) {
+export function PlannerDebugCompareView({
+  compareResult,
+  chrome = 'default',
+}: {
+  compareResult: PlannerDebugCompareResponse;
+  chrome?: 'default' | 'admin';
+}) {
+  const runBasePath = chrome === 'admin' ? '/admin/planner-debug/runs' : '/internal/planner-debug/runs';
   const leftSummary = useMemo(() => buildPlannerResultSummary(compareResult.left.assistantPackage), [compareResult.left.assistantPackage]);
   const rightSummary = useMemo(() => buildPlannerResultSummary(compareResult.right.assistantPackage), [compareResult.right.assistantPackage]);
   const leftPreview = useMemo(() => buildPlannerResultPreview(compareResult.left.input, compareResult.left.assistantPackage), [compareResult.left.assistantPackage, compareResult.left.input]);
@@ -174,8 +183,8 @@ export function PlannerDebugCompareView({ compareResult }: { compareResult: Plan
       </div>
 
       <div className={styles.compareBoard}>
-        <ResultColumn label="A" result={compareResult.left} />
-        <ResultColumn label="B" result={compareResult.right} />
+        <ResultColumn label="A" result={compareResult.left} runBasePath={runBasePath} />
+        <ResultColumn label="B" result={compareResult.right} runBasePath={runBasePath} />
       </div>
     </div>
   );

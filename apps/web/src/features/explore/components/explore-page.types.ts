@@ -1,7 +1,5 @@
 export type ContentTab = '短剧漫剧' | '音乐MV' | '知识分享';
 
-export type ExploreSidebarNav = 'home' | 'projects' | 'avatar' | 'voice';
-
 export type ExplorePopover = 'character' | 'model' | 'imageModel' | null;
 
 export type ExploreCatalogScope = 'all' | 'public' | 'personal';

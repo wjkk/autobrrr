@@ -4,6 +4,7 @@ import type { PlannerSession, Run } from '@prisma/client';
 import type { ResolvedPlannerAgentSelection } from './planner-agent-registry.js';
 import { parsePlannerAssistantPackage, type PlannerStepAnalysisItem } from './planner-agent-schemas.js';
 import type { PlannerStructuredDoc } from './planner-doc.js';
+import { autoGeneratePlannerSubjectAssetsForRefinement } from './planner-subject-auto-assets.js';
 import { prisma } from './prisma.js';
 import { applyPartialRerunScope, buildPartialDiffSummary } from './planner-refinement-partial.js';
 import { syncPlannerRefinementDerivedData } from './planner-refinement-sync.js';
@@ -632,6 +633,69 @@ export async function finalizePlannerConversation(args: {
 
     return refinementVersion;
   });
+
+  if (args.plannerSession.createdById) {
+    try {
+      const autoSubjectImageSummary = await autoGeneratePlannerSubjectAssetsForRefinement({
+        userId: args.plannerSession.createdById,
+        projectId: args.plannerSession.projectId,
+        episodeId: args.plannerSession.episodeId,
+        refinementVersionId: result.id,
+      });
+
+      const currentRun = await prisma.run.findUnique({
+        where: { id: args.run.id },
+        select: { outputJson: true },
+      });
+      const currentOutput =
+        currentRun?.outputJson && typeof currentRun.outputJson === 'object' && !Array.isArray(currentRun.outputJson)
+          ? (currentRun.outputJson as Record<string, unknown>)
+          : {};
+
+      await prisma.run.update({
+        where: { id: args.run.id },
+        data: {
+          outputJson: {
+            ...currentOutput,
+            autoSubjectImageSummary: autoSubjectImageSummary as unknown as Prisma.InputJsonValue,
+          } satisfies Prisma.InputJsonValue,
+        },
+      });
+    } catch (error) {
+      const currentRun = await prisma.run.findUnique({
+        where: { id: args.run.id },
+        select: { outputJson: true },
+      });
+      const currentOutput =
+        currentRun?.outputJson && typeof currentRun.outputJson === 'object' && !Array.isArray(currentRun.outputJson)
+          ? (currentRun.outputJson as Record<string, unknown>)
+          : {};
+
+      await prisma.run.update({
+        where: { id: args.run.id },
+        data: {
+          outputJson: {
+            ...currentOutput,
+            autoSubjectImageSummary: {
+              refinementVersionId: result.id,
+              attempted: 0,
+              created: 0,
+              skipped: 0,
+              failed: 1,
+              items: [
+                {
+                  subjectId: '',
+                  name: 'planner_subject_auto',
+                  status: 'failed',
+                  reason: error instanceof Error ? error.message : '自动主体图生成失败。',
+                },
+              ],
+            } as unknown as Prisma.InputJsonValue,
+          } satisfies Prisma.InputJsonValue,
+        },
+      });
+    }
+  }
 
   return {
     stage: 'refinement' as const,

@@ -1,4 +1,4 @@
-import { PlannerAgentDebugPage } from '@/features/planner-debug/components/planner-agent-debug-page';
+import { redirect } from 'next/navigation';
 
 interface PageProps {
   searchParams?: Promise<{ subAgentSlug?: string }>;
@@ -6,5 +6,6 @@ interface PageProps {
 
 export default async function InternalPlannerAgentsPage({ searchParams }: PageProps) {
   const params = searchParams ? await searchParams : undefined;
-  return <PlannerAgentDebugPage mode="manage" initialSubAgentSlug={params?.subAgentSlug} />;
+  const search = params?.subAgentSlug ? `?subAgentSlug=${encodeURIComponent(params.subAgentSlug)}` : '';
+  redirect(`/admin/planner-agents${search}`);
 }

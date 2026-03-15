@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
+import { AdminShell } from '@/features/admin/components/admin-shell';
 import styles from './planner-agent-debug-page.module.css';
 
 import type { PlannerDebugRunDetail, PlannerDebugRunListItem } from '../lib/planner-agent-debug-types';
@@ -46,9 +47,11 @@ async function requestJson<T>(path: string, init?: RequestInit) {
 
 interface PlannerDebugRunBrowserProps {
   initialRunId?: string;
+  chrome?: 'default' | 'admin';
 }
 
-export function PlannerDebugRunBrowser({ initialRunId }: PlannerDebugRunBrowserProps) {
+export function PlannerDebugRunBrowser({ initialRunId, chrome = 'default' }: PlannerDebugRunBrowserProps) {
+  const debugBasePath = chrome === 'admin' ? '/admin/planner-debug' : '/internal/planner-debug';
   const [runs, setRuns] = useState<PlannerDebugRunListItem[]>([]);
   const [selectedRun, setSelectedRun] = useState<PlannerDebugRunDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -126,9 +129,8 @@ export function PlannerDebugRunBrowser({ initialRunId }: PlannerDebugRunBrowserP
     }
   };
 
-  return (
-    <div className={styles.page}>
-      <div className={styles.shell}>
+  const content = (
+      <div className={chrome === 'admin' ? styles.adminShell : styles.shell}>
         <section className={styles.hero}>
           <div>
             <div className={styles.eyebrow}>策划调试回放</div>
@@ -253,9 +255,9 @@ export function PlannerDebugRunBrowser({ initialRunId }: PlannerDebugRunBrowserP
                   </div>
                   <div className={styles.linkRow}>
                     {selectedRun.subAgentProfile?.slug ? (
-                      <Link href={`/internal/planner-debug/${encodeURIComponent(selectedRun.subAgentProfile.slug)}`}>返回该子 Agent 调试页</Link>
+                      <Link href={`${debugBasePath}/${encodeURIComponent(selectedRun.subAgentProfile.slug)}`}>返回该子 Agent 调试页</Link>
                     ) : null}
-                    <Link href="/internal/planner-debug/compare">打开 A/B 对比页</Link>
+                    <Link href={`${debugBasePath}/compare`}>打开 A/B 对比页</Link>
                   </div>
                 </div>
               ) : null}
@@ -263,6 +265,15 @@ export function PlannerDebugRunBrowser({ initialRunId }: PlannerDebugRunBrowserP
           </div>
         </section>
       </div>
-    </div>
   );
+
+  if (chrome === 'admin') {
+    return (
+      <AdminShell pageTitle="Agent 调试回放" active="planner">
+        {content}
+      </AdminShell>
+    );
+  }
+
+  return <div className={styles.page}>{content}</div>;
 }

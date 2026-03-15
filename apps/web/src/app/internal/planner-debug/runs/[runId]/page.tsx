@@ -1,4 +1,4 @@
-import { PlannerDebugRunBrowser } from '@/features/planner-debug/components/planner-debug-run-browser';
+import { redirect } from 'next/navigation';
 
 interface PageProps {
   params: Promise<{ runId: string }>;
@@ -6,5 +6,5 @@ interface PageProps {
 
 export default async function InternalPlannerDebugRunDetailPage({ params }: PageProps) {
   const { runId } = await params;
-  return <PlannerDebugRunBrowser initialRunId={decodeURIComponent(runId)} />;
+  redirect(`/admin/planner-debug/runs/${encodeURIComponent(runId)}`);
 }

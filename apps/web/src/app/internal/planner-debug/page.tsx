@@ -1,4 +1,4 @@
-import { PlannerAgentDebugPage } from '@/features/planner-debug/components/planner-agent-debug-page';
+import { redirect } from 'next/navigation';
 
 interface PageProps {
   searchParams?: Promise<{ replayRunId?: string; autoRun?: string }>;
@@ -6,5 +6,8 @@ interface PageProps {
 
 export default async function InternalPlannerDebugPage({ searchParams }: PageProps) {
   const params = searchParams ? await searchParams : undefined;
-  return <PlannerAgentDebugPage mode="debug" initialReplayRunId={params?.replayRunId} initialAutoRun={params?.autoRun === '1'} />;
+  const query = new URLSearchParams();
+  if (params?.replayRunId) query.set('replayRunId', params.replayRunId);
+  if (params?.autoRun) query.set('autoRun', params.autoRun);
+  redirect(`/admin/planner-debug${query.toString() ? `?${query}` : ''}`);
 }

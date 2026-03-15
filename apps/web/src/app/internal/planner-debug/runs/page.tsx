@@ -1,5 +1,5 @@
-import { PlannerDebugRunBrowser } from '@/features/planner-debug/components/planner-debug-run-browser';
+import { redirect } from 'next/navigation';
 
 export default function InternalPlannerDebugRunsPage() {
-  return <PlannerDebugRunBrowser />;
+  redirect('/admin/planner-debug/runs');
 }

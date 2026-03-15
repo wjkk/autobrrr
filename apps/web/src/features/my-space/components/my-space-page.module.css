@@ -32,13 +32,6 @@
   margin-bottom: 24px;
 }
 
-.brandLetter {
-  font-weight: 800;
-  font-size: 18px;
-  font-style: italic;
-  color: var(--text-primary);
-}
-
 .navBtn {
   width: 44px;
   height: 44px;
@@ -60,6 +53,7 @@
 .navBtnActive {
   background: var(--bg-hover);
   color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.05);
 }
 
 .vipBadge {
@@ -200,77 +194,20 @@
   padding: 92px 40px 48px;
 }
 
-.headerArea {
-  display: flex;
-  justify-content: space-between;
-  gap: 24px;
-  align-items: flex-end;
-}
-
-.headerIdentity {
-  min-width: 0;
-}
-
-.headerEyebrow {
-  color: #98a2b3;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.headerTitle {
-  margin-top: 10px;
-  font-size: 34px;
-  line-height: 1.04;
-  font-weight: 800;
-  letter-spacing: -0.05em;
-  color: #101828;
-}
-
-.headerSubtitle {
-  max-width: 700px;
-  margin-top: 10px;
-  color: #667085;
-  font-size: 14px;
-  line-height: 1.75;
-}
-
-.headerMeta {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  min-width: 360px;
-}
-
-.metricCard {
-  padding: 14px 16px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.84);
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.04);
-}
-
-.metricCard span {
-  color: #98a2b3;
-  font-size: 12px;
-}
-
-.metricCard strong {
-  display: block;
-  margin-top: 8px;
-  color: #111827;
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-}
-
 .controlBar {
   display: flex;
   justify-content: space-between;
   gap: 18px;
   align-items: center;
-  margin-top: 28px;
+  margin-top: 2px;
+  padding: 2px 0 0;
+}
+
+.filterGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
 }
 
 .contentTabs {
@@ -314,6 +251,7 @@
 .searchWrap {
   position: relative;
   width: min(100%, 320px);
+  flex: 0 0 320px;
 }
 
 .searchIcon {
@@ -341,14 +279,6 @@
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.08);
 }
 
-.subControlBar {
-  margin-top: 14px;
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
-}
-
 .stageFilters {
   display: flex;
   flex-wrap: wrap;
@@ -368,8 +298,9 @@
 
 .resultsMeta {
   color: #98a2b3;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .grid {
@@ -564,7 +495,7 @@
 }
 
 .cardBody {
-  padding: 14px 16px 16px;
+  padding: 12px 14px 14px;
 }
 
 .cardTags {
@@ -596,32 +527,41 @@
 }
 
 .cardTitle {
-  margin-top: 12px;
+  margin-top: 10px;
   color: #101828;
-  font-size: 22px;
-  line-height: 1.2;
+  font-size: 20px;
+  line-height: 1.22;
   font-weight: 800;
   letter-spacing: -0.04em;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  min-height: 48px;
 }
 
 .cardDesc {
-  margin-top: 10px;
-  min-height: 70px;
+  margin-top: 8px;
+  min-height: 50px;
   color: #667085;
-  font-size: 14px;
-  line-height: 1.75;
+  font-size: 13px;
+  line-height: 1.65;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .cardInfoRow {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 14px;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .cardInfo {
-  padding: 12px 14px;
-  border-radius: 18px;
+  padding: 10px 12px;
+  border-radius: 16px;
   background: rgba(248, 250, 252, 0.9);
   border: 1px solid rgba(15, 23, 42, 0.05);
 }
@@ -635,14 +575,14 @@
 
 .cardInfo strong {
   display: block;
-  margin-top: 8px;
+  margin-top: 6px;
   color: #111827;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
 .cardBottom {
-  margin-top: 14px;
+  margin-top: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -658,15 +598,15 @@
 .cardActions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .cardAction {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
-  padding: 0 14px;
+  min-height: 36px;
+  padding: 0 12px;
   border-radius: 999px;
   font-size: 13px;
   font-weight: 700;
@@ -763,20 +703,15 @@
     padding: 92px 20px 36px;
   }
 
-  .headerArea,
   .controlBar,
-  .subControlBar,
   .cardBottom {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .headerMeta {
-    min-width: 0;
-  }
-
   .searchWrap {
     width: 100%;
+    flex-basis: auto;
   }
 }
 
@@ -789,7 +724,6 @@
     display: none;
   }
 
-  .headerMeta,
   .cardInfoRow {
     grid-template-columns: 1fr;
   }

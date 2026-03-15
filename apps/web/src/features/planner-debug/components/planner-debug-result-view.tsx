@@ -35,7 +35,9 @@ export function PlannerDebugResultView(props: {
   debugResult: PlannerDebugRunResponse;
   replayHref?: string | null;
   refillHref?: string | null;
+  chrome?: 'default' | 'admin';
 }) {
+  const compareHref = props.chrome === 'admin' ? '/admin/planner-debug/compare' : '/internal/planner-debug/compare';
   const preview = useMemo(
     () => buildPlannerResultPreview(props.debugResult.input, props.debugResult.assistantPackage),
     [props.debugResult.assistantPackage, props.debugResult.input],
@@ -58,7 +60,7 @@ export function PlannerDebugResultView(props: {
 
       <div className={styles.linkRow}>
         {props.replayHref ? <Link href={props.replayHref}>打开本次回放页</Link> : null}
-        <Link href="/internal/planner-debug/compare">打开 A/B 对比页</Link>
+        <Link href={compareHref}>打开 A/B 对比页</Link>
         {props.refillHref ? <Link href={props.refillHref}>用本次结果回填调试表单</Link> : null}
       </div>
 

@@ -1,0 +1,237 @@
+.page {
+  position: relative;
+  min-height: 100vh;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  overflow: hidden;
+  display: flex;
+}
+
+.globalSidebar {
+  width: 64px;
+  background: var(--bg-panel);
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 0;
+  z-index: 20;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.sidebarGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.brandMark {
+  margin-bottom: 24px;
+}
+
+.navBtn {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.navBtn:hover {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+}
+
+.navBtnActive {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.vipBadge {
+  background: rgba(255, 200, 50, 0.1);
+  border: 1px solid rgba(255, 200, 50, 0.3);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  cursor: pointer;
+  margin-bottom: 8px;
+  transition: all 0.2s;
+}
+
+.vipBadge:hover {
+  background: rgba(255, 200, 50, 0.2);
+}
+
+.vipBadge strong {
+  font-size: 10px;
+  color: #ffd700;
+}
+
+.vipBadge span {
+  font-size: 9px;
+  color: #ffda66;
+  margin-top: 2px;
+}
+
+.utilBtn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.utilBtn:hover {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-hover);
+  display: grid;
+  place-items: center;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.topBar {
+  position: absolute;
+  top: 0;
+  left: 64px;
+  right: 0;
+  height: 60px;
+  padding: 0 32px 0 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 30;
+  background: var(--bg-panel-elevated);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.topBarLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.brandTitle {
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+}
+
+.divider {
+  color: var(--border-strong);
+  font-weight: 400;
+}
+
+.pageTitle {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.topBarRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-app);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.actionBtn:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-tertiary);
+}
+
+.pageScrollContainer {
+  position: absolute;
+  inset: 0;
+  left: 64px;
+  overflow-y: auto;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+}
+
+.noticeToast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 60;
+  max-width: 320px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(17, 24, 39, 0.94);
+  color: #f8fafc;
+  font-size: 13px;
+  line-height: 1.6;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
+}
+
+@media (max-width: 1080px) {
+  .topBar {
+    left: 0;
+  }
+
+  .globalSidebar {
+    display: none;
+  }
+
+  .pageScrollContainer {
+    left: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .topBar {
+    padding: 0 16px;
+  }
+
+  .topBarRight {
+    display: none;
+  }
+
+  .noticeToast {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    max-width: none;
+  }
+}

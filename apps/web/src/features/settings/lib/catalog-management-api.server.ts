@@ -4,17 +4,17 @@ import { requestAivApiFromServer } from '@/lib/aiv-api';
 
 import type { CatalogStyleItem, CatalogSubjectItem, SettingsAuthUser } from './catalog-management-api';
 
-export async function fetchCatalogSubjects(): Promise<CatalogSubjectItem[]> {
+export async function fetchCatalogSubjects(scope: 'all' | 'public' | 'personal' = 'all'): Promise<CatalogSubjectItem[]> {
   try {
-    return (await requestAivApiFromServer<CatalogSubjectItem[]>('/api/explore/subjects?scope=all')) ?? [];
+    return (await requestAivApiFromServer<CatalogSubjectItem[]>(`/api/explore/subjects?scope=${encodeURIComponent(scope)}`)) ?? [];
   } catch {
     return [];
   }
 }
 
-export async function fetchCatalogStyles(): Promise<CatalogStyleItem[]> {
+export async function fetchCatalogStyles(scope: 'all' | 'public' | 'personal' = 'all'): Promise<CatalogStyleItem[]> {
   try {
-    return (await requestAivApiFromServer<CatalogStyleItem[]>('/api/explore/styles?scope=all')) ?? [];
+    return (await requestAivApiFromServer<CatalogStyleItem[]>(`/api/explore/styles?scope=${encodeURIComponent(scope)}`)) ?? [];
   } catch {
     return [];
   }

@@ -1,0 +1,106 @@
+.shell {
+  padding: 92px 32px 48px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-end;
+  margin-bottom: 22px;
+}
+
+.eyebrow {
+  color: #98a2b3;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin-top: 10px;
+  font-size: 34px;
+  line-height: 1.05;
+  font-weight: 800;
+  color: #101828;
+}
+
+.subtitle {
+  margin-top: 10px;
+  color: #667085;
+  font-size: 14px;
+  line-height: 1.8;
+  max-width: 860px;
+}
+
+.groupList {
+  display: grid;
+  gap: 18px;
+}
+
+.group {
+  border-radius: 28px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.05);
+  padding: 20px;
+}
+
+.groupTitle {
+  color: #101828;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.groupHint {
+  margin-top: 8px;
+  color: #667085;
+  font-size: 13px;
+}
+
+.grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.card {
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(248, 250, 252, 0.92);
+  border: 1px solid rgba(15, 23, 42, 0.05);
+}
+
+.cardTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cardTitle {
+  color: #101828;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.cardMeta {
+  margin-top: 6px;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.9);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  color: #475467;
+  font-size: 11px;
+  font-weight: 700;
+}

@@ -1,5 +1,5 @@
-import { PlannerAgentDebugPage } from '@/features/planner-debug/components/planner-agent-debug-page';
+import { redirect } from 'next/navigation';
 
 export default function InternalPlannerDebugComparePage() {
-  return <PlannerAgentDebugPage mode="debug" />;
+  redirect('/admin/planner-debug/compare');
 }

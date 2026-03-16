@@ -2,7 +2,16 @@
 
 版本：v0.3  
 日期：2026-03-13  
-状态：新基线草案（用于后端正式开工前对齐）
+状态：专项草案（保留历史决策背景，不作为当前数据库与接口实现裁决依据）
+
+> ⚠️ 本文保留了“后端正式开工前”的历史判断。
+>
+> 其中涉及以下内容时，必须以新文档覆盖为准：
+>
+> 1. 数据库真相源：只认 `apps/api/prisma/schema.prisma`
+> 2. 当前接口形态：只认 `docs/specs/backend-data-api-spec-v0.3.md`
+> 3. 当前执行链路：只认 `docs/specs/internal-execution-api-spec-v0.3.md`
+> 4. 当前重构顺序：只认 `docs/specs/backend-implementation-checklist-v0.3.md`
 
 ## 1. 目标
 

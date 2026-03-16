@@ -165,18 +165,37 @@
 
 1. 它们现在存在于 schema，但不应继续作为当前主实施清单的中心任务。
 
-## 4. 下一阶段实施顺序
+## 4. 本轮执行约束与配套文档
+
+正式进入重构实现前，先固定以下文档角色：
+
+1. `docs/index/master-index-v0.4.md`：定义当前应信任的文档层级
+2. `docs/specs/refactor-execution-guardrails-v0.1.md`：定义执行约束、前置条件、验证矩阵与停手条件
+3. `docs/specs/backend-implementation-checklist-v0.3.md`：定义阶段顺序、任务清单与 DoD
+4. `docs/specs/frontend-workspace-contract-migration-v0.1.md`：定义前端主工作区契约迁移方式
+
+当前执行原则：
+
+1. 不新增新的 package 分层，优先在现有目录中收口边界
+2. 不先做 UI 改版，先做契约与边界收口
+3. 不继续扩展 `StudioFixture` 作为主工作区长期契约
+4. 所有 schema 变更先兼容、后回填、再收紧约束
+5. 每个 Phase 完成后至少通过类型检查、主路径 smoke 和文档同步校验
+
+## 5. 下一阶段实施顺序
 
 ## Phase 1：文档与架构真相收口
 
 1. 重写核心 specs，确保与代码一致
 2. 固定代码真相源
-3. 将系统复盘文档纳入主索引
+3. 将执行约束与契约迁移文档纳入主索引
 
 DoD：
 
 1. 文档可反映真实代码
 2. 新人不再需要同时猜测“目标态”和“实现态”
+3. `master-index-v0.4.md` 可作为唯一入口，不再需要回看 `master-index-v0.3.md`
+4. 旧 `v0.2` 文档头部具有明确归档/警告说明
 
 ## Phase 2：AI 层收口重构
 
@@ -631,19 +650,25 @@ DoD：
 
 1. route 文件明显变薄
 2. AI 能力与业务逻辑分离
+3. 新增 service / orchestrator 边界不会改变既有 API 协议
+4. 目录、Planner、Creation、Publish 的业务编排不再直接堆在 route 中
 
 ## Phase 7：前端与后端契约清理
 
 1. 对 workspace DTO 做正式冻结
 2. 清理前端残余 mock/旧状态逻辑
 3. 统一错误码与状态映射
+4. 按 `docs/specs/frontend-workspace-contract-migration-v0.1.md` 执行 Planner -> Creation -> Publish 的迁移顺序
+5. 主工作区页面逐步移除 `StudioFixture` 运行时依赖
 
 DoD：
 
 1. web 不再依赖隐式字段猜测
 2. 工作区 DTO 成为稳定契约
+3. `createRuntimeStudioFixture()` 不再进入 Planner / Creation / Publish 真实页面启动路径
+4. mock-data 仅保留在演示、预览或测试场景
 
-## 5. 当前不再建议继续投入的旧任务
+## 6. 当前不再建议继续投入的旧任务
 
 以下任务不再作为当前近期优先级：
 
@@ -657,7 +682,7 @@ DoD：
 1. 这些不是当前真实系统的主要瓶颈
 2. 当前更紧迫的是：文档真相、AI 模块化、外部调用日志
 
-## 6. 当前实施判断
+## 7. 当前实施判断
 
 今天的后端不是“等待开工”的状态，而是：
 

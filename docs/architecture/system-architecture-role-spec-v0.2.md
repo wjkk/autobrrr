@@ -2,7 +2,16 @@
 
 版本：v0.2  
 日期：2026-03-09  
-状态：现行架构基线（对齐最新 Explore/Planner）
+状态：已归档（总体方向仍可参考，路由与运行时描述已过时）
+
+> ⚠️ 本文中的路由与运行时形态不再作为当前裁决依据。
+>
+> 当前应改读：
+>
+> 1. `docs/index/master-index-v0.4.md`
+> 2. `docs/specs/backend-data-api-spec-v0.3.md`
+> 3. `docs/specs/internal-execution-api-spec-v0.3.md`
+> 4. `docs/specs/refactor-execution-guardrails-v0.1.md`
 
 关联文档：
 - `docs/web/web-route-and-page-spec-v0.2.md`

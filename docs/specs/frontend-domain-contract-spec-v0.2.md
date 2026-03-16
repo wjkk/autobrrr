@@ -2,7 +2,15 @@
 
 版本：v0.2  
 日期：2026-03-09  
-状态：现状基线 + v0.2 演进约束
+状态：历史快照（准确描述过渡态，但不作为重构终态依据）
+
+> ⚠️ 本文档描述的是“当前过渡态”而不是“下一阶段终态”。
+>
+> 当前 Planner / Creation / Publish 页面仍将真实 API 响应映射回 `StudioFixture`，因此本文对现状仍有参考价值；但若要进入重构实现，请优先阅读：
+>
+> 1. `docs/index/master-index-v0.4.md`
+> 2. `docs/specs/refactor-execution-guardrails-v0.1.md`
+> 3. `docs/specs/frontend-workspace-contract-migration-v0.1.md`
 
 ## 1. 目标
 

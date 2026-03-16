@@ -2,7 +2,15 @@
 
 版本：v0.2  
 日期：2026-03-09  
-状态：实现基线（与当前 Explore/Planner 代码对齐）
+状态：已归档（主流程基础说明保留，接口与后台路径说明已过时）
+
+> ⚠️ 本文中的 API 对接章节已明显过时，`/internal/*` 路径也已退化为兼容入口。
+>
+> 当前应改读：
+>
+> 1. `docs/index/master-index-v0.4.md`
+> 2. `docs/specs/backend-data-api-spec-v0.3.md`
+> 3. `docs/specs/frontend-workspace-contract-migration-v0.1.md`
 
 ## 1. 路由总览（已实现）
 

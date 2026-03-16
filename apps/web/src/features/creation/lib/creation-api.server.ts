@@ -3,7 +3,7 @@ import { createRuntimeStudioFixture, getMockStudioProject } from '@aiv/mock-data
 
 import { AivApiError, requestAivApiFromServer } from '@/lib/aiv-api';
 
-import type { ApiCreationWorkspace, ApiProjectDetail, CreationRuntimeApiContext } from './creation-api';
+import { mergeCreationWorkspaceFromApi, type ApiCreationWorkspace, type ApiProjectDetail, type CreationRuntimeApiContext } from './creation-api';
 
 function toProjectStatus(status: string) {
   return status.toLowerCase() as StudioFixture['project']['status'];
@@ -15,6 +15,7 @@ function buildStudioFixtureFromApi(project: ApiProjectDetail, workspace: ApiCrea
     prompt,
     contentMode: project.contentMode,
   });
+  const creationWorkspace = mergeCreationWorkspaceFromApi(baseStudio.creation, workspace);
 
   return {
     ...baseStudio,
@@ -35,55 +36,8 @@ function buildStudioFixtureFromApi(project: ApiProjectDetail, workspace: ApiCrea
       status: toProjectStatus(episode.status),
     })),
     creation: {
-      ...baseStudio.creation,
-      selectedShotId: workspace.shots[0]?.id ?? baseStudio.creation.selectedShotId,
-      shots: workspace.shots.map((shot) => ({
-        id: shot.id,
-        title: shot.title,
-        subtitleText: shot.subtitleText,
-        narrationText: shot.narrationText,
-        imagePrompt: shot.imagePrompt,
-        motionPrompt: shot.motionPrompt,
-        preferredModel: shot.latestGenerationRun?.modelEndpoint?.slug ?? 'vision-auto',
-        resolution: shot.activeVersion?.mediaKind === 'video' ? '1080P' : '720P',
-        durationMode: '4s',
-        durationSeconds: 4,
-        cropToVoice: false,
-        status: shot.status === 'success' || shot.status === 'failed' || shot.status === 'queued' ? shot.status : 'pending',
-        versions: shot.activeVersion
-          ? [{
-              id: shot.activeVersion.id,
-              label: shot.activeVersion.label,
-              modelId: shot.latestGenerationRun?.modelEndpoint?.slug ?? 'vision-auto',
-              status: shot.activeVersion.status === 'active' ? 'active' : 'archived',
-              mediaKind: shot.activeVersion.mediaKind,
-              createdAt: '刚刚',
-            }]
-          : [],
-        activeVersionId: shot.activeVersionId ?? '',
-        selectedVersionId: shot.activeVersionId,
-        pendingApplyVersionId: null,
-        materials: [],
-        activeMaterialId: null,
-        canvasTransform: {
-          ratio: '9:16',
-          zoom: 100,
-          offsetX: 0,
-          offsetY: 0,
-          flipX: false,
-        },
-        lastError: shot.status === 'failed' ? '本次生成失败，请重试。' : '',
-      })),
-      playback: {
-        ...baseStudio.creation.playback,
-        currentSecond: 0,
-        totalSecond: Math.max(4, workspace.shots.length * 4),
-        playing: false,
-      },
-      lipSync: {
-        ...baseStudio.creation.lipSync,
-        baseShotId: workspace.shots[0]?.id ?? baseStudio.creation.lipSync.baseShotId,
-      },
+      ...creationWorkspace,
+      points: baseStudio.creation.points,
     },
   };
 }

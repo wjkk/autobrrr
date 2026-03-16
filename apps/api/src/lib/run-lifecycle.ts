@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { Run } from '@prisma/client';
 
+import { downloadGeneratedAssetToLocal } from './asset-storage.js';
 import { finalizePlannerConversation } from './planner-orchestrator.js';
 import { extractPlannerText, findStringDeep } from './planner-text-extraction.js';
 import { syncPlannerRefinementProjection } from './planner-refinement-projection.js';
@@ -24,11 +25,6 @@ export function inferMediaKindFromRunType(runType: string): SupportedMediaKind |
   return null;
 }
 
-function buildGeneratedAssetUrl(runId: string, mediaKind: SupportedMediaKind) {
-  const extension = mediaKind === 'IMAGE' ? 'png' : 'mp4';
-  return `https://generated.local/${runId}.${extension}`;
-}
-
 function buildGeneratedMimeType(mediaKind: SupportedMediaKind) {
   return mediaKind === 'IMAGE' ? 'image/png' : 'video/mp4';
 }
@@ -42,14 +38,9 @@ function readObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
-function resolveProviderSourceUrl(run: Run, mediaKind: SupportedMediaKind) {
+function resolveProviderSourceUrl(run: Run) {
   const providerData = readObject(run.outputJson).providerData;
-  const providerUrl = findStringDeep(providerData, ['uri', 'url', 'downloadUrl']);
-  if (providerUrl) {
-    return providerUrl;
-  }
-
-  return buildGeneratedAssetUrl(run.id, mediaKind);
+  return findStringDeep(providerData, ['uri', 'url', 'downloadUrl']);
 }
 
 function parseVideoOptions(run: Run) {
@@ -163,39 +154,51 @@ export async function finalizeGeneratedRun(run: Run, mediaKind: SupportedMediaKi
     const input = readObject(run.inputJson);
     const prompt = typeof input.prompt === 'string' ? input.prompt : 'planner-generated-image';
     const dimensions = resolveDimensions('IMAGE', run);
+    const providerSourceUrl = resolveProviderSourceUrl(run);
+    if (!providerSourceUrl) {
+      return failRun(run.id, 'PROVIDER_OUTPUT_URL_MISSING', 'Provider output did not include a downloadable image URL.');
+    }
 
     try {
+      const storedAsset = await downloadGeneratedAssetToLocal({
+        runId: run.id,
+        mediaKind: 'IMAGE',
+        providerSourceUrl,
+      });
       const result = await prisma.$transaction(async (tx) => {
-      const project = await tx.project.findUniqueOrThrow({
-        where: { id: projectId },
-        select: { createdById: true },
-      });
+        const project = await tx.project.findUniqueOrThrow({
+          where: { id: projectId },
+          select: { createdById: true },
+        });
 
-      const asset = await tx.asset.create({
-        data: {
-          ownerUserId: project.createdById,
-          projectId,
-          episodeId,
-          mediaKind: 'IMAGE',
-          sourceKind: 'GENERATED',
-          fileName: buildGeneratedFileName(run.id, 'IMAGE'),
-          mimeType: buildGeneratedMimeType('IMAGE'),
-          width: dimensions.width,
-          height: dimensions.height,
-          durationMs: null,
-          sourceUrl: resolveProviderSourceUrl(run, 'IMAGE'),
-          metadataJson: {
-            runId: run.id,
-            prompt,
-            providerJobId: run.providerJobId,
-            providerStatus: run.providerStatus,
-            generatedAt: new Date().toISOString(),
-            options: readObject(input.options),
-            plannerResourceType: run.resourceType,
-            plannerResourceId: resourceId,
-          } as Prisma.InputJsonValue,
-        },
-      });
+        const asset = await tx.asset.create({
+          data: {
+            ownerUserId: project.createdById,
+            projectId,
+            episodeId,
+            mediaKind: 'IMAGE',
+            sourceKind: 'GENERATED',
+            fileName: storedAsset.fileName,
+            mimeType: storedAsset.mimeType ?? buildGeneratedMimeType('IMAGE'),
+            fileSizeBytes: storedAsset.fileSizeBytes,
+            storageKey: storedAsset.storageKey,
+            width: dimensions.width,
+            height: dimensions.height,
+            durationMs: null,
+            sourceUrl: storedAsset.sourceUrl,
+            metadataJson: {
+              runId: run.id,
+              prompt,
+              providerJobId: run.providerJobId,
+              providerStatus: run.providerStatus,
+              generatedAt: new Date().toISOString(),
+              providerSourceUrl,
+              options: readObject(input.options),
+              plannerResourceType: run.resourceType,
+              plannerResourceId: resourceId,
+            } as Prisma.InputJsonValue,
+          },
+        });
 
       let refinementVersionId: string | null = null;
 
@@ -298,8 +301,7 @@ export async function finalizeGeneratedRun(run: Run, mediaKind: SupportedMediaKi
         },
       });
 
-      return { assetId: asset.id };
-      return { assetId: asset.id };
+        return { assetId: asset.id };
       });
 
       return {
@@ -334,6 +336,16 @@ export async function finalizeGeneratedRun(run: Run, mediaKind: SupportedMediaKi
         ? shot.imagePrompt
         : shot.motionPrompt;
   const dimensions = resolveDimensions(mediaKind, run);
+  const providerSourceUrl = resolveProviderSourceUrl(run);
+  if (!providerSourceUrl) {
+    return failRun(run.id, 'PROVIDER_OUTPUT_URL_MISSING', `Provider output did not include a downloadable ${mediaKind.toLowerCase()} URL.`);
+  }
+
+  const storedAsset = await downloadGeneratedAssetToLocal({
+    runId: run.id,
+    mediaKind,
+    providerSourceUrl,
+  });
 
   const result = await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUniqueOrThrow({
@@ -356,18 +368,21 @@ export async function finalizeGeneratedRun(run: Run, mediaKind: SupportedMediaKi
         episodeId: shot.episodeId,
         mediaKind,
         sourceKind: 'GENERATED',
-        fileName: buildGeneratedFileName(run.id, mediaKind),
-        mimeType: buildGeneratedMimeType(mediaKind),
+        fileName: storedAsset.fileName,
+        mimeType: storedAsset.mimeType ?? buildGeneratedMimeType(mediaKind),
+        fileSizeBytes: storedAsset.fileSizeBytes,
+        storageKey: storedAsset.storageKey,
         width: dimensions.width,
         height: dimensions.height,
         durationMs: dimensions.durationMs,
-        sourceUrl: resolveProviderSourceUrl(run, mediaKind),
+        sourceUrl: storedAsset.sourceUrl,
         metadataJson: {
           runId: run.id,
           prompt,
           providerJobId: run.providerJobId,
           providerStatus: run.providerStatus,
           generatedAt: new Date().toISOString(),
+          providerSourceUrl,
           options: readObject(input.options),
         } as Prisma.InputJsonValue,
       },

@@ -22,15 +22,17 @@ interface DraftState {
     textEndpointSlugs: string[];
     imageEndpointSlugs: string[];
     videoEndpointSlugs: string[];
+    audioEndpointSlugs: string[];
   };
   defaults: {
     textEndpointSlug: string;
     imageEndpointSlug: string;
     videoEndpointSlug: string;
+    audioEndpointSlug: string;
   };
 }
 
-type ModelKind = 'text' | 'image' | 'video';
+type ModelKind = 'text' | 'image' | 'video' | 'audio';
 
 interface ModelEndpointOption {
   id: string;
@@ -53,11 +55,13 @@ function makeDraft(config: ProviderConfigItem): DraftState {
       textEndpointSlugs: config.userConfig.enabledModels.textEndpointSlugs,
       imageEndpointSlugs: config.userConfig.enabledModels.imageEndpointSlugs,
       videoEndpointSlugs: config.userConfig.enabledModels.videoEndpointSlugs,
+      audioEndpointSlugs: config.userConfig.enabledModels.audioEndpointSlugs,
     },
     defaults: {
       textEndpointSlug: config.userConfig.defaults.textEndpointSlug ?? '',
       imageEndpointSlug: config.userConfig.defaults.imageEndpointSlug ?? '',
       videoEndpointSlug: config.userConfig.defaults.videoEndpointSlug ?? '',
+      audioEndpointSlug: config.userConfig.defaults.audioEndpointSlug ?? '',
     },
   };
 }
@@ -69,7 +73,10 @@ function modelKindLabel(modelKind: ModelKind) {
   if (modelKind === 'image') {
     return '图片';
   }
-  return '视频';
+  if (modelKind === 'video') {
+    return '视频';
+  }
+  return '音频';
 }
 
 function getEnabledModelSlugs(draft: DraftState, modelKind: ModelKind) {
@@ -78,6 +85,9 @@ function getEnabledModelSlugs(draft: DraftState, modelKind: ModelKind) {
   }
   if (modelKind === 'image') {
     return draft.enabledModels.imageEndpointSlugs;
+  }
+  if (modelKind === 'audio') {
+    return draft.enabledModels.audioEndpointSlugs;
   }
   return draft.enabledModels.videoEndpointSlugs;
 }
@@ -88,6 +98,9 @@ function getDefaultModelSlug(draft: DraftState, modelKind: ModelKind) {
   }
   if (modelKind === 'image') {
     return draft.defaults.imageEndpointSlug;
+  }
+  if (modelKind === 'audio') {
+    return draft.defaults.audioEndpointSlug;
   }
   return draft.defaults.videoEndpointSlug;
 }
@@ -103,6 +116,12 @@ function setEnabledModelSlugs(draft: DraftState, modelKind: ModelKind, nextSlugs
     return {
       ...draft.enabledModels,
       imageEndpointSlugs: nextSlugs,
+    };
+  }
+  if (modelKind === 'audio') {
+    return {
+      ...draft.enabledModels,
+      audioEndpointSlugs: nextSlugs,
     };
   }
   return {
@@ -245,7 +264,15 @@ function ModelSelectionSection(props: {
         <div className={styles.modelDefaultRow}>
           <div className={styles.fieldLabel}>
             <span>默认{modelKindLabel(modelKind)}模型</span>
-            <span className={styles.fieldHint}>{modelKind === 'text' ? 'planner / 文本任务' : modelKind === 'image' ? '图片生成' : '视频生成'} 未显式指定模型时使用</span>
+            <span className={styles.fieldHint}>
+              {modelKind === 'text'
+                ? 'planner / 文本任务'
+                : modelKind === 'image'
+                  ? '图片生成'
+                  : modelKind === 'video'
+                    ? '视频生成'
+                    : '音频生成'} 未显式指定模型时使用
+            </span>
           </div>
           <select
             className={styles.input}
@@ -257,6 +284,7 @@ function ModelSelectionSection(props: {
                   textEndpointSlug: modelKind === 'text' ? event.target.value : draft.defaults.textEndpointSlug,
                   imageEndpointSlug: modelKind === 'image' ? event.target.value : draft.defaults.imageEndpointSlug,
                   videoEndpointSlug: modelKind === 'video' ? event.target.value : draft.defaults.videoEndpointSlug,
+                  audioEndpointSlug: modelKind === 'audio' ? event.target.value : draft.defaults.audioEndpointSlug,
                 },
               })
             }
@@ -289,11 +317,13 @@ async function updateProviderConfig(providerCode: string, draft: DraftState): Pr
         textEndpointSlug: draft.defaults.textEndpointSlug || null,
         imageEndpointSlug: draft.defaults.imageEndpointSlug || null,
         videoEndpointSlug: draft.defaults.videoEndpointSlug || null,
+        audioEndpointSlug: draft.defaults.audioEndpointSlug || null,
       },
       enabledModels: {
         textEndpointSlugs: draft.enabledModels.textEndpointSlugs,
         imageEndpointSlugs: draft.enabledModels.imageEndpointSlugs,
         videoEndpointSlugs: draft.enabledModels.videoEndpointSlugs,
+        audioEndpointSlugs: draft.enabledModels.audioEndpointSlugs,
       },
     }),
   });
@@ -405,11 +435,13 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
             textEndpointSlugs: updated.userConfig.enabledModels.textEndpointSlugs,
             imageEndpointSlugs: updated.userConfig.enabledModels.imageEndpointSlugs,
             videoEndpointSlugs: updated.userConfig.enabledModels.videoEndpointSlugs,
+            audioEndpointSlugs: updated.userConfig.enabledModels.audioEndpointSlugs,
           },
           defaults: {
             textEndpointSlug: updated.userConfig.defaults.textEndpointSlug ?? '',
             imageEndpointSlug: updated.userConfig.defaults.imageEndpointSlug ?? '',
             videoEndpointSlug: updated.userConfig.defaults.videoEndpointSlug ?? '',
+            audioEndpointSlug: updated.userConfig.defaults.audioEndpointSlug ?? '',
           },
         },
       };
@@ -442,7 +474,7 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
       let updated = await updateProviderConfig(providerCode, draft);
       applyConfigUpdate(updated, { replaceDraft: true });
 
-      if (providerCode === 'platou') {
+      if (CONFIGURABLE_PROVIDER_CODES.has(providerCode)) {
         setSyncingCode(providerCode);
         try {
           updated = await syncProviderModels(providerCode);
@@ -572,16 +604,20 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
   };
 
   useEffect(() => {
-    const platouConfig = configs.find((item) => item.provider.code === 'platou');
-    if (!platouConfig || !platouConfig.userConfig.configured || !platouConfig.userConfig.enabled) {
-      return;
-    }
-    if (platouConfig.userConfig.catalogSync.syncedAt || autoSyncedCodesRef.current.has('platou') || syncingCode === 'platou') {
-      return;
-    }
+    for (const config of configs) {
+      if (!CONFIGURABLE_PROVIDER_CODES.has(config.provider.code)) {
+        continue;
+      }
+      if (!config.userConfig.configured || !config.userConfig.enabled) {
+        continue;
+      }
+      if (config.userConfig.catalogSync.syncedAt || autoSyncedCodesRef.current.has(config.provider.code) || syncingCode === config.provider.code) {
+        continue;
+      }
 
-    autoSyncedCodesRef.current.add('platou');
-    void onSyncModels('platou', { quiet: true });
+      autoSyncedCodesRef.current.add(config.provider.code);
+      void onSyncModels(config.provider.code, { quiet: true });
+    }
   }, [configs, syncingCode]);
 
   const effectiveUser = currentUser;
@@ -753,8 +789,8 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                 <strong>ARK / Doubao 1.8</strong>
               </div>
               <div className={styles.statsItem}>
-                <span>图片 / 视频</span>
-                <strong>Platou</strong>
+                <span>图片 / 视频 / 音频</span>
+                <strong>Ark / Platou</strong>
               </div>
               <div className={styles.statsItem}>
                 <span>作用范围</span>
@@ -808,6 +844,7 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
             const textEndpoints = item.endpoints.filter((endpoint) => endpoint.modelKind === 'text');
             const imageEndpoints = item.endpoints.filter((endpoint) => endpoint.modelKind === 'image');
             const videoEndpoints = item.endpoints.filter((endpoint) => endpoint.modelKind === 'video');
+            const audioEndpoints = item.endpoints.filter((endpoint) => endpoint.modelKind === 'audio');
             const testKinds = [
               ...(textEndpoints.length ? (['text'] as const) : []),
               ...(imageEndpoints.length ? (['image'] as const) : []),
@@ -893,7 +930,7 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                       <p>
                         {item.userConfig.catalogSync.syncedAt
                           ? `${new Date(item.userConfig.catalogSync.syncedAt).toLocaleString('zh-CN')} · 共 ${item.userConfig.catalogSync.modelCount ?? item.endpoints.length} 个模型`
-                          : `当前已收录 ${item.endpoints.length} 个模型（文本 ${textEndpoints.length} / 图片 ${imageEndpoints.length} / 视频 ${videoEndpoints.length}）`}
+                          : `当前已收录 ${item.endpoints.length} 个模型（文本 ${textEndpoints.length} / 图片 ${imageEndpoints.length} / 视频 ${videoEndpoints.length} / 音频 ${audioEndpoints.length}）`}
                       </p>
                       {item.userConfig.catalogSync.message ? <p>{item.userConfig.catalogSync.message}</p> : null}
                     </div>
@@ -995,9 +1032,17 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                         draft={draft}
                         onDraftChange={onDraftChange}
                       />
+                    ) : item.provider.code === 'ark' ? (
+                      <ModelSelectionSection
+                        providerCode={item.provider.code}
+                        modelKind="text"
+                        endpoints={textEndpoints}
+                        draft={draft}
+                        onDraftChange={onDraftChange}
+                      />
                     ) : null}
 
-                    {imageEndpoints.length ? (
+                    {imageEndpoints.length || item.provider.code === 'ark' ? (
                       <ModelSelectionSection
                         providerCode={item.provider.code}
                         modelKind="image"
@@ -1007,11 +1052,21 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
                       />
                     ) : null}
 
-                    {videoEndpoints.length ? (
+                    {videoEndpoints.length || item.provider.code === 'ark' ? (
                       <ModelSelectionSection
                         providerCode={item.provider.code}
                         modelKind="video"
                         endpoints={videoEndpoints}
+                        draft={draft}
+                        onDraftChange={onDraftChange}
+                      />
+                    ) : null}
+
+                    {audioEndpoints.length || item.provider.code === 'ark' ? (
+                      <ModelSelectionSection
+                        providerCode={item.provider.code}
+                        modelKind="audio"
+                        endpoints={audioEndpoints}
                         draft={draft}
                         onDraftChange={onDraftChange}
                       />

@@ -28,6 +28,17 @@ export interface ApiWorkspaceShot {
   narrationText: string;
   imagePrompt: string;
   motionPrompt: string;
+  promptJson: Record<string, unknown> | null;
+  targetVideoModelFamilySlug: string | null;
+  materialBindings: Array<{
+    id: string;
+    sourceUrl: string | null;
+    fileName: string;
+    mediaKind: string;
+    sourceKind: string;
+    createdAt: string;
+  }>;
+  finalizedAt: string | null;
   status: string;
   latestGenerationRun: {
     id: string;
@@ -101,7 +112,7 @@ function inferResolution(shot: ApiWorkspaceShot): '720P' | '1080P' {
 }
 
 function inferPreferredModel(shot: ApiWorkspaceShot) {
-  return shot.latestGenerationRun?.modelEndpoint?.slug ?? 'vision-auto';
+  return shot.latestGenerationRun?.modelEndpoint?.slug ?? shot.targetVideoModelFamilySlug ?? 'vision-auto';
 }
 
 function inferPreferredModelLabel(shot: ApiWorkspaceShot) {
@@ -150,8 +161,13 @@ function mapWorkspaceShotToCreationShot(shot: ApiWorkspaceShot): Shot {
     activeVersionId: shot.activeVersionId ?? '',
     selectedVersionId: shot.activeVersionId,
     pendingApplyVersionId: null,
-    materials: [],
-    activeMaterialId: null,
+    materials: shot.materialBindings.map((asset) => ({
+      id: asset.id,
+      label: asset.fileName,
+      source: asset.sourceKind === 'generated' ? 'generated' : asset.sourceKind === 'imported' ? 'history' : 'local',
+      kind: asset.mediaKind === 'video' ? 'video' : 'image',
+    })),
+    activeMaterialId: shot.materialBindings[0]?.id ?? null,
     canvasTransform: {
       ratio: '9:16',
       zoom: 100,

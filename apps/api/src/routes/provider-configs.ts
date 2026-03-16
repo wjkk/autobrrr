@@ -1,10 +1,17 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { submitArkTextResponse } from '../lib/ark-client.js';
+import { extractArkCatalogModels, listArkModels, syncArkModelCatalog } from '../lib/ark-model-catalog.js';
 import { mergeProviderConfigOptions, parseProviderConfigOptions } from '../lib/provider-config-options.js';
 import { extractPlatouCatalogModels, syncPlatouModelCatalog } from '../lib/platou-model-catalog.js';
-import { listPlatouModels, queryPlatouVideoGeneration, submitPlatouChatCompletion, submitPlatouImageGeneration, submitPlatouVideoGeneration } from '../lib/platou-client.js';
+import { listPlatouModels } from '../lib/platou-client.js';
+import {
+  queryVideoGenerationTask,
+  submitImageGeneration,
+  submitTextGeneration,
+  submitVideoGeneration,
+  supportsProviderGatewayCapability,
+} from '../lib/provider-gateway.js';
 import { requireUser } from '../lib/auth.js';
 import { prisma } from '../lib/prisma.js';
 
@@ -21,6 +28,7 @@ const updateProviderConfigSchema = z.object({
       textEndpointSlug: z.string().trim().min(1).nullable().optional(),
       imageEndpointSlug: z.string().trim().min(1).nullable().optional(),
       videoEndpointSlug: z.string().trim().min(1).nullable().optional(),
+      audioEndpointSlug: z.string().trim().min(1).nullable().optional(),
     })
     .optional(),
   enabledModels: z
@@ -28,12 +36,13 @@ const updateProviderConfigSchema = z.object({
       textEndpointSlugs: z.array(z.string().trim().min(1)).optional().default([]),
       imageEndpointSlugs: z.array(z.string().trim().min(1)).optional().default([]),
       videoEndpointSlugs: z.array(z.string().trim().min(1)).optional().default([]),
+      audioEndpointSlugs: z.array(z.string().trim().min(1)).optional().default([]),
     })
     .optional(),
 });
 
 const testProviderConfigSchema = z.object({
-  testKind: z.enum(['text', 'image', 'video']).optional(),
+  testKind: z.enum(['text', 'image', 'video', 'audio']).optional(),
 });
 
 function mapProviderConfig(args: {
@@ -120,11 +129,13 @@ function mapProviderConfig(args: {
             textEndpointSlug: null,
             imageEndpointSlug: null,
             videoEndpointSlug: null,
+            audioEndpointSlug: null,
           },
           enabledModels: {
             textEndpointSlugs: [],
             imageEndpointSlugs: [],
             videoEndpointSlugs: [],
+            audioEndpointSlugs: [],
           },
           catalogSync: {
             status: null,
@@ -145,7 +156,7 @@ function mapProviderConfig(args: {
 
 function pickTestEndpoint(args: {
   providerCode: string;
-  requestedKind?: 'text' | 'image' | 'video';
+  requestedKind?: 'text' | 'image' | 'video' | 'audio';
   endpoints: Array<{
     id: string;
     slug: string;
@@ -159,6 +170,7 @@ function pickTestEndpoint(args: {
     textEndpointSlug: string | null;
     imageEndpointSlug: string | null;
     videoEndpointSlug: string | null;
+    audioEndpointSlug: string | null;
   };
 }) {
   const bySlug = new Map(args.endpoints.map((endpoint) => [endpoint.slug, endpoint]));
@@ -172,7 +184,9 @@ function pickTestEndpoint(args: {
         ? args.defaults.imageEndpointSlug
         : args.requestedKind === 'video'
           ? args.defaults.videoEndpointSlug
-          : args.defaults.textEndpointSlug,
+          : args.requestedKind === 'audio'
+            ? args.defaults.audioEndpointSlug
+            : args.defaults.textEndpointSlug,
   ]
     .filter((value): value is string => !!value)
     .map((slug) => bySlug.get(slug))
@@ -184,10 +198,6 @@ function pickTestEndpoint(args: {
 
   if (args.requestedKind) {
     return candidates[0] ?? null;
-  }
-
-  if (args.providerCode === 'ark') {
-    return args.endpoints.find((endpoint) => endpoint.modelKind === 'text') ?? null;
   }
 
   if (args.providerCode === 'platou') {
@@ -202,6 +212,95 @@ function pickTestEndpoint(args: {
   }
 
   return args.endpoints[0] ?? null;
+}
+
+async function runProviderConnectivityTest(args: {
+  userId: string;
+  providerCode: string;
+  baseUrl: string;
+  apiKey: string;
+  modelKind: string;
+  remoteModelKey: string;
+  modelEndpointId?: string;
+  modelProviderId?: string;
+}) {
+  const kind = args.modelKind.toLowerCase();
+  const hookMetadata = {
+    traceId: `provider-test:${args.userId}:${args.providerCode}:${kind}`,
+    userId: args.userId,
+    resourceType: 'provider_config_test',
+    modelProviderId: args.modelProviderId,
+    modelEndpointId: args.modelEndpointId,
+  };
+
+  if (kind === 'text') {
+    if (!supportsProviderGatewayCapability(args.providerCode, 'text')) {
+      throw new Error(`Provider ${args.providerCode} does not support text testing yet.`);
+    }
+    await submitTextGeneration({
+      providerCode: args.providerCode,
+      baseUrl: args.baseUrl,
+      apiKey: args.apiKey,
+      model: args.remoteModelKey,
+      prompt: args.providerCode === 'ark' ? '请只返回 ok' : 'reply with ok',
+      hookMetadata,
+    });
+    return;
+  }
+
+  if (kind === 'image') {
+    if (!supportsProviderGatewayCapability(args.providerCode, 'image')) {
+      throw new Error(`Provider ${args.providerCode} does not support image testing yet.`);
+    }
+    await submitImageGeneration({
+      providerCode: args.providerCode,
+      baseUrl: args.baseUrl,
+      apiKey: args.apiKey,
+      model: args.remoteModelKey,
+      prompt: 'A clean minimal test image.',
+      hookMetadata,
+    });
+    return;
+  }
+
+  if (kind === 'video') {
+    if (!supportsProviderGatewayCapability(args.providerCode, 'video')) {
+      throw new Error(`Provider ${args.providerCode} does not support video testing yet.`);
+    }
+    const created = await submitVideoGeneration({
+      providerCode: args.providerCode,
+      baseUrl: args.baseUrl,
+      apiKey: args.apiKey,
+      model: args.remoteModelKey,
+      prompt: 'A short simple test video of moving light.',
+      hookMetadata,
+    });
+    const taskId = typeof created.task_id === 'string'
+      ? created.task_id
+      : typeof created.id === 'string'
+        ? created.id
+        : null;
+    if (!taskId) {
+      throw new Error(`${args.providerCode} video test did not return a task id.`);
+    }
+    await queryVideoGenerationTask({
+      providerCode: args.providerCode,
+      baseUrl: args.baseUrl,
+      apiKey: args.apiKey,
+      taskId,
+      hookMetadata,
+    });
+    return;
+  }
+
+  if (kind === 'audio') {
+    if (!supportsProviderGatewayCapability(args.providerCode, 'audio')) {
+      throw new Error(`Provider ${args.providerCode} does not support audio testing yet.`);
+    }
+    throw new Error(`Provider ${args.providerCode} audio testing is not implemented yet.`);
+  }
+
+  throw new Error(`Unsupported provider test kind: ${args.modelKind}`);
 }
 
 function mapProviderEndpoints(endpoints: Array<{
@@ -397,6 +496,7 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       ...(payload.data.enabledModels?.textEndpointSlugs ?? []),
       ...(payload.data.enabledModels?.imageEndpointSlugs ?? []),
       ...(payload.data.enabledModels?.videoEndpointSlugs ?? []),
+      ...(payload.data.enabledModels?.audioEndpointSlugs ?? []),
     ];
     if (requestedSlugs.length > 0) {
       const uniqueRequestedSlugs = [...new Set(requestedSlugs)];
@@ -423,7 +523,8 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       const mismatchedDefault =
         (payload.data.defaults.textEndpointSlug && payload.data.enabledModels.textEndpointSlugs.length > 0 && !payload.data.enabledModels.textEndpointSlugs.includes(payload.data.defaults.textEndpointSlug))
         || (payload.data.defaults.imageEndpointSlug && payload.data.enabledModels.imageEndpointSlugs.length > 0 && !payload.data.enabledModels.imageEndpointSlugs.includes(payload.data.defaults.imageEndpointSlug))
-        || (payload.data.defaults.videoEndpointSlug && payload.data.enabledModels.videoEndpointSlugs.length > 0 && !payload.data.enabledModels.videoEndpointSlugs.includes(payload.data.defaults.videoEndpointSlug));
+        || (payload.data.defaults.videoEndpointSlug && payload.data.enabledModels.videoEndpointSlugs.length > 0 && !payload.data.enabledModels.videoEndpointSlugs.includes(payload.data.defaults.videoEndpointSlug))
+        || (payload.data.defaults.audioEndpointSlug && payload.data.enabledModels.audioEndpointSlugs.length > 0 && !payload.data.enabledModels.audioEndpointSlugs.includes(payload.data.defaults.audioEndpointSlug));
       if (mismatchedDefault) {
         return reply.code(400).send({
           ok: false,
@@ -443,11 +544,13 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
               textEndpointSlug: payload.data.defaults?.textEndpointSlug || null,
               imageEndpointSlug: payload.data.defaults?.imageEndpointSlug || null,
               videoEndpointSlug: payload.data.defaults?.videoEndpointSlug || null,
+              audioEndpointSlug: payload.data.defaults?.audioEndpointSlug || null,
             },
             enabledModels: {
               textEndpointSlugs: payload.data.enabledModels?.textEndpointSlugs ?? currentOptions.enabledModels.textEndpointSlugs,
               imageEndpointSlugs: payload.data.enabledModels?.imageEndpointSlugs ?? currentOptions.enabledModels.imageEndpointSlugs,
               videoEndpointSlugs: payload.data.enabledModels?.videoEndpointSlugs ?? currentOptions.enabledModels.videoEndpointSlugs,
+              audioEndpointSlugs: payload.data.enabledModels?.audioEndpointSlugs ?? currentOptions.enabledModels.audioEndpointSlugs,
             },
           })
         : undefined;
@@ -557,7 +660,7 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       });
     }
 
-    if (provider.code !== 'platou') {
+    if (provider.code !== 'platou' && provider.code !== 'ark') {
       return reply.code(400).send({
         ok: false,
         error: {
@@ -590,19 +693,41 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
     }
 
     try {
-      const payload = await listPlatouModels({
-        baseUrl,
-        apiKey: config.apiKey,
-      });
-      const discoveredModels = extractPlatouCatalogModels(payload);
-      if (discoveredModels.length === 0) {
-        throw new Error('Platou model catalog returned no supported text/image/video models.');
-      }
+      const payload = provider.code === 'ark'
+        ? await listArkModels({
+            baseUrl,
+            apiKey: config.apiKey,
+          })
+        : await listPlatouModels({
+            baseUrl,
+            apiKey: config.apiKey,
+          });
+      let syncMessage = '';
+      let totalCount = 0;
 
-      const syncResult = await syncPlatouModelCatalog({
-        providerId: provider.id,
-        discoveredModels,
-      });
+      if (provider.code === 'ark') {
+        const discoveredModels = extractArkCatalogModels(payload);
+        if (discoveredModels.length === 0) {
+          throw new Error('Volcengine Ark model catalog returned no supported text/image/video/audio models.');
+        }
+        const syncResult = await syncArkModelCatalog({
+          providerId: provider.id,
+          discoveredModels,
+        });
+        totalCount = syncResult.totalCount;
+        syncMessage = `已同步 ${syncResult.totalCount} 个模型（文本 ${syncResult.byKind.TEXT} / 图片 ${syncResult.byKind.IMAGE} / 视频 ${syncResult.byKind.VIDEO} / 音频 ${syncResult.byKind.AUDIO}）。`;
+      } else {
+        const discoveredModels = extractPlatouCatalogModels(payload);
+        if (discoveredModels.length === 0) {
+          throw new Error('Platou model catalog returned no supported text/image/video models.');
+        }
+        const syncResult = await syncPlatouModelCatalog({
+          providerId: provider.id,
+          discoveredModels,
+        });
+        totalCount = syncResult.totalCount;
+        syncMessage = `已同步 ${syncResult.totalCount} 个模型（文本 ${syncResult.byKind.TEXT} / 图片 ${syncResult.byKind.IMAGE} / 视频 ${syncResult.byKind.VIDEO}）。`;
+      }
 
       await prisma.userProviderConfig.update({
         where: {
@@ -615,9 +740,9 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
           optionsJson: mergeProviderConfigOptions(config.optionsJson, {
             catalogSync: {
               status: 'passed',
-              message: `已同步 ${syncResult.totalCount} 个模型（文本 ${syncResult.byKind.TEXT} / 图片 ${syncResult.byKind.IMAGE} / 视频 ${syncResult.byKind.VIDEO}）。`,
+              message: syncMessage,
               syncedAt: new Date().toISOString(),
-              modelCount: syncResult.totalCount,
+              modelCount: totalCount,
             },
           }),
         },
@@ -789,60 +914,16 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
     }
 
     try {
-      if (provider.code === 'ark') {
-        await submitArkTextResponse({
-          baseUrl,
-          apiKey: config.apiKey,
-          model: testEndpoint.remoteModelKey,
-          prompt: '请只返回 ok',
-        });
-      } else if (provider.code === 'platou') {
-        if (testEndpoint.modelKind === 'text') {
-          await submitPlatouChatCompletion({
-            baseUrl,
-            apiKey: config.apiKey,
-            model: testEndpoint.remoteModelKey,
-            prompt: 'reply with ok',
-          });
-        } else if (testEndpoint.modelKind === 'image') {
-          await submitPlatouImageGeneration({
-            baseUrl,
-            apiKey: config.apiKey,
-            model: testEndpoint.remoteModelKey,
-            prompt: 'A clean minimal test image.',
-          });
-        } else if (testEndpoint.modelKind === 'video') {
-          const created = await submitPlatouVideoGeneration({
-            baseUrl,
-            apiKey: config.apiKey,
-            model: testEndpoint.remoteModelKey,
-            prompt: 'A short simple test video of moving light.',
-          });
-          const taskId = typeof created.task_id === 'string'
-            ? created.task_id
-            : typeof created.id === 'string'
-              ? created.id
-              : null;
-          if (!taskId) {
-            throw new Error('Platou video test did not return a task id.');
-          }
-          await queryPlatouVideoGeneration({
-            baseUrl,
-            apiKey: config.apiKey,
-            taskId,
-          });
-        } else {
-          throw new Error('Unsupported Platou test kind.');
-        }
-      } else {
-        return reply.code(400).send({
-          ok: false,
-          error: {
-            code: 'TEST_NOT_SUPPORTED',
-            message: 'This provider does not support connectivity testing yet.',
-          },
-        });
-      }
+      await runProviderConnectivityTest({
+        userId: user.id,
+        providerCode: provider.code,
+        baseUrl,
+        apiKey: config.apiKey,
+        modelKind: testEndpoint.modelKind,
+        remoteModelKey: testEndpoint.remoteModelKey,
+        modelEndpointId: testEndpoint.id,
+        modelProviderId: provider.id,
+      });
     } catch (error) {
       await prisma.userProviderConfig.updateMany({
         where: {

@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify';
-import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { mapRun } from '../lib/api-mappers.js';
@@ -7,35 +6,48 @@ import { requireUser } from '../lib/auth.js';
 import { resolveModelSelection } from '../lib/model-registry.js';
 import { resolvePlannerAgentSelection } from '../lib/planner-agent-registry.js';
 import { buildPlannerGenerationPrompt, createPlannerUserMessage } from '../lib/planner-orchestrator.js';
+import { PLANNER_REFINEMENT_LOCKED_ERROR } from '../lib/planner-refinement-drafts.js';
+import {
+  getPlannerRerunScopeTriggerType,
+  getPlannerRerunScopeUserLabel,
+  normalizePlannerRerunScope,
+  plannerLegacyRerunScopeSchema,
+  plannerRerunScopeSchema,
+  type PlannerRerunScope,
+} from '../lib/planner-rerun-scope.js';
+import { resolvePlannerTargetVideoModel } from '../lib/planner-target-video-model.js';
 import { prisma } from '../lib/prisma.js';
+import { serializeRunInput } from '../lib/run-input.js';
 import { resolveUserDefaultModelSelection } from '../lib/user-model-defaults.js';
 
 const paramsSchema = z.object({
   projectId: z.string().min(1),
 });
 
-const payloadSchema = z.object({
+const payloadBaseSchema = z.object({
   episodeId: z.string().min(1),
-  scope: z.enum(['subject_only', 'scene_only', 'shots_only']),
-  targetId: z.string().min(1),
   prompt: z.string().trim().min(1).max(10000).optional(),
   modelFamily: z.string().trim().max(120).optional(),
   modelEndpoint: z.string().trim().max(120).optional(),
+  targetVideoModelFamilySlug: z.string().trim().max(120).optional(),
   idempotencyKey: z.string().trim().max(191).optional(),
 });
 
-function readObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
+const payloadSchema = z.union([
+  payloadBaseSchema.extend(plannerLegacyRerunScopeSchema.shape),
+  payloadBaseSchema.extend({
+    rerunScope: plannerRerunScopeSchema,
+  }),
+]);
 
 function buildScopeInstruction(args: {
-  scope: 'subject_only' | 'scene_only' | 'shots_only';
-  targetEntity: Record<string, unknown>;
+  scope: PlannerRerunScope;
+  targetEntity: Record<string, unknown> | Record<string, unknown>[];
   prompt: string | undefined;
 }) {
   const customPrompt = args.prompt?.trim();
 
-  if (args.scope === 'subject_only') {
+  if (args.scope.type === 'subject') {
     return [
       '你只允许调整一个主体设定，并同步更新与该主体强相关的分镜表述。',
       '不要重写整个故事主题，不要扩张场景数量。',
@@ -44,7 +56,7 @@ function buildScopeInstruction(args: {
     ].join('\n');
   }
 
-  if (args.scope === 'scene_only') {
+  if (args.scope.type === 'scene') {
     return [
       '你只允许调整一个场景设定，并同步更新与该场景强相关的分镜表述。',
       '不要改动主体关系和故事主线。',
@@ -53,8 +65,19 @@ function buildScopeInstruction(args: {
     ].join('\n');
   }
 
+  if (args.scope.type === 'act') {
+    return [
+      '你只允许调整一个幕内的分镜与节奏安排，输出完整的 refinement 文档，但不要改动其他幕的核心内容。',
+      '不要重写全部故事主题，不要改动无关主体和无关场景。',
+      `当前目标幕：${JSON.stringify(args.targetEntity)}`,
+      customPrompt ? `用户补充要求：${customPrompt}` : '请围绕当前幕的节奏、镜头组织和情绪推进做局部优化。',
+    ].join('\n');
+  }
+
   return [
-    '你只允许调整一个分镜脚本，输出完整的 refinement 文档，但仅局部修改该分镜及其必要的上下文描述。',
+    Array.isArray(args.targetEntity) && args.targetEntity.length > 1
+      ? '你只允许调整一组指定分镜，输出完整的 refinement 文档，但仅局部修改这些分镜及其必要的上下文描述。'
+      : '你只允许调整一个分镜脚本，输出完整的 refinement 文档，但仅局部修改该分镜及其必要的上下文描述。',
     '不要改动无关主体和场景设定。',
     `当前目标分镜：${JSON.stringify(args.targetEntity)}`,
     customPrompt ? `用户补充要求：${customPrompt}` : '请根据当前分镜内容自动优化画面描述、构图、运镜和台词。',
@@ -80,6 +103,15 @@ export async function registerPlannerPartialRerunRoutes(app: FastifyInstance) {
         },
       });
     }
+
+    const rerunScope = normalizePlannerRerunScope(
+      'rerunScope' in payload.data
+        ? payload.data.rerunScope
+        : {
+            scope: payload.data.scope,
+            targetId: payload.data.targetId,
+          },
+    );
 
     const plannerSession = await prisma.plannerSession.findFirst({
       where: {
@@ -139,6 +171,7 @@ export async function registerPlannerPartialRerunRoutes(app: FastifyInstance) {
         id: true,
         structuredDocJson: true,
         subAgentProfileId: true,
+        isConfirmed: true,
       },
     });
 
@@ -152,29 +185,43 @@ export async function registerPlannerPartialRerunRoutes(app: FastifyInstance) {
       });
     }
 
-    const [targetSubject, targetScene, targetShot, recentMessages] = await Promise.all([
-      payload.data.scope === 'subject_only'
+    if (activeRefinement.isConfirmed) {
+      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
+    }
+
+    const [targetSubject, targetScene, targetShots, targetActShots, recentMessages] = await Promise.all([
+      rerunScope.type === 'subject'
         ? prisma.plannerSubject.findFirst({
             where: {
-              id: payload.data.targetId,
+              id: rerunScope.subjectId,
               refinementVersionId: activeRefinement.id,
             },
           })
         : Promise.resolve(null),
-      payload.data.scope === 'scene_only'
+      rerunScope.type === 'scene'
         ? prisma.plannerScene.findFirst({
             where: {
-              id: payload.data.targetId,
+              id: rerunScope.sceneId,
               refinementVersionId: activeRefinement.id,
             },
           })
         : Promise.resolve(null),
-      payload.data.scope === 'shots_only'
-        ? prisma.plannerShotScript.findFirst({
+      rerunScope.type === 'shot'
+        ? prisma.plannerShotScript.findMany({
             where: {
-              id: payload.data.targetId,
+              id: { in: rerunScope.shotIds },
               refinementVersionId: activeRefinement.id,
             },
+            orderBy: { sortOrder: 'asc' },
+          })
+        : Promise.resolve([]),
+      rerunScope.type === 'act'
+        ? prisma.plannerShotScript.findMany({
+            where: {
+              actKey: rerunScope.actId,
+              refinementVersionId: activeRefinement.id,
+            },
+            orderBy: { sortOrder: 'asc' },
           })
         : Promise.resolve(null),
       prisma.plannerMessage.findMany({
@@ -186,8 +233,21 @@ export async function registerPlannerPartialRerunRoutes(app: FastifyInstance) {
       }),
     ]);
 
-    const targetEntity = targetSubject ?? targetScene ?? targetShot;
-    if (!targetEntity) {
+    const targetEntity =
+      targetSubject
+      ?? targetScene
+      ?? (rerunScope.type === 'act'
+        ? {
+            actKey: rerunScope.actId,
+            shots: targetActShots,
+          }
+        : targetShots);
+
+    if (
+      !targetEntity
+      || (Array.isArray(targetEntity) && targetEntity.length === 0)
+      || (rerunScope.type === 'act' && targetActShots && targetActShots.length === 0)
+    ) {
       return reply.code(404).send({
         ok: false,
         error: {
@@ -233,9 +293,13 @@ export async function registerPlannerPartialRerunRoutes(app: FastifyInstance) {
     }
 
     const scopeInstruction = buildScopeInstruction({
-      scope: payload.data.scope,
-      targetEntity: JSON.parse(JSON.stringify(targetEntity)) as Record<string, unknown>,
+      scope: rerunScope,
+      targetEntity: JSON.parse(JSON.stringify(targetEntity)) as Record<string, unknown> | Record<string, unknown>[],
       prompt: payload.data.prompt,
+    });
+    const targetVideoModel = await resolvePlannerTargetVideoModel({
+      requestedFamilySlug: payload.data.targetVideoModelFamilySlug,
+      settingsJson: plannerSession.project.creationConfig?.settingsJson,
     });
 
     const promptPackage = buildPlannerGenerationPrompt({
@@ -249,6 +313,8 @@ export async function registerPlannerPartialRerunRoutes(app: FastifyInstance) {
       selectedSubjectName: plannerSession.project.creationConfig?.subjectProfile?.name ?? null,
       selectedStyleName: plannerSession.project.creationConfig?.stylePreset?.name ?? null,
       selectedImageModelLabel: plannerSession.project.creationConfig?.imageModelEndpoint?.label ?? null,
+      targetVideoModelFamilySlug: targetVideoModel?.familySlug ?? null,
+      targetVideoModelSummary: targetVideoModel?.summary ?? null,
       priorMessages: recentMessages
         .reverse()
         .map((message) => {
@@ -264,7 +330,7 @@ export async function registerPlannerPartialRerunRoutes(app: FastifyInstance) {
       currentStructuredDoc: activeRefinement.structuredDocJson,
     });
 
-    const triggerType = payload.data.scope;
+    const triggerType = getPlannerRerunScopeTriggerType(rerunScope);
     const result = await prisma.$transaction(async (tx) => {
       await tx.plannerSession.update({
         where: { id: plannerSession.id },
@@ -277,7 +343,7 @@ export async function registerPlannerPartialRerunRoutes(app: FastifyInstance) {
         db: tx,
         plannerSessionId: plannerSession.id,
         userId: user.id,
-        prompt: payload.data.prompt?.trim() || `${payload.data.scope}:${payload.data.targetId}`,
+        prompt: payload.data.prompt?.trim() || getPlannerRerunScopeUserLabel(rerunScope),
       });
 
       const run = await tx.run.create({
@@ -293,12 +359,12 @@ export async function registerPlannerPartialRerunRoutes(app: FastifyInstance) {
           status: 'QUEUED',
           executorType: 'SYSTEM_WORKER',
           idempotencyKey: payload.data.idempotencyKey ?? null,
-          inputJson: {
+          inputJson: serializeRunInput({
             plannerSessionId: plannerSession.id,
             episodeId: plannerSession.episode.id,
             projectId: plannerSession.project.id,
             prompt: promptPackage.promptText,
-            rawPrompt: payload.data.prompt?.trim() || `${payload.data.scope}:${payload.data.targetId}`,
+            rawPrompt: payload.data.prompt?.trim() || getPlannerRerunScopeUserLabel(rerunScope),
             projectTitle: plannerSession.project.title,
             episodeTitle: plannerSession.episode.title,
             contentMode: plannerSession.project.contentMode,
@@ -306,9 +372,18 @@ export async function registerPlannerPartialRerunRoutes(app: FastifyInstance) {
             subtype: selection.subtype,
             targetStage: 'refinement',
             triggerType,
-            scope: payload.data.scope,
-            targetEntityId: payload.data.targetId,
-            targetEntity: targetEntity as Prisma.InputJsonValue,
+            ...(targetVideoModel ? { targetVideoModelFamilySlug: targetVideoModel.familySlug } : {}),
+            scope: triggerType,
+            targetEntityId:
+              rerunScope.type === 'subject'
+                ? rerunScope.subjectId
+                : rerunScope.type === 'scene'
+                  ? rerunScope.sceneId
+                  : rerunScope.type === 'shot'
+                    ? rerunScope.shotIds[0]
+                    : rerunScope.actId,
+            rerunScope,
+            targetEntity: JSON.parse(JSON.stringify(targetEntity)) as Record<string, unknown>,
             stepDefinitions: promptPackage.stepDefinitions,
             promptSnapshot: promptPackage.promptSnapshot,
             agentProfile: selection.agentProfile,
@@ -319,6 +394,35 @@ export async function registerPlannerPartialRerunRoutes(app: FastifyInstance) {
               selectedSubject: plannerSession.project.creationConfig?.subjectProfile,
               selectedStyle: plannerSession.project.creationConfig?.stylePreset,
               selectedImageModel: plannerSession.project.creationConfig?.imageModelEndpoint,
+              selectedVideoModel: targetVideoModel
+                ? {
+                    familySlug: targetVideoModel.familySlug,
+                    familyName: targetVideoModel.familyName,
+                    capabilitySummary: targetVideoModel.summary,
+                  }
+                : null,
+              activeOutline:
+                plannerSession.outlineConfirmedAt
+                  ? await tx.plannerOutlineVersion.findFirst({
+                      where: {
+                        plannerSessionId: plannerSession.id,
+                        isActive: true,
+                      },
+                      orderBy: { createdAt: 'desc' },
+                      select: {
+                        id: true,
+                        versionNumber: true,
+                        outlineDocJson: true,
+                      },
+                    }).then((outline) =>
+                      outline
+                        ? {
+                            id: outline.id,
+                            versionNumber: outline.versionNumber,
+                            outlineDoc: outline.outlineDocJson,
+                          }
+                        : null)
+                  : null,
               activeRefinement: {
                 id: activeRefinement.id,
                 structuredDoc: activeRefinement.structuredDocJson,
@@ -341,7 +445,7 @@ export async function registerPlannerPartialRerunRoutes(app: FastifyInstance) {
               label: resolvedModel.endpoint.label,
               remoteModelKey: resolvedModel.endpoint.remoteModelKey,
             },
-          } as Prisma.InputJsonValue,
+          }),
         },
       });
 
@@ -356,7 +460,7 @@ export async function registerPlannerPartialRerunRoutes(app: FastifyInstance) {
           status: 'updating',
         },
         triggerType,
-        scope: payload.data.scope,
+        scope: triggerType,
         run: mapRun(result),
       },
     });

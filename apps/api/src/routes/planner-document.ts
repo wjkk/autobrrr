@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { requireUser } from '../lib/auth.js';
 import { plannerStructuredDocSchema } from '../lib/planner-doc.js';
 import { findOwnedEpisode } from '../lib/ownership.js';
+import { PLANNER_REFINEMENT_LOCKED_ERROR } from '../lib/planner-refinement-drafts.js';
 import { syncPlannerRefinementDerivedData } from '../lib/planner-refinement-sync.js';
 import { prisma } from '../lib/prisma.js';
 
@@ -99,7 +100,16 @@ export async function registerPlannerDocumentRoutes(app: FastifyInstance) {
           isActive: true,
         },
         orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          structuredDocJson: true,
+          isConfirmed: true,
+        },
       });
+
+      if (activeRefinement?.isConfirmed) {
+        throw new Error('PLANNER_REFINEMENT_LOCKED');
+      }
 
       await tx.project.update({
         where: { id: episode.project.id },
@@ -118,6 +128,11 @@ export async function registerPlannerDocumentRoutes(app: FastifyInstance) {
       });
 
       if (activeRefinement) {
+        const previousProjection =
+          activeRefinement.structuredDocJson && typeof activeRefinement.structuredDocJson === 'object' && !Array.isArray(activeRefinement.structuredDocJson)
+            ? (activeRefinement.structuredDocJson as Record<string, unknown>)
+            : null;
+
         await tx.plannerRefinementVersion.update({
           where: { id: activeRefinement.id },
           data: {
@@ -131,6 +146,7 @@ export async function registerPlannerDocumentRoutes(app: FastifyInstance) {
           db: tx,
           refinementVersionId: activeRefinement.id,
           structuredDoc: payload.data.structuredDoc,
+          previousProjection,
         });
       }
 
@@ -144,7 +160,17 @@ export async function registerPlannerDocumentRoutes(app: FastifyInstance) {
           finishedAt: latestRun.finishedAt ?? new Date(),
         },
       });
+    }).catch((error: unknown) => {
+      if (error instanceof Error && error.message === 'PLANNER_REFINEMENT_LOCKED') {
+        return null;
+      }
+
+      throw error;
     });
+
+    if (!updatedRun) {
+      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
+    }
 
     return reply.send({
       ok: true,

@@ -1,6 +1,11 @@
 import { prisma } from '../src/lib/prisma.js';
 
-async function upsertFamily(slug: string, name: string, modelKind: 'IMAGE' | 'VIDEO' | 'TEXT', capabilityJson: Record<string, unknown>) {
+async function upsertFamily(
+  slug: string,
+  name: string,
+  modelKind: 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO' | 'LIPSYNC',
+  capabilityJson: Record<string, unknown>,
+) {
   return prisma.modelFamily.upsert({
     where: { slug },
     update: {
@@ -83,6 +88,31 @@ async function main() {
     provider: 'ark',
     model: 'doubao-seed-1-8-251228',
     modalities: ['text'],
+  });
+  await upsertFamily('ark-seedream-image', 'ARK Seedream Image', 'IMAGE', {
+    provider: 'ark',
+    model: 'seedream-2.0',
+    modalities: ['image'],
+    aspectRatios: ['1:1', '9:16', '16:9'],
+    integrationStatus: 'planned',
+  });
+  await upsertFamily('ark-seedance-2-video', 'ARK Seedance 2.0 Video', 'VIDEO', {
+    provider: 'ark',
+    model: 'seedance-2.0',
+    modalities: ['video', 'audio'],
+    aspectRatios: ['9:16', '16:9', '1:1'],
+    durations: [4, 6, 8],
+    supportsMultiShot: true,
+    maxShotsPerGeneration: 6,
+    promptStyle: 'narrative',
+    audioDescStyle: 'inline',
+    cameraVocab: 'chinese',
+    integrationStatus: 'planned',
+  });
+  await upsertFamily('ark-audio-generation', 'ARK Audio Generation', 'AUDIO', {
+    provider: 'ark',
+    modalities: ['audio'],
+    integrationStatus: 'planned',
   });
   const platouChat = await upsertFamily('platou-google-chat', 'Platou Google Chat', 'TEXT', {
     provider: 'platou',

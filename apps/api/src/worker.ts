@@ -1,7 +1,10 @@
+import { createExternalApiCallLogHook } from './lib/external-api-call-logs.js';
 import { prisma } from './lib/prisma.js';
 import { processNextQueuedRun } from './lib/run-worker.js';
+import { setTransportHook } from './lib/transport-hooks.js';
 
 async function main() {
+  setTransportHook(createExternalApiCallLogHook());
   const processed = await processNextQueuedRun();
 
   if (!processed) {

@@ -48,6 +48,8 @@
 
 ## Commit 1：Run Input 类型化骨架
 
+当前状态：已完成（2026-03-16）
+
 ### 目标
 
 统一 `Run.inputJson` 的读写方式，消灭字符串路径解析。
@@ -83,6 +85,8 @@
 
 ## Commit 2：Provider Gateway 收口
 
+当前状态：已完成（2026-03-16）
+
 ### 目标
 
 建立 `provider-gateway.ts`，让同步业务调用统一收口。
@@ -90,7 +94,7 @@
 ### 对应待办
 
 1. `R-02`
-2. `R-05` 的前半部分
+2. `R-05A`
 
 ### 主要文件
 
@@ -116,6 +120,8 @@
 只有当“同步业务调用统一入口”已经稳定，才继续做本地存储和 hooks。
 
 ## Commit 3：本地文件存储替代临时 URL
+
+当前状态：已完成（2026-03-16）
 
 ### 目标
 
@@ -150,6 +156,8 @@
 
 ## Commit 4：Transport Hooks + ARK 多能力预留
 
+当前状态：已完成（2026-03-16；hook 已接入 `external_api_call_logs`）
+
 ### 目标
 
 在 transport 层插 hooks，并把 ARK 从“text-only 假设”里解放出来。
@@ -157,7 +165,8 @@
 ### 对应待办
 
 1. `R-04`
-2. `R-05`
+2. `R-05A`
+3. `R-05B / R-05C / R-05D`
 
 ### 主要文件
 
@@ -174,16 +183,27 @@
 2. no-op hook 不影响主链路
 3. ARK 在架构上不再被写死为 text-only
 
+状态说明：
+
+1. `R-04` 已完成：transport hook 已在 server / worker 双端安装
+2. `R-10` 已完成：`external_api_call_logs` 已落地并通过 focused smoke
+3. `R-05A`、`R-05B` 已完成
+4. `R-05C / R-05D` 不应再与本提交绑定成一个“大进行中”状态
+3. 这三个子项应按 ARK 的真实 endpoint readiness 单独推进
+
 ### 最小验证
 
 1. 文本、图片、视频调用都能经过 hook
 2. model registry 返回 ARK 多能力预留结构
+3. provider test 不再依赖 `ark = text-only` 假设
 
 ### 切换条件
 
 这一步结束后，Phase 2 的通用 AI 边界基本收住，才进入 Planner 基础修复。
 
 ## Commit 5：Planner 基础修复
+
+当前状态：已完成（`R-06`、`R-07`、`R-08`、`R-09` 已完成）
 
 ### 目标
 
@@ -216,12 +236,23 @@
 1. outline -> refinement 可正常完成
 2. partial rerun 新 scope 可用
 3. 标题修改后 asset 不丢失
+4. 前端整份 structured doc 回写不会静默丢失 `entityKey`
+
+当前收口备注：
+
+1. `sourceOutlineVersionId` 已进入 schema、run input、workspace
+2. typed `rerunScope` 已贯穿前后端主路径
+3. 标题改写后实体 ID 与 asset 绑定稳定性已通过 focused API smoke
+4. 真实 API smoke 已补到资产回写后二次 document save、shot entity patch、refinement activation 后 workspace / run output 同步
+5. `smoke-planner-api-refactor.ts` 现已补齐 planner media generation 路径：覆盖 shot `generate-image` run 创建、生成结果 finalize、`PlannerShotScript.generatedAssetIdsJson` 更新、以及 structured doc / workspace 投影同步
 
 ### 切换条件
 
-只有当 Planner 基础结构稳定后，才值得做模型感知 prompt。
+当前该切换条件已满足，Planner 基础结构与投影链路可视为稳定，之后继续推进模型感知 prompt 与体验增强。
 
 ## Commit 6：模型能力服务 + Prompt Generator
+
+当前状态：已完成（`R-11`、`R-12` 已完成）
 
 ### 目标
 
@@ -256,6 +287,8 @@
 
 ## Commit 7：Planner 模型感知注入 + `shot-prompts` 预览接口
 
+当前状态：已完成（`R-13`、`R-14` 已完成；前端已可切模型查看 prompt 预览且不污染当前版本）
+
 ### 目标
 
 让 refinement 真正带目标模型语境，并把 prompt 预览开放给前端。
@@ -270,24 +303,27 @@
 1. `apps/api/src/lib/planner-orchestrator.ts`
 2. `apps/api/src/routes/planner-commands.ts`
 3. `apps/api/src/routes/planner-shot-prompts.ts`
-4. `apps/web/src/features/planner/lib/planner-api.ts`
-5. `apps/web/src/app/api/...`
+4. `apps/api/src/lib/planner-target-video-model.ts`
+5. `apps/web/src/features/planner/lib/planner-api.ts`
+6. `apps/web/src/features/planner/components/planner-shot-prompt-preview.tsx`
+7. `apps/web/src/app/api/...`
 
 ### 完成后必须成立
 
-1. refinement shot 原料带 `targetModelFamilySlug`
-2. agent 能感知目标模型能力摘要
-3. 前端可调用 `shot-prompts` 预览接口
+1. refinement prompt 已正式注入目标视频模型能力摘要
+2. `targetVideoModelFamilySlug` 已写入 run input，并沿 structured doc / `PlannerShotScript` / workspace 贯通
+3. 前端可在 Planner 内切换真实视频模型并查看 `shot-prompts` 预览
 4. 切模型只重算预览，不创建新版本
 
 ### 最小验证
 
 1. 同一版本切不同 `modelSlug` 可实时返回不同 prompt
 2. workspace 中能看到模型语境字段
+3. `generate-doc / partial-rerun` 创建的 queued run 已写入 `targetVideoModelFamilySlug` 与能力摘要 prompt
 
 ### 切换条件
 
-只有当 Planner 已经能稳定产出“模型感知原料 + prompt 预览”，才进入版本副本和 finalize。
+只有当 Planner 已经能稳定产出“模型感知原料 + prompt 预览”，才进入版本副本和 finalize。当前已满足该条件，后续阻塞点转为 `R-15` 草稿副本机制和 `R-16` finalize。
 
 ## Commit 8：已确认版本创建草稿副本
 
@@ -315,10 +351,11 @@
 
 1. 在已确认版本点击继续修改，会切到新副本
 2. 源版本内容保持不变
+3. 草稿副本中的 `subject / scene / shot` 拥有新的实体 ID 与 `entityKey`，首次保存不会与源版本发生主键冲突
 
 ### 切换条件
 
-只有当版本副本机制成立后，`finalize` 才不会把 Planner 版本链做坏。
+只有当版本副本机制成立后，`finalize` 才不会把 Planner 版本链做坏。当前该条件已满足，下一步进入 `R-16`。
 
 ## Commit 9：`planner/finalize` + Creation 交接
 
@@ -347,10 +384,11 @@
 
 1. 点击“确认策划，进入创作”后可进入 Creation
 2. Creation 初始数据来自 finalize 结果
+3. 重复 finalize 不会生成重复 Shot，且会复用既有 shot 行
 
 ### 切换条件
 
-到这里，核心业务闭环才算真的成立。之后才做体验增强。
+到这里，核心业务闭环才算真的成立。当前该条件已满足，Creation 首屏 presenter 与运行时刷新也已统一复用 finalize workspace 映射；`R-19` 也已完成当前收口：Planner 页已补齐 creation CTA 的真实浏览器回归，同模型可直接进入创作，切模型会重新 finalize 后进入创作，且 `planner-page.tsx` 已收敛到约 658 行。
 
 ## Commit 10：SSE + shot 级重跑 + Planner 页整合
 
@@ -385,7 +423,7 @@
 
 ### 切换条件
 
-到这一步，Planner Phase 5 基本完成。
+到这一步，Planner Phase 5 基本完成。当前 `R-17`、`R-18`、`R-19` 已完成当前阶段实现：`planner-page.tsx` 已拆出 header、episode rail、thread panel、document panel、result header、dialogs，并新增 `use-planner-runtime-workspace.ts`、`use-planner-run-submission.ts`、`use-planner-asset-drafts.ts`、`use-planner-asset-actions.ts`、`use-planner-document-persistence.ts`、`use-planner-composer-actions.ts`、`use-planner-shot-editor.ts`、`use-planner-shot-actions.ts`、`use-planner-shot-prompt-preview.ts`、`use-planner-creation-flow.ts`、`use-planner-display-state.ts`、`use-planner-dialog-display-state.ts`，以及 `planner-page-helpers.ts`、`planner-page-dialogs.tsx` 等收口文件；`planner-page.tsx` 已收敛到约 658 行，Planner 页“进入创作”已通过真实浏览器回归。
 
 ## Commit 11：API 分层重构
 

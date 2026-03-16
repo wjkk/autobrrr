@@ -46,6 +46,7 @@ loadLocalEnvFile();
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   API_PORT: z.coerce.number().int().positive().default(8787),
+  API_PUBLIC_BASE_URL: z.string().trim().url().optional(),
   SESSION_COOKIE_NAME: z.string().min(1).default('aiv_session'),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(14),
 });
@@ -53,6 +54,7 @@ const envSchema = z.object({
 export const env = envSchema.parse({
   DATABASE_URL: process.env.DATABASE_URL,
   API_PORT: process.env.API_PORT,
+  API_PUBLIC_BASE_URL: process.env.API_PUBLIC_BASE_URL,
   SESSION_COOKIE_NAME: process.env.SESSION_COOKIE_NAME,
   SESSION_TTL_DAYS: process.env.SESSION_TTL_DAYS,
 });

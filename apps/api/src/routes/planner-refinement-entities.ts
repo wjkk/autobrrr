@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { requireUser } from '../lib/auth.js';
+import { PLANNER_REFINEMENT_LOCKED_ERROR } from '../lib/planner-refinement-drafts.js';
 import { syncPlannerRefinementProjection } from '../lib/planner-refinement-projection.js';
 import { prisma } from '../lib/prisma.js';
 
@@ -71,6 +72,7 @@ async function findOwnedActiveRefinement(projectId: string, episodeId: string, u
     },
     select: {
       id: true,
+      isConfirmed: true,
       plannerSession: {
         select: {
           projectId: true,
@@ -110,6 +112,10 @@ export async function registerPlannerRefinementEntityRoutes(app: FastifyInstance
           message: 'No active refinement version found.',
         },
       });
+    }
+
+    if (activeRefinement.isConfirmed) {
+      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
     }
 
     const subject = await prisma.plannerSubject.findFirst({
@@ -194,6 +200,10 @@ export async function registerPlannerRefinementEntityRoutes(app: FastifyInstance
       });
     }
 
+    if (activeRefinement.isConfirmed) {
+      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
+    }
+
     const scene = await prisma.plannerScene.findFirst({
       where: {
         id: params.data.sceneId,
@@ -272,6 +282,10 @@ export async function registerPlannerRefinementEntityRoutes(app: FastifyInstance
           message: 'No active refinement version found.',
         },
       });
+    }
+
+    if (activeRefinement.isConfirmed) {
+      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
     }
 
     const subject = await prisma.plannerSubject.findFirst({
@@ -370,6 +384,10 @@ export async function registerPlannerRefinementEntityRoutes(app: FastifyInstance
       });
     }
 
+    if (activeRefinement.isConfirmed) {
+      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
+    }
+
     const scene = await prisma.plannerScene.findFirst({
       where: {
         id: params.data.sceneId,
@@ -466,6 +484,10 @@ export async function registerPlannerRefinementEntityRoutes(app: FastifyInstance
       });
     }
 
+    if (activeRefinement.isConfirmed) {
+      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
+    }
+
     const shot = await prisma.plannerShotScript.findFirst({
       where: {
         id: params.data.shotScriptId,
@@ -546,6 +568,10 @@ export async function registerPlannerRefinementEntityRoutes(app: FastifyInstance
           message: 'No active refinement version found.',
         },
       });
+    }
+
+    if (activeRefinement.isConfirmed) {
+      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
     }
 
     const shot = await prisma.plannerShotScript.findFirst({

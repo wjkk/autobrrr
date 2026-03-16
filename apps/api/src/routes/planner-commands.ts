@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify';
-import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { mapRun } from '../lib/api-mappers.js';
@@ -8,7 +7,9 @@ import { resolveModelSelection } from '../lib/model-registry.js';
 import { resolvePlannerAgentSelection } from '../lib/planner-agent-registry.js';
 import { buildPlannerGenerationPrompt, createPlannerUserMessage } from '../lib/planner-orchestrator.js';
 import { findOwnedEpisode } from '../lib/ownership.js';
+import { resolvePlannerTargetVideoModel } from '../lib/planner-target-video-model.js';
 import { prisma } from '../lib/prisma.js';
+import { serializeRunInput } from '../lib/run-input.js';
 import { resolveUserDefaultModelSelection } from '../lib/user-model-defaults.js';
 
 const paramsSchema = z.object({
@@ -21,6 +22,7 @@ const payloadSchema = z.object({
   subtype: z.string().trim().min(1).max(64).optional(),
   modelFamily: z.string().trim().max(120).optional(),
   modelEndpoint: z.string().trim().max(120).optional(),
+  targetVideoModelFamilySlug: z.string().trim().max(120).optional(),
   idempotencyKey: z.string().trim().max(191).optional(),
 });
 
@@ -192,6 +194,10 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
     const triggerType = targetStage === 'outline'
       ? (activeOutline ? 'update_outline' : 'generate_outline')
       : (activeRefinement ? 'follow_up' : 'generate_doc');
+    const targetVideoModel = await resolvePlannerTargetVideoModel({
+      requestedFamilySlug: payload.data.targetVideoModelFamilySlug,
+      settingsJson: creationConfig?.settingsJson,
+    });
 
     const promptPackage = buildPlannerGenerationPrompt({
       selection,
@@ -204,6 +210,8 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
       selectedSubjectName: creationConfig?.subjectProfile?.name,
       selectedStyleName: creationConfig?.stylePreset?.name,
       selectedImageModelLabel: creationConfig?.imageModelEndpoint?.label,
+      targetVideoModelFamilySlug: targetVideoModel?.familySlug ?? null,
+      targetVideoModelSummary: targetVideoModel?.summary ?? null,
       priorMessages: recentMessages
         .reverse()
         .map((message) => {
@@ -248,7 +256,7 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
           status: 'QUEUED',
           executorType: 'SYSTEM_WORKER',
           idempotencyKey: payload.data.idempotencyKey ?? null,
-          inputJson: {
+          inputJson: serializeRunInput({
             plannerSessionId: plannerSession.id,
             episodeId: episode.id,
             projectId: episode.project.id,
@@ -261,6 +269,8 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
             subtype: selection.subtype,
             targetStage,
             triggerType,
+            ...(activeOutline ? { sourceOutlineVersionId: activeOutline.id } : {}),
+            ...(targetVideoModel ? { targetVideoModelFamilySlug: targetVideoModel.familySlug } : {}),
             stepDefinitions: promptPackage.stepDefinitions,
             promptSnapshot: promptPackage.promptSnapshot,
             agentProfile: selection.agentProfile,
@@ -273,6 +283,13 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
               selectedSubject: creationConfig?.subjectProfile,
               selectedStyle: creationConfig?.stylePreset,
               selectedImageModel: creationConfig?.imageModelEndpoint,
+              selectedVideoModel: targetVideoModel
+                ? {
+                    familySlug: targetVideoModel.familySlug,
+                    familyName: targetVideoModel.familyName,
+                    capabilitySummary: targetVideoModel.summary,
+                  }
+                : null,
               priorMessages: recentMessages.map((message) => ({
                 role: message.role.toLowerCase(),
                 messageType: message.messageType.toLowerCase(),
@@ -311,7 +328,7 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
               label: resolvedModel.endpoint.label,
               remoteModelKey: resolvedModel.endpoint.remoteModelKey,
             },
-          } as Prisma.InputJsonValue,
+          }),
         },
       });
 

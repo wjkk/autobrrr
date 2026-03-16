@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 import { resolveModelSelection } from './model-registry.js';
-import { submitPlatouImageGeneration } from './platou-client.js';
 import { findStringDeep } from './planner-text-extraction.js';
+import { submitImageGeneration } from './provider-gateway.js';
 import { resolveProviderRuntimeConfigForUser } from './provider-runtime-config.js';
 import { resolveUserDefaultModelSelection } from './user-model-defaults.js';
 
@@ -66,16 +66,21 @@ export async function generateCatalogSubjectImageForUser(args: {
   const prompt = buildCatalogSubjectPrompt(args.input);
   let providerOutput: Record<string, unknown>;
 
-  if (runtimeConfig.providerCode === 'platou') {
-    providerOutput = await submitPlatouImageGeneration({
-      model: resolvedModel.endpoint.remoteModelKey,
-      prompt,
-      baseUrl: runtimeConfig.baseUrl,
-      apiKey: runtimeConfig.apiKey,
-    });
-  } else {
-    throw new Error('当前 provider 暂不支持目录主体图直出，请切换到支持图片生成的 provider。');
-  }
+  providerOutput = await submitImageGeneration({
+    providerCode: runtimeConfig.providerCode ?? resolvedModel.provider.code,
+    model: resolvedModel.endpoint.remoteModelKey,
+    prompt,
+    baseUrl: runtimeConfig.baseUrl,
+    apiKey: runtimeConfig.apiKey,
+    hookMetadata: {
+      traceId: `catalog-subject:${args.userId}:${resolvedModel.endpoint.slug}`,
+      userId: args.userId,
+      modelFamilyId: resolvedModel.family.id,
+      modelProviderId: resolvedModel.provider.id,
+      modelEndpointId: resolvedModel.endpoint.id,
+      resourceType: 'catalog_subject',
+    },
+  });
 
   const sourceUrl = findStringDeep(providerOutput, ['url', 'uri', 'downloadUrl', 'imageUrl']);
   if (!sourceUrl) {

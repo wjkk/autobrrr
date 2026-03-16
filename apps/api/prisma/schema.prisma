@@ -200,6 +200,7 @@ model User {
   plannerRefinementVersions PlannerRefinementVersion[]
   plannerDebugRuns PlannerDebugRun[]
   plannerSubAgentProfileReleases PlannerSubAgentProfileRelease[]
+  externalApiCallLogs ExternalApiCallLog[]
 
   @@map("users")
 }
@@ -242,6 +243,7 @@ model Project {
   recipes          GenerationRecipe[]
   recipeExecutions RecipeExecution[]
   creationConfig   ProjectCreationConfig?
+  externalApiCallLogs ExternalApiCallLog[]
 
   @@index([status, updatedAt])
   @@index([createdById, updatedAt])
@@ -266,6 +268,7 @@ model Episode {
   shotVersions           ShotVersion[]
   assets                 Asset[]
   runs                   Run[]
+  externalApiCallLogs    ExternalApiCallLog[]
 
   @@unique([projectId, episodeNo])
   @@index([projectId, status, updatedAt])
@@ -322,6 +325,7 @@ model PlannerOutlineVersion {
   sourceRun         Run?                 @relation(fields: [sourceRunId], references: [id], onDelete: SetNull)
   createdBy         User?                @relation(fields: [createdById], references: [id], onDelete: SetNull)
   messages          PlannerMessage[]
+  refinementVersions PlannerRefinementVersion[] @relation("OutlineToRefinements")
 
   @@unique([plannerSessionId, versionNumber])
   @@index([plannerSessionId, isActive, createdAt])
@@ -436,6 +440,8 @@ model PlannerRefinementVersion {
   agentProfileId    String?                 @map("agent_profile_id")
   subAgentProfileId String?                 @map("sub_agent_profile_id")
   sourceRunId       String?                 @map("source_run_id")
+  sourceOutlineVersionId String?            @map("source_outline_version_id")
+  sourceRefinementVersionId String?         @map("source_refinement_version_id")
   versionNumber     Int                     @map("version_number")
   triggerType       String                  @map("trigger_type") @db.VarChar(64)
   status            PlannerRefinementStatus @default(DRAFT)
@@ -448,6 +454,8 @@ model PlannerRefinementVersion {
   modelSnapshotJson Json?                   @map("model_snapshot_json")
   operationsJson    Json?                   @map("operations_json")
   isActive          Boolean                 @map("is_active") @default(false)
+  isConfirmed       Boolean                 @map("is_confirmed") @default(false)
+  confirmedAt       DateTime?               @map("confirmed_at")
   errorCode         String?                 @map("error_code") @db.VarChar(120)
   errorMessage      String?                 @map("error_message") @db.Text
   createdById       String?                 @map("created_by_id")
@@ -457,6 +465,9 @@ model PlannerRefinementVersion {
   agentProfile      PlannerAgentProfile?    @relation(fields: [agentProfileId], references: [id], onDelete: SetNull)
   subAgentProfile   PlannerSubAgentProfile? @relation(fields: [subAgentProfileId], references: [id], onDelete: SetNull)
   sourceRun         Run?                    @relation(fields: [sourceRunId], references: [id], onDelete: SetNull)
+  sourceOutlineVersion PlannerOutlineVersion? @relation("OutlineToRefinements", fields: [sourceOutlineVersionId], references: [id], onDelete: SetNull)
+  sourceRefinementVersion PlannerRefinementVersion? @relation("RefinementToDrafts", fields: [sourceRefinementVersionId], references: [id], onDelete: SetNull)
+  draftRefinementVersions PlannerRefinementVersion[] @relation("RefinementToDrafts")
   createdBy         User?                   @relation(fields: [createdById], references: [id], onDelete: SetNull)
   messages          PlannerMessage[]
   stepAnalysis      PlannerStepAnalysis[]
@@ -467,6 +478,8 @@ model PlannerRefinementVersion {
   @@unique([plannerSessionId, versionNumber])
   @@index([plannerSessionId, isActive, createdAt])
   @@index([sourceRunId])
+  @@index([sourceOutlineVersionId])
+  @@index([sourceRefinementVersionId])
   @@map("planner_refinement_versions")
 }
 
@@ -522,6 +535,7 @@ model PlannerShotScript {
   shotNo              String                   @map("shot_no") @db.VarChar(120)
   title               String                   @db.VarChar(255)
   durationSeconds     Int?                     @map("duration_seconds")
+  targetModelFamilySlug String?                @map("target_model_family_slug") @db.VarChar(120)
   visualDescription   String                   @map("visual_description") @db.Text
   composition         String                   @db.Text
   cameraMotion        String                   @map("camera_motion") @db.Text
@@ -593,6 +607,12 @@ model Shot {
   narrationText   String      @map("narration_text") @db.Text
   imagePrompt     String      @map("image_prompt") @db.Text
   motionPrompt    String      @map("motion_prompt") @db.Text
+  promptJson      Json?       @map("prompt_json")
+  targetVideoModelFamilySlug String? @map("target_video_model_family_slug") @db.VarChar(120)
+  materialBindingsJson Json?  @map("material_bindings_json")
+  plannerRefinementVersionId String? @map("planner_refinement_version_id")
+  plannerShotScriptId String? @map("planner_shot_script_id")
+  finalizedAt     DateTime?   @map("finalized_at")
   status          ShotStatus  @default(PENDING)
   activeVersionId String?     @map("active_version_id")
   createdAt       DateTime    @default(now()) @map("created_at")
@@ -603,6 +623,8 @@ model Shot {
   activeVersion   ShotVersion?  @relation("ShotActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
 
   @@unique([episodeId, sequenceNo])
+  @@index([episodeId, plannerRefinementVersionId])
+  @@index([episodeId, plannerShotScriptId])
   @@map("shots")
 }
 
@@ -883,10 +905,48 @@ model Run {
   modelEndpoint    ModelEndpoint? @relation(fields: [modelEndpointId], references: [id], onDelete: SetNull)
   plannerOutlineVersions PlannerOutlineVersion[]
   plannerRefinementVersions PlannerRefinementVersion[]
+  externalApiCallLogs ExternalApiCallLog[]
 
   @@index([projectId, runType, status, createdAt])
   @@index([episodeId, status, createdAt])
   @@index([modelFamilyId, modelEndpointId, createdAt])
   @@index([status, nextPollAt])
   @@map("runs")
+}
+
+model ExternalApiCallLog {
+  id                String    @id @default(cuid())
+  traceId           String?   @map("trace_id") @db.VarChar(191)
+  runId             String?   @map("run_id")
+  userId            String?   @map("user_id")
+  projectId         String?   @map("project_id")
+  episodeId         String?   @map("episode_id")
+  resourceType      String?   @map("resource_type") @db.VarChar(64)
+  resourceId        String?   @map("resource_id") @db.VarChar(191)
+  modelFamilyId     String?   @map("model_family_id")
+  modelProviderId   String?   @map("model_provider_id")
+  modelEndpointId   String?   @map("model_endpoint_id")
+  providerCode      String    @map("provider_code") @db.VarChar(120)
+  capability        String    @db.VarChar(32)
+  operation         String    @db.VarChar(191)
+  requestUrl        String    @map("request_url") @db.VarChar(2048)
+  requestMethod     String    @map("request_method") @db.VarChar(16)
+  requestJson       Json?     @map("request_json")
+  responseJson      Json?     @map("response_json")
+  errorMessage      String?   @map("error_message") @db.Text
+  providerRequestId String?   @map("provider_request_id") @db.VarChar(191)
+  latencyMs         Int       @map("latency_ms")
+  metadataJson      Json?     @map("metadata_json")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  run               Run?      @relation(fields: [runId], references: [id], onDelete: SetNull)
+  user              User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  episode           Episode?  @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+
+  @@index([traceId, createdAt])
+  @@index([runId, createdAt])
+  @@index([userId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([providerCode, capability, createdAt])
+  @@map("external_api_call_logs")
 }

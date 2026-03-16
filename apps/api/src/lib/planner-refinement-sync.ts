@@ -6,12 +6,14 @@ type PlannerDbClient = Prisma.TransactionClient;
 
 interface PreviousPlannerAssetProjection {
   subjects?: Array<{
+    entityKey?: string;
     title?: string;
     prompt?: string;
     referenceAssetIds?: string[];
     generatedAssetIds?: string[];
   }>;
   scenes?: Array<{
+    entityKey?: string;
     title?: string;
     prompt?: string;
     referenceAssetIds?: string[];
@@ -19,8 +21,10 @@ interface PreviousPlannerAssetProjection {
   }>;
   acts?: Array<{
     shots?: Array<{
+      entityKey?: string;
       title?: string;
       visual?: string;
+      targetModelFamilySlug?: string;
       referenceAssetIds?: string[];
       generatedAssetIds?: string[];
     }>;
@@ -29,6 +33,10 @@ interface PreviousPlannerAssetProjection {
 
 function normalizeKey(value: string) {
   return value.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function readProjectionKey(value: string | undefined) {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
 function toAssetIdList(value: string[] | undefined) {
@@ -62,7 +70,7 @@ export async function syncPlannerRefinementDerivedData(args: {
 
   const previousSubjectAssets = new Map(
     (previousProjection?.subjects ?? []).map((subject) => [
-      normalizeKey(subject.title ?? subject.prompt ?? ''),
+      readProjectionKey(subject.entityKey) ?? normalizeKey(subject.title ?? subject.prompt ?? ''),
       {
         referenceAssetIds: toAssetIdList(subject.referenceAssetIds),
         generatedAssetIds: toAssetIdList(subject.generatedAssetIds),
@@ -71,7 +79,7 @@ export async function syncPlannerRefinementDerivedData(args: {
   );
   const previousSceneAssets = new Map(
     (previousProjection?.scenes ?? []).map((scene) => [
-      normalizeKey(scene.title ?? scene.prompt ?? ''),
+      readProjectionKey(scene.entityKey) ?? normalizeKey(scene.title ?? scene.prompt ?? ''),
       {
         referenceAssetIds: toAssetIdList(scene.referenceAssetIds),
         generatedAssetIds: toAssetIdList(scene.generatedAssetIds),
@@ -80,8 +88,11 @@ export async function syncPlannerRefinementDerivedData(args: {
   );
   const previousShotAssets = new Map(
     (previousProjection?.acts ?? []).flatMap((act) => (act.shots ?? []).map((shot) => [
-      normalizeKey(`${shot.title ?? ''}::${shot.visual ?? ''}`),
+      readProjectionKey(shot.entityKey) ?? normalizeKey(`${shot.title ?? ''}::${shot.visual ?? ''}`),
       {
+        targetModelFamilySlug: typeof shot.targetModelFamilySlug === 'string' && shot.targetModelFamilySlug.trim().length > 0
+          ? shot.targetModelFamilySlug.trim()
+          : null,
         referenceAssetIds: toAssetIdList(shot.referenceAssetIds),
         generatedAssetIds: toAssetIdList(shot.generatedAssetIds),
       },
@@ -99,9 +110,11 @@ export async function syncPlannerRefinementDerivedData(args: {
   });
 
   const subjects = await Promise.all(
-    structuredDoc.subjects.map((subject, index) =>
-      db.plannerSubject.create({
+    structuredDoc.subjects.map((subject, index) => {
+      const assetKey = readProjectionKey(subject.entityKey) ?? normalizeKey(subject.title || subject.prompt);
+      return db.plannerSubject.create({
         data: {
+          ...(readProjectionKey(subject.entityKey) ? { id: readProjectionKey(subject.entityKey)! } : {}),
           refinementVersionId,
           name: subject.title,
           role: index === 0 ? '主角' : '配角',
@@ -110,24 +123,26 @@ export async function syncPlannerRefinementDerivedData(args: {
           referenceAssetIdsJson: (
             subject.referenceAssetIds?.length
               ? subject.referenceAssetIds
-              : previousSubjectAssets.get(normalizeKey(subject.title || subject.prompt))?.referenceAssetIds ?? []
+              : previousSubjectAssets.get(assetKey)?.referenceAssetIds ?? []
           ) as Prisma.InputJsonValue,
           generatedAssetIdsJson: (
             subject.generatedAssetIds?.length
               ? subject.generatedAssetIds
-              : previousSubjectAssets.get(normalizeKey(subject.title || subject.prompt))?.generatedAssetIds ?? []
+              : previousSubjectAssets.get(assetKey)?.generatedAssetIds ?? []
           ) as Prisma.InputJsonValue,
           sortOrder: index + 1,
           editable: true,
         },
-      }),
-    ),
+      });
+    }),
   );
 
   const scenes = await Promise.all(
-    structuredDoc.scenes.map((scene, index) =>
-      db.plannerScene.create({
+    structuredDoc.scenes.map((scene, index) => {
+      const assetKey = readProjectionKey(scene.entityKey) ?? normalizeKey(scene.title || scene.prompt);
+      return db.plannerScene.create({
         data: {
+          ...(readProjectionKey(scene.entityKey) ? { id: readProjectionKey(scene.entityKey)! } : {}),
           refinementVersionId,
           name: scene.title,
           time: inferSceneTime(structuredDoc, scene.title),
@@ -137,32 +152,35 @@ export async function syncPlannerRefinementDerivedData(args: {
           referenceAssetIdsJson: (
             scene.referenceAssetIds?.length
               ? scene.referenceAssetIds
-              : previousSceneAssets.get(normalizeKey(scene.title || scene.prompt))?.referenceAssetIds ?? []
+              : previousSceneAssets.get(assetKey)?.referenceAssetIds ?? []
           ) as Prisma.InputJsonValue,
           generatedAssetIdsJson: (
             scene.generatedAssetIds?.length
               ? scene.generatedAssetIds
-              : previousSceneAssets.get(normalizeKey(scene.title || scene.prompt))?.generatedAssetIds ?? []
+              : previousSceneAssets.get(assetKey)?.generatedAssetIds ?? []
           ) as Prisma.InputJsonValue,
           sortOrder: index + 1,
           editable: true,
         },
-      }),
-    ),
+      });
+    }),
   );
 
   let shotSort = 1;
   for (const [actIndex, act] of structuredDoc.acts.entries()) {
     for (const [shotIndex, shot] of act.shots.entries()) {
       const scene = scenes[actIndex] ?? null;
+      const assetKey = readProjectionKey(shot.entityKey) ?? normalizeKey(`${shot.title}::${shot.visual}`);
       await db.plannerShotScript.create({
         data: {
+          ...(readProjectionKey(shot.entityKey) ? { id: readProjectionKey(shot.entityKey)! } : {}),
           refinementVersionId,
           sceneId: scene?.id ?? null,
           actKey: `act-${actIndex + 1}`,
           actTitle: act.title,
           shotNo: shot.title,
           title: shot.title,
+          targetModelFamilySlug: shot.targetModelFamilySlug ?? previousShotAssets.get(assetKey)?.targetModelFamilySlug ?? null,
           visualDescription: shot.visual,
           composition: shot.composition,
           cameraMotion: shot.motion,
@@ -172,12 +190,12 @@ export async function syncPlannerRefinementDerivedData(args: {
           referenceAssetIdsJson: (
             shot.referenceAssetIds?.length
               ? shot.referenceAssetIds
-              : previousShotAssets.get(normalizeKey(`${shot.title}::${shot.visual}`))?.referenceAssetIds ?? []
+              : previousShotAssets.get(assetKey)?.referenceAssetIds ?? []
           ) as Prisma.InputJsonValue,
           generatedAssetIdsJson: (
             shot.generatedAssetIds?.length
               ? shot.generatedAssetIds
-              : previousShotAssets.get(normalizeKey(`${shot.title}::${shot.visual}`))?.generatedAssetIds ?? []
+              : previousShotAssets.get(assetKey)?.generatedAssetIds ?? []
           ) as Prisma.InputJsonValue,
           sortOrder: shotSort,
         },

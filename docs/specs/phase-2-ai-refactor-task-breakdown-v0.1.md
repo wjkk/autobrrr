@@ -21,6 +21,23 @@
 
 为了避免一次提交同时改动 gateway、run input、storage、planner 修复，Phase 2 推荐拆成 6 个提交批次。
 
+当前进度（2026-03-16）：
+
+1. `Commit 1` 已完成：`run-input.ts` 已落地，主路径 Run 创建已切到 `serializeRunInput`，`provider-adapters.ts` 已切到统一解析入口
+2. `Commit 2` 已完成：`provider-gateway.ts` 已落地，`provider-adapters.ts`、`catalog-subject-image.ts`、`planner-debug.ts`、`provider-configs.ts` 主测试路径已改走 gateway
+3. ARK 多能力预留与注册表修正：`R-05A` 已完成，`seed-model-registry.ts` 已加入 ARK 的 IMAGE / VIDEO / AUDIO family 预留，`provider-configs.ts` 已改成 capability-aware 测试分发；`R-05B` 已完成，ARK 图片已接入统一 gateway 并通过真实 provider test；剩余真实 VIDEO / AUDIO 接入拆分为 `R-05C / R-05D`
+4. 本地文件存储替代临时 URL：已完成，`asset-storage.ts`、本地上传访问路由、`run-lifecycle.ts` 的下载落盘链路都已接通，`generated.local` 已从 API 代码路径移除
+5. `Transport Hooks`：已完成当前阶段，`transport-hooks.ts` 已落地，`ark-client.ts` / `platou-client.ts` 已接入统一 hook 触发点；Phase 3 已将其接到 `external_api_call_logs`，server / worker 双端自动安装 hook
+6. `Planner 基础修复`：进行中，Prisma schema 已补 `sourceOutlineVersionId`，`planner-orchestrator.ts` 已开始写入 lineage，`planner-rerun-scope.ts` 已落地，`planner-partial-reruns.ts` 已开始兼容 typed `rerunScope`，前端 `planner-page.tsx` 已改发 typed `rerunScope`，`planner-doc.ts` / `planner-refinement-projection.ts` / `planner-refinement-sync.ts` 已开始接入 `entityKey` 以提升 asset 继承稳定性，Web `planner-structured-doc.ts` 已开始保留 `entityKey` round-trip
+7. Focused smoke：已补 `smoke-planner-refactor.ts`，用于验证 `entityKey` 资产投影、多镜头 prompt 生成与 capability 解析；`smoke-planner-api-refactor.ts` 已通过，覆盖了标题改写后实体 ID/资产绑定保持稳定、主体资产回写同步到 structured doc、资产回写后的再次整包保存、shot entity patch 后 projection 同步、typed `rerunScope` 落库、refinement activation 后 workspace / run output 同步六条真实 API 路径
+
+状态收口结论：
+
+1. 可视为已完成：`R-06`、`R-08`、`R-09`
+2. `R-07` 已完成；focused API smoke 已补齐 planner media generation 路径，事务边界验证闭环成立
+3. `R-04` 已完成，Phase 3 的 `external_api_call_logs` 账本已接通并通过 focused smoke
+4. 已拆成按 provider readiness 推进的持续项：`R-05C`、`R-05D`
+
 每个提交批次要求：
 
 1. 改动面单一
@@ -216,6 +233,7 @@
 2. 衍生数据同步在事务内
 3. `PlannerRerunScope` 类型统一
 4. asset 关联不再主要依赖标题匹配
+5. 前端 structured doc round-trip 不会丢失稳定标识
 
 最小验证：
 
@@ -223,6 +241,13 @@
 2. partial rerun 在新 scope 类型下可用
 3. 标题修改后 asset 关联不丢失
 4. 中途失败不会留下脏 refinement 版本
+5. Web/API 双侧 typecheck 通过
+
+当前剩余残项：
+
+1. `smoke-planner-api-refactor.ts` 现已覆盖 planner media generation：包括 shot `generate-image` run 创建、run finalize、资产落盘后 `PlannerShotScript` 与 structured doc 投影同步
+2. refinement activation、资产回写后的再次整包保存、shot entity patch 同步已纳入真实 API smoke
+3. 不再预期需要重做 `entityKey` 或 `typed rerunScope` 的主设计
 
 ## 3. 执行顺序
 

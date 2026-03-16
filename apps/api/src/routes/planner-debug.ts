@@ -10,11 +10,11 @@ import { parsePlannerAssistantPackage } from '../lib/planner-agent-schemas.js';
 import { buildPlannerGenerationPrompt } from '../lib/planner-orchestrator.js';
 import type { PlannerStructuredDoc } from '../lib/planner-doc.js';
 import { applyPartialRerunScope, buildPartialDiffSummary } from '../lib/planner-refinement-partial.js';
+import { resolvePlannerTargetVideoModel } from '../lib/planner-target-video-model.js';
 import { extractPlannerText } from '../lib/planner-text-extraction.js';
 import { prisma } from '../lib/prisma.js';
+import { submitTextGeneration } from '../lib/provider-gateway.js';
 import { resolveProviderRuntimeConfigForUser } from '../lib/provider-runtime-config.js';
-import { submitArkTextResponse } from '../lib/ark-client.js';
-import { submitPlatouChatCompletion } from '../lib/platou-client.js';
 
 const detailJsonSchema = z.record(z.string(), z.unknown());
 const plannerAssetSchema = z.object({
@@ -39,6 +39,7 @@ const debugRunSchema = z.object({
   selectedSubjectName: z.string().trim().max(255).optional(),
   selectedStyleName: z.string().trim().max(255).optional(),
   selectedImageModelLabel: z.string().trim().max(255).optional(),
+  targetVideoModelFamilySlug: z.string().trim().max(120).optional(),
   priorMessages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
     text: z.string().trim().min(1).max(4000),
@@ -85,6 +86,7 @@ const releaseListParamsSchema = z.object({
 });
 
 async function runPlannerTextDebug(args: {
+  userId: string;
   providerCode: string | null;
   baseUrl: string | null;
   apiKey: string | null;
@@ -95,25 +97,18 @@ async function runPlannerTextDebug(args: {
     return null;
   }
 
-  if (args.providerCode === 'ark') {
-    return submitArkTextResponse({
-      model: args.remoteModelKey,
-      prompt: args.prompt,
-      baseUrl: args.baseUrl,
-      apiKey: args.apiKey,
-    });
-  }
-
-  if (args.providerCode === 'platou') {
-    return submitPlatouChatCompletion({
-      baseUrl: args.baseUrl,
-      apiKey: args.apiKey,
-      model: args.remoteModelKey,
-      prompt: args.prompt,
-    });
-  }
-
-  return null;
+  return submitTextGeneration({
+    providerCode: args.providerCode,
+    model: args.remoteModelKey,
+    prompt: args.prompt,
+    baseUrl: args.baseUrl,
+    apiKey: args.apiKey,
+    hookMetadata: {
+      traceId: `planner-debug:${args.userId}:${args.remoteModelKey}`,
+      userId: args.userId,
+      resourceType: 'planner_debug',
+    },
+  });
 }
 
 function toPrismaJsonInput(value: Prisma.JsonValue | null | undefined) {
@@ -445,6 +440,7 @@ async function executePlannerDebugRun(args: {
   selectedSubjectName?: string;
   selectedStyleName?: string;
   selectedImageModelLabel?: string;
+  targetVideoModelFamilySlug?: string;
   priorMessages?: Array<{ role: 'user' | 'assistant'; text: string }>;
   currentOutlineDoc?: Record<string, unknown>;
   currentStructuredDoc?: Record<string, unknown>;
@@ -483,6 +479,12 @@ async function executePlannerDebugRun(args: {
   }
 
   const promptPackage = buildPlannerGenerationPrompt({
+    ...(await resolvePlannerTargetVideoModel({
+      requestedFamilySlug: args.targetVideoModelFamilySlug,
+    }).then((targetVideoModel) => ({
+      targetVideoModelFamilySlug: targetVideoModel?.familySlug ?? null,
+      targetVideoModelSummary: targetVideoModel?.summary ?? null,
+    }))),
     selection,
     targetStage: args.targetStage,
     userPrompt: args.userPrompt,
@@ -511,6 +513,7 @@ async function executePlannerDebugRun(args: {
 
   try {
     providerOutput = await runPlannerTextDebug({
+      userId: args.userId,
       providerCode: runtimeConfig.providerCode,
       baseUrl: runtimeConfig.baseUrl,
       apiKey: runtimeConfig.apiKey,

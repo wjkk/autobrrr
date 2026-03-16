@@ -23,7 +23,7 @@ interface ProjectionInput {
   shotScripts: Array<
     Pick<
       PlannerShotScript,
-      'id' | 'sceneId' | 'actKey' | 'actTitle' | 'shotNo' | 'title' | 'visualDescription' | 'composition' | 'cameraMotion' | 'voiceRole' | 'dialogue' | 'sortOrder'
+      'id' | 'sceneId' | 'actKey' | 'actTitle' | 'shotNo' | 'title' | 'targetModelFamilySlug' | 'visualDescription' | 'composition' | 'cameraMotion' | 'voiceRole' | 'dialogue' | 'sortOrder'
     >
     & {
       referenceAssetIdsJson?: Prisma.JsonValue | null;
@@ -80,12 +80,14 @@ export function rebuildPlannerStructuredDocFromProjection(input: ProjectionInput
       };
 
     act.shots.push({
+      entityKey: shot.id,
       title: shot.title || shot.shotNo,
       visual: shot.visualDescription,
       composition: shot.composition,
       motion: shot.cameraMotion,
       voice: shot.voiceRole,
       line: shot.dialogue,
+      targetModelFamilySlug: shot.targetModelFamilySlug ?? undefined,
       referenceAssetIds: readAssetIds(shot.referenceAssetIdsJson),
       generatedAssetIds: readAssetIds(shot.generatedAssetIdsJson),
     });
@@ -96,6 +98,7 @@ export function rebuildPlannerStructuredDocFromProjection(input: ProjectionInput
     ...baseDoc,
     subjectBullets: subjects.map((subject) => `${subject.name}：${subject.appearance || subject.prompt}`),
     subjects: subjects.map((subject) => ({
+      entityKey: subject.id,
       title: subject.name,
       prompt: subject.prompt,
       referenceAssetIds: readAssetIds(subject.referenceAssetIdsJson),
@@ -103,6 +106,7 @@ export function rebuildPlannerStructuredDocFromProjection(input: ProjectionInput
     })),
     sceneBullets: scenes.map((scene) => scene.description || scene.prompt),
     scenes: scenes.map((scene) => ({
+      entityKey: scene.id,
       title: scene.name,
       prompt: scene.prompt,
       referenceAssetIds: readAssetIds(scene.referenceAssetIdsJson),
@@ -173,6 +177,7 @@ export async function syncPlannerRefinementProjection(args: {
         actTitle: true,
         shotNo: true,
         title: true,
+        targetModelFamilySlug: true,
         visualDescription: true,
         composition: true,
         cameraMotion: true,

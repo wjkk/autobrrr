@@ -11,6 +11,10 @@
     "seed:model-registry": "tsx scripts/seed-model-registry.ts",
     "seed:planner-agents": "tsx scripts/seed-planner-agents.ts",
     "smoke": "tsx scripts/smoke.ts",
+    "smoke:provider-ark-sync": "tsx scripts/smoke-provider-ark-sync.ts",
+    "smoke:external-api-call-logs": "tsx scripts/smoke-external-api-call-logs.ts",
+    "smoke:planner-refactor": "tsx scripts/smoke-planner-refactor.ts",
+    "smoke:planner-api-refactor": "tsx scripts/smoke-planner-api-refactor.ts",
     "prisma:generate": "prisma generate --schema ./prisma/schema.prisma",
     "prisma:push": "prisma db push --schema ./prisma/schema.prisma"
   },

@@ -6,6 +6,7 @@ import { mapRun } from '../lib/api-mappers.js';
 import { requireUser } from '../lib/auth.js';
 import { findOwnedEpisode } from '../lib/ownership.js';
 import { prisma } from '../lib/prisma.js';
+import { serializeRunInput } from '../lib/run-input.js';
 
 const paramsSchema = z.object({
   projectId: z.string().min(1),
@@ -104,13 +105,13 @@ export async function registerPublishCommandRoutes(app: FastifyInstance) {
           status: 'COMPLETED',
           executorType: 'MANUAL',
           idempotencyKey: payload.data.idempotencyKey ?? null,
-          inputJson: {
+          inputJson: serializeRunInput({
             title: payload.data.title,
             intro: payload.data.intro,
             script: payload.data.script,
             tag: payload.data.tag,
             sourceHistoryId: payload.data.sourceHistoryId ?? null,
-          } as Prisma.InputJsonValue,
+          }),
           outputJson: {
             published: true,
             shotCount: shots.length,

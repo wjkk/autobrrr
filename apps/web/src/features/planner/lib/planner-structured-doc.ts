@@ -28,6 +28,7 @@ interface RuntimePlannerShotScript {
   actTitle: string;
   shotNo: string;
   title: string;
+  targetModelFamilySlug?: string | null;
   visualDescription: string;
   composition: string;
   cameraMotion: string;
@@ -82,25 +83,43 @@ export interface PlannerStructuredDoc {
   highlights: Array<{ title: string; description: string }>;
   styleBullets: string[];
   subjectBullets: string[];
-  subjects: Array<{ title: string; prompt: string; referenceAssetIds?: string[]; generatedAssetIds?: string[] }>;
+  subjects: Array<{
+    entityKey?: string;
+    title: string;
+    prompt: string;
+    referenceAssetIds?: string[];
+    generatedAssetIds?: string[];
+  }>;
   sceneBullets: string[];
-  scenes: Array<{ title: string; prompt: string; referenceAssetIds?: string[]; generatedAssetIds?: string[] }>;
+  scenes: Array<{
+    entityKey?: string;
+    title: string;
+    prompt: string;
+    referenceAssetIds?: string[];
+    generatedAssetIds?: string[];
+  }>;
   scriptSummary: string[];
   acts: Array<{
     title: string;
     time: string;
     location: string;
     shots: Array<{
+      entityKey?: string;
       title: string;
       visual: string;
       composition: string;
       motion: string;
       voice: string;
       line: string;
+      targetModelFamilySlug?: string;
       referenceAssetIds?: string[];
       generatedAssetIds?: string[];
     }>;
   }>;
+}
+
+function inheritEntityKey(value: string | undefined) {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
 
 function normalizeImageCards(items: Array<{ title: string; prompt: string }>, pool: string[], prefix: string): SekoImageCard[] {
@@ -149,7 +168,7 @@ export function toPlannerSeedData(doc: PlannerStructuredDoc, fallback: SekoPlanD
   };
 }
 
-export function toStructuredPlannerDoc(seed: SekoPlanData): PlannerStructuredDoc {
+export function toStructuredPlannerDoc(seed: SekoPlanData, previousDoc?: PlannerStructuredDoc | null): PlannerStructuredDoc {
   return {
     projectTitle: seed.projectTitle,
     episodeTitle: seed.episodeTitle,
@@ -159,31 +178,35 @@ export function toStructuredPlannerDoc(seed: SekoPlanData): PlannerStructuredDoc
     highlights: seed.highlights,
     styleBullets: seed.styleBullets,
     subjectBullets: seed.subjectBullets,
-    subjects: seed.subjects.map((item) => ({
+    subjects: seed.subjects.map((item, index) => ({
+      entityKey: inheritEntityKey(previousDoc?.subjects[index]?.entityKey),
       title: item.title,
       prompt: item.prompt,
       referenceAssetIds: [],
       generatedAssetIds: [],
     })),
     sceneBullets: seed.sceneBullets,
-    scenes: seed.scenes.map((item) => ({
+    scenes: seed.scenes.map((item, index) => ({
+      entityKey: inheritEntityKey(previousDoc?.scenes[index]?.entityKey),
       title: item.title,
       prompt: item.prompt,
       referenceAssetIds: [],
       generatedAssetIds: [],
     })),
     scriptSummary: seed.scriptSummary,
-    acts: seed.acts.map((act) => ({
+    acts: seed.acts.map((act, actIndex) => ({
       title: act.title,
       time: act.time,
       location: act.location,
-      shots: act.shots.map((shot) => ({
+      shots: act.shots.map((shot, shotIndex) => ({
+        entityKey: inheritEntityKey(previousDoc?.acts[actIndex]?.shots[shotIndex]?.entityKey),
         title: shot.title,
         visual: shot.visual,
         composition: shot.composition,
         motion: shot.motion,
         voice: shot.voice,
         line: shot.line,
+        targetModelFamilySlug: previousDoc?.acts[actIndex]?.shots[shotIndex]?.targetModelFamilySlug,
         referenceAssetIds: [],
         generatedAssetIds: [],
       })),

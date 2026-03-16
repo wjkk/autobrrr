@@ -8,6 +8,56 @@ export interface PlannerRuntimeApiContext {
   episodeId: string;
 }
 
+export interface ApiPlannerShotPromptPreview {
+  refinementVersionId: string;
+  model: {
+    familySlug: string;
+    familyName: string;
+    summary: string;
+    capability: {
+      supportsMultiShot: boolean;
+      maxShotsPerGeneration: number;
+      timestampMeaning: 'narrative-hint' | 'hard-constraint' | 'ignored';
+      audioDescStyle: 'inline' | 'none';
+      referenceImageSupport: 'none' | 'style' | 'character' | 'full';
+      maxReferenceImages: number;
+      maxReferenceVideos: number;
+      maxReferenceAudios: number;
+      cameraVocab: 'chinese' | 'english-cinematic' | 'both';
+      maxDurationSeconds: number | null;
+      maxResolution: string | null;
+      promptStyle: 'narrative' | 'single-shot';
+      qualityNote?: string;
+      knownIssues: string[];
+      integrationStatus?: 'active' | 'planned';
+    };
+  };
+  prompts: Array<{
+    groupId: string;
+    modelFamilySlug: string;
+    shotIds: string[];
+    actId: string;
+    mode: 'multi-shot' | 'single-shot';
+    promptText: string;
+    promptPayload: {
+      familySlug: string;
+      supportsMultiShot: boolean;
+      shotCount: number;
+      audioDescStyle: 'inline' | 'none';
+      cameraVocab: 'chinese' | 'english-cinematic' | 'both';
+    };
+  }>;
+}
+
+export interface ApiPlannerAssetOption {
+  id: string;
+  sourceUrl: string | null;
+  fileName: string;
+  mediaKind: string;
+  sourceKind: string;
+  createdAt: string;
+}
+
 export interface ApiPlannerWorkspace {
   availableAssets?: Array<{
     id: string;
@@ -96,6 +146,10 @@ export interface ApiPlannerWorkspace {
     assistantMessage: string | null;
     generatedText: string | null;
     structuredDoc: PlannerStructuredDoc | null;
+    sourceOutlineVersionId?: string | null;
+    sourceRefinementVersionId?: string | null;
+    isConfirmed: boolean;
+    confirmedAt: string | null;
     subAgentProfile: {
       id: string;
       slug: string;
@@ -168,6 +222,7 @@ export interface ApiPlannerWorkspace {
       shotNo: string;
       title: string;
       durationSeconds: number | null;
+      targetModelFamilySlug?: string | null;
       visualDescription: string;
       composition: string;
       cameraMotion: string;
@@ -211,6 +266,10 @@ export interface ApiPlannerWorkspace {
     status: string;
     documentTitle: string | null;
     isActive: boolean;
+    sourceOutlineVersionId?: string | null;
+    sourceRefinementVersionId?: string | null;
+    isConfirmed: boolean;
+    confirmedAt: string | null;
     createdAt: string;
   }>;
   subjects?: Array<{
@@ -279,6 +338,7 @@ export interface ApiPlannerWorkspace {
     shotNo: string;
     title: string;
     durationSeconds: number | null;
+    targetModelFamilySlug?: string | null;
     visualDescription: string;
     composition: string;
     cameraMotion: string;
@@ -314,6 +374,31 @@ export interface ApiPlannerRun {
   };
 }
 
+export interface ApiPlannerFinalizeResult {
+  refinementVersionId: string;
+  targetVideoModelFamilySlug: string;
+  finalizedShotCount: number;
+  finalizedAt: string;
+}
+
+export type PlannerRerunScope =
+  | {
+      type: 'subject';
+      subjectId: string;
+    }
+  | {
+      type: 'scene';
+      sceneId: string;
+    }
+  | {
+      type: 'act';
+      actId: string;
+    }
+  | {
+      type: 'shot';
+      shotIds: string[];
+    };
+
 export interface PlannerPageBootstrap {
   studio: StudioFixture | null;
   runtimeApi?: PlannerRuntimeApiContext;
@@ -321,4 +406,315 @@ export interface PlannerPageBootstrap {
   initialStructuredDoc?: PlannerStructuredDoc | null;
   initialPlannerReady?: boolean;
   initialWorkspace?: ApiPlannerWorkspace | null;
+}
+
+interface ApiEnvelopeSuccess<T> {
+  ok: true;
+  data: T;
+}
+
+interface ApiEnvelopeFailure {
+  ok: false;
+  error: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+}
+
+type ApiEnvelope<T> = ApiEnvelopeSuccess<T> | ApiEnvelopeFailure;
+
+async function plannerJsonRequest<T>(path: string, init?: RequestInit, fallbackMessage?: string) {
+  const response = await fetch(path, {
+    ...init,
+    headers: {
+      Accept: 'application/json',
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.headers ?? {}),
+    },
+  });
+
+  const payload = (await response.json()) as ApiEnvelope<T>;
+  if (!response.ok || !payload.ok) {
+    const errorPayload = payload as ApiEnvelopeFailure;
+    throw new Error(errorPayload.error?.message ?? fallbackMessage ?? `请求失败：${path}`);
+  }
+
+  return payload.data;
+}
+
+export async function fetchPlannerShotPromptPreview(args: {
+  projectId: string;
+  episodeId: string;
+  modelSlug: string;
+  signal?: AbortSignal;
+}) {
+  const search = new URLSearchParams({
+    episodeId: args.episodeId,
+    modelSlug: args.modelSlug,
+  });
+  return plannerJsonRequest<ApiPlannerShotPromptPreview>(
+    `/api/planner/projects/${encodeURIComponent(args.projectId)}/shot-prompts?${search.toString()}`,
+    {
+      method: 'GET',
+      signal: args.signal,
+    },
+    '获取分镜提示词预览失败。',
+  );
+}
+
+export async function fetchPlannerWorkspace(args: {
+  projectId: string;
+  episodeId: string;
+  signal?: AbortSignal;
+}) {
+  const search = new URLSearchParams({
+    episodeId: args.episodeId,
+  });
+  return plannerJsonRequest<ApiPlannerWorkspace>(
+    `/api/planner/projects/${encodeURIComponent(args.projectId)}/workspace?${search.toString()}`,
+    {
+      method: 'GET',
+      signal: args.signal,
+    },
+    '获取策划工作区失败。',
+  );
+}
+
+export async function fetchPlannerImageAssets(args: {
+  projectId: string;
+  episodeId: string;
+  signal?: AbortSignal;
+}) {
+  const search = new URLSearchParams({
+    episodeId: args.episodeId,
+    mediaKind: 'image',
+  });
+  return plannerJsonRequest<ApiPlannerAssetOption[]>(
+    `/api/planner/projects/${encodeURIComponent(args.projectId)}/assets?${search.toString()}`,
+    {
+      method: 'GET',
+      signal: args.signal,
+    },
+    '获取策划素材失败。',
+  );
+}
+
+export async function createPlannerRefinementDraft(args: {
+  projectId: string;
+  episodeId: string;
+  refinementVersionId: string;
+}) {
+  return plannerJsonRequest<{
+    refinementVersionId: string;
+    sourceRefinementVersionId: string;
+  }>(
+    `/api/planner/projects/${encodeURIComponent(args.projectId)}/refinement-versions/${encodeURIComponent(args.refinementVersionId)}/create-draft`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        episodeId: args.episodeId,
+      }),
+    },
+    '创建策划草稿副本失败。',
+  );
+}
+
+export async function confirmPlannerOutlineVersion(args: {
+  projectId: string;
+  episodeId: string;
+  outlineVersionId: string;
+}) {
+  return plannerJsonRequest<{ outlineVersionId: string; confirmedAt: string }>(
+    `/api/planner/projects/${encodeURIComponent(args.projectId)}/outline-versions/${encodeURIComponent(args.outlineVersionId)}/confirm`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        episodeId: args.episodeId,
+      }),
+    },
+    '确认大纲失败。',
+  );
+}
+
+export async function activatePlannerVersion(args: {
+  projectId: string;
+  episodeId: string;
+  versionId: string;
+  stage: 'outline' | 'refinement';
+}) {
+  const actionPath = args.stage === 'refinement'
+    ? `/api/planner/projects/${encodeURIComponent(args.projectId)}/refinement-versions/${encodeURIComponent(args.versionId)}/activate`
+    : `/api/planner/projects/${encodeURIComponent(args.projectId)}/outline-versions/${encodeURIComponent(args.versionId)}/activate`;
+
+  return plannerJsonRequest<{ activeVersionId: string; stage: string }>(
+    actionPath,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        episodeId: args.episodeId,
+      }),
+    },
+    '切换策划版本失败。',
+  );
+}
+
+export async function savePlannerDocument(args: {
+  projectId: string;
+  episodeId: string;
+  structuredDoc: PlannerStructuredDoc;
+}) {
+  return plannerJsonRequest<{ saved: true }>(
+    `/api/planner/projects/${encodeURIComponent(args.projectId)}/document`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({
+        episodeId: args.episodeId,
+        structuredDoc: args.structuredDoc,
+      }),
+    },
+    '保存策划文档失败。',
+  );
+}
+
+export async function finalizePlannerRefinement(args: {
+  projectId: string;
+  episodeId: string;
+  targetVideoModelFamilySlug?: string;
+}) {
+  return plannerJsonRequest<ApiPlannerFinalizeResult>(
+    `/api/planner/projects/${encodeURIComponent(args.projectId)}/finalize`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        episodeId: args.episodeId,
+        ...(args.targetVideoModelFamilySlug ? { targetVideoModelFamilySlug: args.targetVideoModelFamilySlug } : {}),
+      }),
+    },
+    '确认策划并交接到创作失败。',
+  );
+}
+
+export async function submitPlannerPartialRerun(args: {
+  projectId: string;
+  episodeId: string;
+  rerunScope: PlannerRerunScope;
+  prompt?: string;
+}) {
+  return plannerJsonRequest<{ run: { id: string; status: string } }>(
+    `/api/planner/projects/${encodeURIComponent(args.projectId)}/partial-rerun`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        episodeId: args.episodeId,
+        rerunScope: args.rerunScope,
+        ...(args.prompt ? { prompt: args.prompt } : {}),
+      }),
+    },
+    '提交局部重跑失败。',
+  );
+}
+
+export async function submitPlannerGenerateDoc(args: {
+  projectId: string;
+  episodeId: string;
+  prompt: string;
+  modelFamily: string;
+  modelEndpoint: string;
+}) {
+  return plannerJsonRequest<{ run: { id: string; status: string } }>(
+    `/api/planner/projects/${encodeURIComponent(args.projectId)}/generate-doc`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        episodeId: args.episodeId,
+        prompt: args.prompt,
+        modelFamily: args.modelFamily,
+        modelEndpoint: args.modelEndpoint,
+      }),
+    },
+    '提交策划生成任务失败。',
+  );
+}
+
+export async function submitPlannerMediaGeneration(args: {
+  path: string;
+  episodeId: string;
+  prompt: string;
+  referenceAssetIds?: string[];
+}) {
+  return plannerJsonRequest<{ run: { id: string; status: string } }>(
+    args.path,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        episodeId: args.episodeId,
+        prompt: args.prompt,
+        referenceAssetIds: args.referenceAssetIds ?? [],
+      }),
+    },
+    '提交图片生成任务失败。',
+  );
+}
+
+export async function fetchPlannerRun(args: {
+  runId: string;
+}) {
+  return plannerJsonRequest<{
+    status: string;
+    output: {
+      generatedText?: string;
+      structuredDoc?: PlannerStructuredDoc | null;
+    } | null;
+    errorMessage: string | null;
+  }>(
+    `/api/planner/runs/${encodeURIComponent(args.runId)}`,
+    {
+      method: 'GET',
+    },
+    '获取策划任务状态失败。',
+  );
+}
+
+export async function uploadPlannerImageAsset(args: {
+  projectId: string;
+  episodeId: string;
+  file: File;
+}) {
+  const formData = new FormData();
+  formData.set('episodeId', args.episodeId);
+  formData.set('file', args.file);
+
+  const response = await fetch(`/api/planner/projects/${encodeURIComponent(args.projectId)}/assets/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  const payload = (await response.json()) as ApiEnvelope<ApiPlannerAssetOption>;
+  if (!response.ok || !payload.ok) {
+    const errorPayload = payload as ApiEnvelopeFailure;
+    throw new Error(errorPayload.error?.message ?? '上传素材失败。');
+  }
+
+  return payload.data;
+}
+
+export async function patchPlannerEntity<T>(path: string, body: Record<string, unknown>) {
+  return plannerJsonRequest<T>(path, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function putPlannerEntity<T>(path: string, body: Record<string, unknown>) {
+  return plannerJsonRequest<T>(path, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deletePlannerEntity<T>(path: string) {
+  return plannerJsonRequest<T>(path, {
+    method: 'DELETE',
+  });
 }

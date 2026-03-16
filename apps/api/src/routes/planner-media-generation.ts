@@ -1,11 +1,12 @@
-import { Prisma } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { mapRun } from '../lib/api-mappers.js';
 import { requireUser } from '../lib/auth.js';
 import { resolveModelSelection } from '../lib/model-registry.js';
+import { PLANNER_REFINEMENT_LOCKED_ERROR } from '../lib/planner-refinement-drafts.js';
 import { prisma } from '../lib/prisma.js';
+import { serializeRunInput } from '../lib/run-input.js';
 import { resolveUserDefaultModelSelection } from '../lib/user-model-defaults.js';
 
 const scopedPayloadSchema = z.object({
@@ -148,7 +149,7 @@ async function createPlannerImageGenerationRun(args: {
       status: 'QUEUED',
       executorType: 'SYSTEM_WORKER',
       idempotencyKey: args.idempotencyKey ?? null,
-      inputJson: {
+      inputJson: serializeRunInput({
         prompt: args.prompt,
         entityName: args.entityName,
         resourceType: args.resourceType,
@@ -172,7 +173,7 @@ async function createPlannerImageGenerationRun(args: {
         },
         referenceAssetIds: args.referenceAssetIds,
         options: args.options ?? null,
-      } as Prisma.InputJsonValue,
+      }),
     },
   });
 
@@ -208,6 +209,10 @@ export async function registerPlannerMediaGenerationRoutes(app: FastifyInstance)
           message: 'No active refinement version found.',
         },
       });
+    }
+
+    if (activeRefinement.isConfirmed) {
+      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
     }
 
     const subject = await prisma.plannerSubject.findFirst({
@@ -311,6 +316,10 @@ export async function registerPlannerMediaGenerationRoutes(app: FastifyInstance)
       });
     }
 
+    if (activeRefinement.isConfirmed) {
+      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
+    }
+
     const scene = await prisma.plannerScene.findFirst({
       where: {
         id: params.data.sceneId,
@@ -411,6 +420,10 @@ export async function registerPlannerMediaGenerationRoutes(app: FastifyInstance)
           message: 'No active refinement version found.',
         },
       });
+    }
+
+    if (activeRefinement.isConfirmed) {
+      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
     }
 
     const shotScript = await prisma.plannerShotScript.findFirst({

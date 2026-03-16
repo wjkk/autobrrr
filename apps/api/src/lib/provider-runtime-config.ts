@@ -15,6 +15,7 @@ export interface ProviderRuntimeConfig {
   baseUrl: string | null;
   apiKey: string | null;
   enabled: boolean;
+  ownerUserId: string | null;
 }
 
 export async function resolveProviderRuntimeConfigForUser(args: {
@@ -39,6 +40,7 @@ export async function resolveProviderRuntimeConfigForUser(args: {
       baseUrl: args.fallbackBaseUrl ?? null,
       apiKey: null,
       enabled: true,
+      ownerUserId: args.userId,
     } satisfies ProviderRuntimeConfig;
   }
 
@@ -61,6 +63,7 @@ export async function resolveProviderRuntimeConfigForUser(args: {
     baseUrl: userConfig?.baseUrlOverride ?? provider.baseUrl,
     apiKey: userConfig?.apiKey ?? null,
     enabled: userConfig?.enabled ?? provider.enabled,
+    ownerUserId: args.userId,
   } satisfies ProviderRuntimeConfig;
 }
 
@@ -76,6 +79,7 @@ export async function resolveRunProviderRuntimeConfig(run: Run): Promise<Provide
       baseUrl: inputBaseUrl,
       apiKey: null,
       enabled: true,
+      ownerUserId: null,
     };
   }
 
@@ -101,6 +105,7 @@ export async function resolveRunProviderRuntimeConfig(run: Run): Promise<Provide
       baseUrl: inputBaseUrl,
       apiKey: null,
       enabled: true,
+      ownerUserId: project?.createdById ?? null,
     };
   }
 

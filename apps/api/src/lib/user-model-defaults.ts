@@ -10,22 +10,28 @@ function readString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-function defaultKeyForModelKind(modelKind: 'IMAGE' | 'VIDEO' | 'TEXT') {
+function defaultKeyForModelKind(modelKind: 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO') {
   if (modelKind === 'IMAGE') {
     return 'imageEndpointSlug';
   }
   if (modelKind === 'VIDEO') {
     return 'videoEndpointSlug';
   }
+  if (modelKind === 'AUDIO') {
+    return 'audioEndpointSlug';
+  }
   return 'textEndpointSlug';
 }
 
-function enabledKeyForModelKind(modelKind: 'IMAGE' | 'VIDEO' | 'TEXT') {
+function enabledKeyForModelKind(modelKind: 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO') {
   if (modelKind === 'IMAGE') {
     return 'imageEndpointSlugs';
   }
   if (modelKind === 'VIDEO') {
     return 'videoEndpointSlugs';
+  }
+  if (modelKind === 'AUDIO') {
+    return 'audioEndpointSlugs';
   }
   return 'textEndpointSlugs';
 }
@@ -36,7 +42,7 @@ interface ParsedProviderModelSelection {
   enabledSlugs: string[];
 }
 
-async function listUserProviderSelections(userId: string, modelKind: 'IMAGE' | 'VIDEO' | 'TEXT') {
+async function listUserProviderSelections(userId: string, modelKind: 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO') {
   const configs = await prisma.userProviderConfig.findMany({
     where: {
       userId,
@@ -69,7 +75,7 @@ async function listUserProviderSelections(userId: string, modelKind: 'IMAGE' | '
   });
 }
 
-export async function resolveUserDefaultModelSelection(userId: string, modelKind: 'IMAGE' | 'VIDEO' | 'TEXT') {
+export async function resolveUserDefaultModelSelection(userId: string, modelKind: 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO') {
   const selections = await listUserProviderSelections(userId, modelKind);
 
   for (const config of selections) {
@@ -109,7 +115,7 @@ export async function resolveUserDefaultModelSelection(userId: string, modelKind
   return null;
 }
 
-export async function listUserEnabledModelEndpoints(userId: string, modelKind: 'IMAGE' | 'VIDEO' | 'TEXT') {
+export async function listUserEnabledModelEndpoints(userId: string, modelKind: 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO') {
   const selections = await listUserProviderSelections(userId, modelKind);
   if (selections.length === 0) {
     return {

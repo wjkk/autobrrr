@@ -1,32 +1,45 @@
 import type { PlannerStructuredDoc } from './planner-doc.js';
+import { parseStoredPlannerRerunScope } from './planner-rerun-scope.js';
 
 function readObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function readObjectArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && !Array.isArray(item))
+    : [];
 }
 
 function readString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+function pickTargetEntityRecord(value: Record<string, unknown> | Record<string, unknown>[]) {
+  return Array.isArray(value) ? value[0] ?? {} : value;
+}
+
 function mergeShotOnlyDoc(args: {
   previousDoc: PlannerStructuredDoc;
   nextDoc: PlannerStructuredDoc;
-  targetEntity: Record<string, unknown>;
+  targetEntity: Record<string, unknown> | Record<string, unknown>[];
 }) {
-  const targetShotTitle =
-    (typeof args.targetEntity.title === 'string' && args.targetEntity.title.trim()) ||
-    (typeof args.targetEntity.shotNo === 'string' && args.targetEntity.shotNo.trim()) ||
-    '';
+  const targetShotTitles = (Array.isArray(args.targetEntity) ? args.targetEntity : [args.targetEntity])
+    .map((item) => readString(item.title) ?? readString(item.shotNo) ?? '')
+    .filter((value): value is string => value.length > 0);
 
-  if (!targetShotTitle) {
+  if (!targetShotTitles.length) {
     return args.previousDoc;
   }
 
-  const replacementShot = args.nextDoc.acts
-    .flatMap((act) => act.shots)
-    .find((shot) => shot.title === targetShotTitle);
+  const replacementShotMap = new Map(
+    args.nextDoc.acts
+      .flatMap((act) => act.shots)
+      .filter((shot) => targetShotTitles.includes(shot.title))
+      .map((shot) => [shot.title, shot] as const),
+  );
 
-  if (!replacementShot) {
+  if (replacementShotMap.size === 0) {
     return args.previousDoc;
   }
 
@@ -34,7 +47,7 @@ function mergeShotOnlyDoc(args: {
     ...args.previousDoc,
     acts: args.previousDoc.acts.map((act) => ({
       ...act,
-      shots: act.shots.map((shot) => (shot.title === targetShotTitle ? replacementShot : shot)),
+      shots: act.shots.map((shot) => replacementShotMap.get(shot.title) ?? shot),
     })),
   };
 }
@@ -44,16 +57,19 @@ export function buildPartialDiffSummary(args: {
   nextDoc: PlannerStructuredDoc;
   input: Record<string, unknown>;
 }) {
-  const scope = readString(args.input.scope);
-  const targetEntity = readObject(args.input.targetEntity);
+  const scope = parseStoredPlannerRerunScope(args.input);
+  const targetEntity = Array.isArray(args.input.targetEntity)
+    ? readObjectArray(args.input.targetEntity)
+    : readObject(args.input.targetEntity);
   const previousDoc = args.previousDoc;
 
   if (!scope || !previousDoc) {
     return [] as string[];
   }
 
-  if (scope === 'subject_only') {
-    const targetName = readString(targetEntity.name) ?? readString(targetEntity.title) ?? '目标主体';
+  if (scope.type === 'subject') {
+    const entity = pickTargetEntityRecord(targetEntity);
+    const targetName = readString(entity.name) ?? readString(entity.title) ?? '目标主体';
     const previousSubject = previousDoc.subjects.find((subject) => subject.title === targetName);
     const nextSubject = args.nextDoc.subjects.find((subject) => subject.title === targetName) ?? args.nextDoc.subjects[0];
     if (!nextSubject) {
@@ -70,8 +86,9 @@ export function buildPartialDiffSummary(args: {
     return summary;
   }
 
-  if (scope === 'scene_only') {
-    const targetName = readString(targetEntity.name) ?? readString(targetEntity.title) ?? '目标场景';
+  if (scope.type === 'scene') {
+    const entity = pickTargetEntityRecord(targetEntity);
+    const targetName = readString(entity.name) ?? readString(entity.title) ?? '目标场景';
     const previousScene = previousDoc.scenes.find((scene) => scene.title === targetName);
     const nextScene = args.nextDoc.scenes.find((scene) => scene.title === targetName) ?? args.nextDoc.scenes[0];
     if (!nextScene) {
@@ -88,28 +105,41 @@ export function buildPartialDiffSummary(args: {
     return summary;
   }
 
-  if (scope === 'shots_only') {
-    const targetTitle = readString(targetEntity.title) ?? readString(targetEntity.shotNo) ?? '目标分镜';
-    const previousShot = previousDoc.acts.flatMap((act) => act.shots).find((shot) => shot.title === targetTitle);
-    const nextShot = args.nextDoc.acts.flatMap((act) => act.shots).find((shot) => shot.title === targetTitle);
-    if (!previousShot || !nextShot) {
-      return [`已局部重写分镜：${targetTitle}`];
+  if (scope.type === 'shot') {
+    const targetTitles = (Array.isArray(targetEntity) ? targetEntity : [targetEntity])
+      .map((item) => readString(item.title) ?? readString(item.shotNo) ?? null)
+      .filter((value): value is string => !!value);
+    if (targetTitles.length === 0) {
+      return ['已局部重写分镜'];
     }
 
-    const summary = [`已局部重写分镜：${targetTitle}`];
-    if (previousShot.visual !== nextShot.visual) {
-      summary.push('画面描述已调整');
-    }
-    if (previousShot.composition !== nextShot.composition) {
-      summary.push('构图设计已调整');
-    }
-    if (previousShot.motion !== nextShot.motion) {
-      summary.push('运镜调度已调整');
-    }
-    if (previousShot.line !== nextShot.line) {
-      summary.push('台词内容已调整');
+    const summary = [`已局部重写分镜：${targetTitles.join('、')}`];
+    for (const targetTitle of targetTitles) {
+      const previousShot = previousDoc.acts.flatMap((act) => act.shots).find((shot) => shot.title === targetTitle);
+      const nextShot = args.nextDoc.acts.flatMap((act) => act.shots).find((shot) => shot.title === targetTitle);
+      if (!previousShot || !nextShot) {
+        continue;
+      }
+      if (previousShot.visual !== nextShot.visual) {
+        summary.push(`${targetTitle} 画面描述已调整`);
+      }
+      if (previousShot.composition !== nextShot.composition) {
+        summary.push(`${targetTitle} 构图设计已调整`);
+      }
+      if (previousShot.motion !== nextShot.motion) {
+        summary.push(`${targetTitle} 运镜调度已调整`);
+      }
+      if (previousShot.line !== nextShot.line) {
+        summary.push(`${targetTitle} 台词内容已调整`);
+      }
     }
     return summary;
+  }
+
+  if (scope.type === 'act') {
+    const entity = pickTargetEntityRecord(targetEntity);
+    const actKey = readString(entity.actKey) ?? scope.actId;
+    return [`已局部重写幕：${actKey}`];
   }
 
   return [];
@@ -125,10 +155,16 @@ export function applyPartialRerunScope(args: {
     return args.nextDoc;
   }
 
-  const scope = readString(args.input.scope);
-  const targetEntity = readObject(args.input.targetEntity);
+  const scope = parseStoredPlannerRerunScope(args.input);
+  const targetEntity = Array.isArray(args.input.targetEntity)
+    ? readObjectArray(args.input.targetEntity)
+    : readObject(args.input.targetEntity);
 
-  if (scope === 'subject_only') {
+  if (!scope) {
+    return args.nextDoc;
+  }
+
+  if (scope.type === 'subject') {
     return {
       ...previousDoc,
       subjectBullets: args.nextDoc.subjectBullets,
@@ -136,7 +172,7 @@ export function applyPartialRerunScope(args: {
     } satisfies PlannerStructuredDoc;
   }
 
-  if (scope === 'scene_only') {
+  if (scope.type === 'scene') {
     return {
       ...previousDoc,
       sceneBullets: args.nextDoc.sceneBullets,
@@ -144,12 +180,24 @@ export function applyPartialRerunScope(args: {
     } satisfies PlannerStructuredDoc;
   }
 
-  if (scope === 'shots_only') {
+  if (scope.type === 'shot') {
     return mergeShotOnlyDoc({
       previousDoc,
       nextDoc: args.nextDoc,
       targetEntity,
     });
+  }
+
+  if (scope.type === 'act') {
+    const targetActKey = readString(pickTargetEntityRecord(targetEntity).actKey) ?? scope.actId;
+    return {
+      ...previousDoc,
+      acts: previousDoc.acts.map((act, index) => {
+        const nextAct = args.nextDoc.acts[index];
+        const actKey = `act-${index + 1}`;
+        return actKey === targetActKey && nextAct ? nextAct : act;
+      }),
+    } satisfies PlannerStructuredDoc;
   }
 
   return args.nextDoc;

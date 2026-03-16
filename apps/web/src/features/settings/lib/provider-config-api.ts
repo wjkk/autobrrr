@@ -26,11 +26,13 @@ export interface ProviderConfigItem {
       textEndpointSlug: string | null;
       imageEndpointSlug: string | null;
       videoEndpointSlug: string | null;
+      audioEndpointSlug: string | null;
     };
     enabledModels: {
       textEndpointSlugs: string[];
       imageEndpointSlugs: string[];
       videoEndpointSlugs: string[];
+      audioEndpointSlugs: string[];
     };
     catalogSync: {
       status: string | null;

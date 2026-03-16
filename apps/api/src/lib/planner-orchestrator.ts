@@ -69,6 +69,23 @@ function readStructuredDoc(value: unknown): PlannerStructuredDoc | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as PlannerStructuredDoc) : null;
 }
 
+function applyTargetVideoModelToStructuredDoc(doc: PlannerStructuredDoc, targetVideoModelFamilySlug: string | null) {
+  if (!targetVideoModelFamilySlug) {
+    return doc;
+  }
+
+  return {
+    ...doc,
+    acts: doc.acts.map((act) => ({
+      ...act,
+      shots: act.shots.map((shot) => ({
+        ...shot,
+        targetModelFamilySlug: readString(shot.targetModelFamilySlug) ?? targetVideoModelFamilySlug,
+      })),
+    })),
+  } satisfies PlannerStructuredDoc;
+}
+
 export function resolvePlannerStepDefinitions(selection: ResolvedPlannerAgentSelection) {
   const subSteps = normalizeSteps(selection.subAgentProfile.stepDefinitionsJson);
   if (subSteps.length > 0) {
@@ -103,6 +120,8 @@ function buildPlannerPromptSnapshot(args: {
   priorMessages: Array<{ role: string; text: string }>;
   currentOutlineDoc?: unknown;
   currentStructuredDoc?: unknown;
+  targetVideoModelFamilySlug?: string | null;
+  targetVideoModelSummary?: string | null;
   stepDefinitions: PlannerStepAnalysisItem[];
 }) {
   const systemPromptFinal = [
@@ -120,6 +139,9 @@ function buildPlannerPromptSnapshot(args: {
     args.selection.agentProfile.defaultDeveloperPrompt ?? '',
     args.selection.subAgentProfile.developerPromptOverride ?? '',
     '请输出严格 JSON，不要输出 markdown，不要输出额外解释。',
+    args.targetStage === 'refinement' && args.targetVideoModelSummary
+      ? `细化剧情内容时必须显式适配目标视频模型能力摘要，不要输出与该模型能力冲突的镜头组织。${args.targetVideoModelSummary}`
+      : '',
     args.targetStage === 'outline'
       ? '输出格式必须包含 stage、assistantMessage、documentTitle、outlineDoc、operations。outlineDoc 用于可确认的大纲。'
       : '输出格式必须包含 stage、assistantMessage、stepAnalysis、documentTitle、structuredDoc、operations。structuredDoc 用于右侧细化文档。',
@@ -135,6 +157,12 @@ function buildPlannerPromptSnapshot(args: {
     args.selectedSubjectName ? `当前主体：${args.selectedSubjectName}` : '',
     args.selectedStyleName ? `当前画风：${args.selectedStyleName}` : '',
     args.selectedImageModelLabel ? `当前主体图模型：${args.selectedImageModelLabel}` : '',
+    args.targetStage === 'refinement' && args.targetVideoModelFamilySlug
+      ? `当前目标视频模型：${args.targetVideoModelFamilySlug}`
+      : '',
+    args.targetStage === 'refinement' && args.targetVideoModelSummary
+      ? `目标视频模型能力摘要：${args.targetVideoModelSummary}`
+      : '',
     args.currentOutlineDoc && args.targetStage === 'outline'
       ? `当前激活大纲：${JSON.stringify(args.currentOutlineDoc)}`
       : '',
@@ -177,6 +205,8 @@ function buildPlannerPromptSnapshot(args: {
       selectedSubjectName: args.selectedSubjectName ?? null,
       selectedStyleName: args.selectedStyleName ?? null,
       selectedImageModelLabel: args.selectedImageModelLabel ?? null,
+      targetVideoModelFamilySlug: args.targetVideoModelFamilySlug ?? null,
+      targetVideoModelSummary: args.targetVideoModelSummary ?? null,
       priorMessages: args.priorMessages,
       currentOutlineDoc: args.currentOutlineDoc ?? null,
       currentStructuredDoc: args.currentStructuredDoc ?? null,
@@ -200,6 +230,8 @@ export function buildPlannerGenerationPrompt(args: {
   priorMessages: Array<{ role: string; text: string }>;
   currentOutlineDoc?: unknown;
   currentStructuredDoc?: unknown;
+  targetVideoModelFamilySlug?: string | null;
+  targetVideoModelSummary?: string | null;
 }) {
   const stepDefinitions = resolvePlannerStepDefinitions(args.selection);
   const promptSnapshot = buildPlannerPromptSnapshot({
@@ -219,6 +251,12 @@ export function buildPlannerGenerationPrompt(args: {
     args.selectedSubjectName ? `当前主体：${args.selectedSubjectName}` : '',
     args.selectedStyleName ? `当前画风：${args.selectedStyleName}` : '',
     args.selectedImageModelLabel ? `当前主体图模型：${args.selectedImageModelLabel}` : '',
+    args.targetStage === 'refinement' && args.targetVideoModelFamilySlug
+      ? `当前目标视频模型：${args.targetVideoModelFamilySlug}`
+      : '',
+    args.targetStage === 'refinement' && args.targetVideoModelSummary
+      ? `目标视频模型能力摘要：${args.targetVideoModelSummary}`
+      : '',
     args.currentOutlineDoc && args.targetStage === 'outline'
       ? `当前激活大纲：${JSON.stringify(args.currentOutlineDoc)}`
       : '',
@@ -280,6 +318,8 @@ export async function finalizePlannerConversation(args: {
   const contentMode = readString(input.contentMode) ?? null;
   const targetStage = readString(input.targetStage) === 'outline' ? 'outline' : 'refinement';
   const triggerType = readString(input.triggerType) ?? (targetStage === 'outline' ? 'generate_outline' : 'generate_doc');
+  const inputSourceOutlineVersionId = readString(input.sourceOutlineVersionId);
+  const targetVideoModelFamilySlug = readString(input.targetVideoModelFamilySlug);
 
   const rawAssistantPackage = parsePlannerAssistantPackage({
     targetStage,
@@ -303,7 +343,7 @@ export async function finalizePlannerConversation(args: {
           ...rawAssistantPackage,
           structuredDoc: applyPartialRerunScope({
             previousDoc: previousStructuredDoc,
-            nextDoc: rawAssistantPackage.structuredDoc,
+            nextDoc: applyTargetVideoModelToStructuredDoc(rawAssistantPackage.structuredDoc, targetVideoModelFamilySlug),
             input,
           }),
         }
@@ -441,6 +481,16 @@ export async function finalizePlannerConversation(args: {
 
   const result = await prisma.$transaction(async (tx) => {
     const confirmedAt = triggerType === 'confirm_outline' ? new Date() : null;
+    const activeOutlineVersion = await tx.plannerOutlineVersion.findFirst({
+      where: {
+        plannerSessionId: args.plannerSession.id,
+        isActive: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+      },
+    });
     const previousActiveRefinement = await tx.plannerRefinementVersion.findFirst({
       where: {
         plannerSessionId: args.plannerSession.id,
@@ -475,6 +525,7 @@ export async function finalizePlannerConversation(args: {
         agentProfileId: readString(agentProfile.id),
         subAgentProfileId: readString(subAgentProfile.id),
         sourceRunId: args.run.id,
+        sourceOutlineVersionId: inputSourceOutlineVersionId ?? activeOutlineVersion?.id ?? null,
         versionNumber: nextVersionNumber + 1,
         triggerType,
         status: 'READY',

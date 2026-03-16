@@ -4,6 +4,10 @@ import { z } from 'zod';
 
 import { requireUser } from '../lib/auth.js';
 import { findOwnedEpisode } from '../lib/ownership.js';
+import {
+  createPlannerRefinementDraftCopy,
+  isPlannerRefinementConfirmed,
+} from '../lib/planner-refinement-drafts.js';
 import { prisma } from '../lib/prisma.js';
 
 const paramsSchema = z.object({
@@ -175,6 +179,187 @@ export async function registerPlannerRefinementVersionRoutes(app: FastifyInstanc
       ok: true,
       data: {
         refinementVersionId: targetVersion.id,
+      },
+    });
+  });
+
+  app.post('/api/projects/:projectId/planner/refinement-versions/:versionId/create-draft', async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) {
+      return;
+    }
+
+    const params = paramsSchema.safeParse(request.params);
+    const payload = payloadSchema.safeParse(request.body);
+    if (!params.success || !payload.success) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'INVALID_ARGUMENT',
+          message: 'Invalid planner refinement draft payload.',
+          details: payload.success ? undefined : payload.error.flatten(),
+        },
+      });
+    }
+
+    const episode = await findOwnedEpisode(params.data.projectId, payload.data.episodeId, user.id);
+    if (!episode) {
+      return reply.code(404).send({
+        ok: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Episode not found.',
+        },
+      });
+    }
+
+    const plannerSession = await prisma.plannerSession.findFirst({
+      where: {
+        projectId: episode.project.id,
+        episodeId: episode.id,
+        isActive: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!plannerSession) {
+      return reply.code(409).send({
+        ok: false,
+        error: {
+          code: 'PLANNER_SESSION_REQUIRED',
+          message: 'No active planner session found.',
+        },
+      });
+    }
+
+    const sourceVersion = await prisma.plannerRefinementVersion.findFirst({
+      where: {
+        id: params.data.versionId,
+        plannerSessionId: plannerSession.id,
+      },
+      select: {
+        id: true,
+        plannerSessionId: true,
+        agentProfileId: true,
+        subAgentProfileId: true,
+        sourceRunId: true,
+        sourceOutlineVersionId: true,
+        versionNumber: true,
+        triggerType: true,
+        status: true,
+        instruction: true,
+        assistantMessage: true,
+        documentTitle: true,
+        generatedText: true,
+        structuredDocJson: true,
+        inputSnapshotJson: true,
+        modelSnapshotJson: true,
+        operationsJson: true,
+        isConfirmed: true,
+        createdById: true,
+        subjects: {
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            id: true,
+            name: true,
+            role: true,
+            appearance: true,
+            personality: true,
+            prompt: true,
+            negativePrompt: true,
+            referenceAssetIdsJson: true,
+            generatedAssetIdsJson: true,
+            sortOrder: true,
+            editable: true,
+          },
+        },
+        scenes: {
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            id: true,
+            name: true,
+            time: true,
+            locationType: true,
+            description: true,
+            prompt: true,
+            negativePrompt: true,
+            referenceAssetIdsJson: true,
+            generatedAssetIdsJson: true,
+            sortOrder: true,
+            editable: true,
+          },
+        },
+        shotScripts: {
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            id: true,
+            sceneId: true,
+            actKey: true,
+            actTitle: true,
+            shotNo: true,
+            title: true,
+            durationSeconds: true,
+            targetModelFamilySlug: true,
+            visualDescription: true,
+            composition: true,
+            cameraMotion: true,
+            voiceRole: true,
+            dialogue: true,
+            subjectBindingsJson: true,
+            referenceAssetIdsJson: true,
+            generatedAssetIdsJson: true,
+            sortOrder: true,
+          },
+        },
+        stepAnalysis: {
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            stepKey: true,
+            title: true,
+            status: true,
+            detailJson: true,
+            sortOrder: true,
+          },
+        },
+      },
+    });
+
+    if (!sourceVersion) {
+      return reply.code(404).send({
+        ok: false,
+        error: {
+          code: 'PLANNER_REFINEMENT_NOT_FOUND',
+          message: 'Planner refinement version not found.',
+        },
+      });
+    }
+
+    if (!isPlannerRefinementConfirmed(sourceVersion)) {
+      return reply.code(409).send({
+        ok: false,
+        error: {
+          code: 'PLANNER_REFINEMENT_NOT_CONFIRMED',
+          message: 'Only confirmed refinement versions can create a draft copy.',
+        },
+      });
+    }
+
+    const draftVersion = await prisma.$transaction(async (tx) =>
+      createPlannerRefinementDraftCopy({
+        db: tx,
+        sourceVersion,
+        createdById: user.id,
+      }),
+    );
+
+    return reply.send({
+      ok: true,
+      data: {
+        refinementVersionId: draftVersion.id,
+        sourceRefinementVersionId: sourceVersion.id,
       },
     });
   });

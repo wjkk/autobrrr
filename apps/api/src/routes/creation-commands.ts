@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify';
-import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { mapRun } from '../lib/api-mappers.js';
@@ -7,6 +6,7 @@ import { requireUser } from '../lib/auth.js';
 import { resolveModelSelection } from '../lib/model-registry.js';
 import { findOwnedShot } from '../lib/ownership.js';
 import { prisma } from '../lib/prisma.js';
+import { serializeRunInput } from '../lib/run-input.js';
 import { resolveUserDefaultModelSelection } from '../lib/user-model-defaults.js';
 
 const paramsSchema = z.object({
@@ -56,7 +56,7 @@ async function createGenerationRun(args: {
 
   const resolvedModel = await resolveModelSelection({
     modelKind: args.modelKind,
-    familySlug: args.modelFamily ?? userDefaultModel?.familySlug,
+    familySlug: args.modelFamily ?? shot.targetVideoModelFamilySlug ?? userDefaultModel?.familySlug,
     endpointSlug: args.modelEndpoint ?? userDefaultModel?.endpointSlug,
     strategy: 'default',
   });
@@ -112,7 +112,7 @@ async function createGenerationRun(args: {
         status: 'QUEUED',
         executorType: 'SYSTEM_WORKER',
         idempotencyKey: args.idempotencyKey ?? null,
-        inputJson: {
+        inputJson: serializeRunInput({
           shotId: shot.id,
           prompt: effectivePrompt,
           modelFamily: {
@@ -134,7 +134,7 @@ async function createGenerationRun(args: {
           },
           referenceAssetIds: args.referenceAssetIds,
           options: args.options ?? null,
-        } as Prisma.InputJsonValue,
+        }),
       },
     });
 

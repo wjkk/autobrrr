@@ -2,9 +2,22 @@ import { randomUUID } from 'node:crypto';
 
 import type { Run } from '@prisma/client';
 
-import { submitArkTextResponse } from './ark-client.js';
-import { queryPlatouVideoGeneration, submitPlatouChatCompletion, submitPlatouImageGeneration, submitPlatouVideoGeneration } from './platou-client.js';
+import {
+  queryVideoGenerationTask,
+  submitImageGeneration,
+  submitTextGeneration,
+  submitVideoGeneration,
+} from './provider-gateway.js';
 import { resolveRunProviderRuntimeConfig } from './provider-runtime-config.js';
+import type {
+  ImageGenerationRunInput,
+  PlannerDocUpdateRunInput,
+  RunInputPayload,
+  StoryboardGenerationRunInput,
+  VideoGenerationRunInput,
+} from './run-input.js';
+import { parseRunInput } from './run-input.js';
+import type { TransportHookMetadata } from './transport-hooks.js';
 
 export interface ProviderCallbackPayload {
   providerJobId?: string;
@@ -56,31 +69,42 @@ function readString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-function getRunInput(run: Run) {
-  return readObject(run.inputJson);
+type ProviderBackedRunInput =
+  | ImageGenerationRunInput
+  | VideoGenerationRunInput
+  | PlannerDocUpdateRunInput
+  | StoryboardGenerationRunInput;
+
+function isProviderBackedRunInput(input: RunInputPayload): input is ProviderBackedRunInput {
+  return 'modelProvider' in input && 'modelEndpoint' in input;
+}
+
+function getProviderBackedRunInput(run: Run): ProviderBackedRunInput {
+  const input = parseRunInput(run);
+  if (!isProviderBackedRunInput(input)) {
+    throw new Error(`Run ${run.id} with type ${run.runType} does not support provider-backed execution.`);
+  }
+  return input;
 }
 
 function getProviderType(run: Run) {
-  const input = getRunInput(run);
-  const modelProvider = readObject(input.modelProvider);
-  const providerType = modelProvider.providerType;
+  const input = getProviderBackedRunInput(run);
+  const providerType = input.modelProvider.providerType;
   return typeof providerType === 'string' ? providerType.toLowerCase() : 'official';
 }
 
 function getProviderCode(run: Run) {
-  const input = getRunInput(run);
-  const modelProvider = readObject(input.modelProvider);
-  return readString(modelProvider.code);
+  const input = getProviderBackedRunInput(run);
+  return readString(input.modelProvider.code);
 }
 
 function getEndpointModelKey(run: Run) {
-  const input = getRunInput(run);
-  const endpoint = readObject(input.modelEndpoint);
-  return readString(endpoint.remoteModelKey);
+  const input = getProviderBackedRunInput(run);
+  return readString(input.modelEndpoint.remoteModelKey);
 }
 
 function getPrompt(run: Run) {
-  const input = getRunInput(run);
+  const input = getProviderBackedRunInput(run);
   return readString(input.prompt) ?? '';
 }
 
@@ -99,6 +123,25 @@ function getModelKind(run: Run) {
 
 function secondsFromNow(seconds: number) {
   return new Date(Date.now() + seconds * 1000);
+}
+
+function buildRunTransportMetadata(args: {
+  run: Run;
+  ownerUserId: string | null;
+  traceId: string;
+}) {
+  return {
+    traceId: args.traceId,
+    runId: args.run.id,
+    userId: args.ownerUserId ?? undefined,
+    projectId: args.run.projectId ?? undefined,
+    episodeId: args.run.episodeId ?? undefined,
+    resourceType: args.run.resourceType ?? undefined,
+    resourceId: args.run.resourceId ?? undefined,
+    modelFamilyId: args.run.modelFamilyId ?? undefined,
+    modelProviderId: args.run.modelProviderId ?? undefined,
+    modelEndpointId: args.run.modelEndpointId ?? undefined,
+  } satisfies TransportHookMetadata;
 }
 
 function normalizeProviderStatus(providerStatus: string) {
@@ -225,6 +268,11 @@ const mockProxyAdapter: ProviderAdapter = {
 const arkAdapter: ProviderAdapter = {
   async submit(run) {
     const runtimeConfig = await resolveRunProviderRuntimeConfig(run);
+    const hookMetadata = buildRunTransportMetadata({
+      run,
+      ownerUserId: runtimeConfig.ownerUserId,
+      traceId: `run:${run.id}:submit`,
+    });
     const prompt = getPrompt(run);
     if (!prompt) {
       return {
@@ -265,11 +313,13 @@ const arkAdapter: ProviderAdapter = {
         errorMessage: 'Run model key is required for ARK submission.',
       };
     }
-    const response = await submitArkTextResponse({
+    const response = await submitTextGeneration({
+      providerCode: runtimeConfig.providerCode ?? 'ark',
       model,
       prompt,
       apiKey: runtimeConfig.apiKey,
       baseUrl: runtimeConfig.baseUrl,
+      hookMetadata,
     });
     return {
       type: 'completed',
@@ -301,6 +351,11 @@ const arkAdapter: ProviderAdapter = {
 const platouAdapter: ProviderAdapter = {
   async submit(run) {
     const runtimeConfig = await resolveRunProviderRuntimeConfig(run);
+    const hookMetadata = buildRunTransportMetadata({
+      run,
+      ownerUserId: runtimeConfig.ownerUserId,
+      traceId: `run:${run.id}:submit`,
+    });
     if (!runtimeConfig.enabled || !runtimeConfig.apiKey || !runtimeConfig.baseUrl) {
       return mockProxyAdapter.submit(run);
     }
@@ -324,15 +379,17 @@ const platouAdapter: ProviderAdapter = {
       };
     }
 
-    const input = getRunInput(run);
-    const options = readObject(input.options);
+    const input = getProviderBackedRunInput(run);
+    const options = readObject('options' in input ? input.options : null);
 
     if (getModelKind(run) === 'text') {
-      const response = await submitPlatouChatCompletion({
+      const response = await submitTextGeneration({
+        providerCode: runtimeConfig.providerCode ?? 'platou',
         baseUrl: runtimeConfig.baseUrl,
         apiKey: runtimeConfig.apiKey,
         model,
         prompt,
+        hookMetadata,
       });
       return {
         type: 'completed',
@@ -342,11 +399,13 @@ const platouAdapter: ProviderAdapter = {
     }
 
     if (getModelKind(run) === 'image') {
-      const response = await submitPlatouImageGeneration({
+      const response = await submitImageGeneration({
+        providerCode: runtimeConfig.providerCode ?? 'platou',
         baseUrl: runtimeConfig.baseUrl,
         apiKey: runtimeConfig.apiKey,
         model,
         prompt,
+        hookMetadata,
       });
       return {
         type: 'completed',
@@ -360,7 +419,8 @@ const platouAdapter: ProviderAdapter = {
       readString(options.lastFrameUrl),
     ].filter((value): value is string => !!value);
 
-    const response = await submitPlatouVideoGeneration({
+    const response = await submitVideoGeneration({
+      providerCode: runtimeConfig.providerCode ?? 'platou',
       baseUrl: runtimeConfig.baseUrl,
       apiKey: runtimeConfig.apiKey,
       model,
@@ -368,6 +428,7 @@ const platouAdapter: ProviderAdapter = {
       images,
       duration: typeof options.durationSeconds === 'number' ? options.durationSeconds : undefined,
       aspectRatio: readString(options.aspectRatio) ?? undefined,
+      hookMetadata,
     });
 
     const providerJobId = inferPlatouVideoTaskId(response);
@@ -392,6 +453,11 @@ const platouAdapter: ProviderAdapter = {
   },
   async poll(run) {
     const runtimeConfig = await resolveRunProviderRuntimeConfig(run);
+    const hookMetadata = buildRunTransportMetadata({
+      run,
+      ownerUserId: runtimeConfig.ownerUserId,
+      traceId: `run:${run.id}:poll`,
+    });
     if (!runtimeConfig.enabled || !runtimeConfig.apiKey || !runtimeConfig.baseUrl) {
       return mockProxyAdapter.poll(run);
     }
@@ -404,10 +470,12 @@ const platouAdapter: ProviderAdapter = {
       };
     }
 
-    const response = await queryPlatouVideoGeneration({
+    const response = await queryVideoGenerationTask({
+      providerCode: runtimeConfig.providerCode ?? 'platou',
       baseUrl: runtimeConfig.baseUrl,
       apiKey: runtimeConfig.apiKey,
       taskId: run.providerJobId,
+      hookMetadata,
     });
     const state = inferPlatouVideoState(response);
 

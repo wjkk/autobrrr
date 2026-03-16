@@ -170,7 +170,20 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
               isActive: true,
             },
             orderBy: { createdAt: 'desc' },
-            include: {
+            select: {
+              id: true,
+              versionNumber: true,
+              triggerType: true,
+              sourceOutlineVersionId: true,
+              sourceRefinementVersionId: true,
+              status: true,
+              documentTitle: true,
+              assistantMessage: true,
+              generatedText: true,
+              structuredDocJson: true,
+              isConfirmed: true,
+              confirmedAt: true,
+              createdAt: true,
               stepAnalysis: {
                 orderBy: { sortOrder: 'asc' },
               },
@@ -203,9 +216,13 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
               id: true,
               versionNumber: true,
               triggerType: true,
+              sourceOutlineVersionId: true,
+              sourceRefinementVersionId: true,
               status: true,
               documentTitle: true,
               isActive: true,
+              isConfirmed: true,
+              confirmedAt: true,
               createdAt: true,
             },
           }),
@@ -366,11 +383,15 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
               id: activeRefinement.id,
               versionNumber: activeRefinement.versionNumber,
               triggerType: activeRefinement.triggerType,
+              sourceOutlineVersionId: activeRefinement.sourceOutlineVersionId,
+              sourceRefinementVersionId: activeRefinement.sourceRefinementVersionId,
               status: activeRefinement.status.toLowerCase(),
               documentTitle: activeRefinement.documentTitle,
               assistantMessage: activeRefinement.assistantMessage,
               generatedText: activeRefinement.generatedText,
               structuredDoc: activeRefinement.structuredDocJson,
+              isConfirmed: activeRefinement.isConfirmed,
+              confirmedAt: activeRefinement.confirmedAt?.toISOString() ?? null,
               subAgentProfile: activeRefinement.subAgentProfile
                 ? {
                     id: activeRefinement.subAgentProfile.id,
@@ -417,6 +438,7 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
                 shotNo: shot.shotNo,
                 title: shot.title,
                 durationSeconds: shot.durationSeconds,
+                targetModelFamilySlug: shot.targetModelFamilySlug,
                 visualDescription: shot.visualDescription,
                 composition: shot.composition,
                 cameraMotion: shot.cameraMotion,
@@ -478,6 +500,7 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
           shotNo: shot.shotNo,
           title: shot.title,
           durationSeconds: shot.durationSeconds,
+          targetModelFamilySlug: shot.targetModelFamilySlug,
           visualDescription: shot.visualDescription,
           composition: shot.composition,
           cameraMotion: shot.cameraMotion,
@@ -494,9 +517,13 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
           id: version.id,
           versionNumber: version.versionNumber,
           triggerType: version.triggerType,
+          sourceOutlineVersionId: version.sourceOutlineVersionId,
+          sourceRefinementVersionId: version.sourceRefinementVersionId,
           status: version.status.toLowerCase(),
           documentTitle: version.documentTitle,
           isActive: version.isActive,
+          isConfirmed: version.isConfirmed,
+          confirmedAt: version.confirmedAt?.toISOString() ?? null,
           createdAt: version.createdAt.toISOString(),
         })),
       },
@@ -546,6 +573,37 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
         },
       },
     });
+
+    const materialAssetIds = new Set<string>();
+    for (const shot of shots) {
+      if (!Array.isArray(shot.materialBindingsJson)) {
+        continue;
+      }
+      for (const assetId of shot.materialBindingsJson) {
+        if (typeof assetId === 'string' && assetId.trim().length > 0) {
+          materialAssetIds.add(assetId);
+        }
+      }
+    }
+
+    const materialAssets = materialAssetIds.size > 0
+      ? await prisma.asset.findMany({
+          where: {
+            id: {
+              in: Array.from(materialAssetIds),
+            },
+          },
+          select: {
+            id: true,
+            sourceUrl: true,
+            fileName: true,
+            mediaKind: true,
+            sourceKind: true,
+            createdAt: true,
+          },
+        })
+      : [];
+    const materialAssetMap = new Map(materialAssets.map((asset) => [asset.id, asset]));
 
     const runs = await prisma.run.findMany({
       where: {
@@ -597,6 +655,26 @@ export async function registerWorkspaceRoutes(app: FastifyInstance) {
           narrationText: shot.narrationText,
           imagePrompt: shot.imagePrompt,
           motionPrompt: shot.motionPrompt,
+          promptJson:
+            shot.promptJson && typeof shot.promptJson === 'object' && !Array.isArray(shot.promptJson)
+              ? shot.promptJson
+              : null,
+          targetVideoModelFamilySlug: shot.targetVideoModelFamilySlug,
+          materialBindings: Array.isArray(shot.materialBindingsJson)
+            ? shot.materialBindingsJson
+                .filter((assetId): assetId is string => typeof assetId === 'string')
+                .map((assetId) => materialAssetMap.get(assetId))
+                .filter((asset): asset is NonNullable<typeof asset> => Boolean(asset))
+                .map((asset) => ({
+                  id: asset.id,
+                  sourceUrl: asset.sourceUrl,
+                  fileName: asset.fileName,
+                  mediaKind: asset.mediaKind.toLowerCase(),
+                  sourceKind: asset.sourceKind.toLowerCase(),
+                  createdAt: asset.createdAt.toISOString(),
+                }))
+            : [],
+          finalizedAt: shot.finalizedAt?.toISOString() ?? null,
           status: shot.status.toLowerCase(),
           latestGenerationRun: latestRunByShotId.get(shot.id)
             ? {

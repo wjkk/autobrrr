@@ -11,7 +11,7 @@ interface ProviderConfigPageProps {
   currentUser: SettingsAuthUser | null;
 }
 
-const CONFIGURABLE_PROVIDER_CODES = new Set(['ark', 'aicso', 'platou']);
+const CONFIGURABLE_PROVIDER_CODES = new Set(['ark', 'platou']);
 
 interface DraftState {
   apiKey: string;
@@ -666,7 +666,7 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
               </span>
               <h1 className={styles.title}>先登录，再测试 provider 配置</h1>
               <p className={styles.subtitle}>
-                这里会把 `ARK`、`AICSO` 等配置保存到当前用户自己的表里。为了让你直接在页面里完成测试，我补了一个最小登录入口。
+                这里会把 `ARK`、`Platou` 等配置保存到当前用户自己的表里。为了让你直接在页面里完成测试，我补了一个最小登录入口。
               </p>
             </div>
             <Link href="/explore" className={styles.backLink}>
@@ -715,7 +715,7 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
             </span>
             <h1 className={styles.title}>把模型权限交给用户自己配置</h1>
             <p className={styles.subtitle}>
-              这里统一管理 `ARK`、`AICSO` 等模型网关的密钥与基础地址。保存后，后端会优先读取你在表内配置的 provider 凭据，不再依赖应用环境变量。
+              这里统一管理 `ARK`、`Platou` 等模型网关的密钥与基础地址。保存后，后端会优先读取你在表内配置的 provider 凭据，不再依赖应用环境变量。
             </p>
           </div>
           <Link href="/explore" className={styles.backLink}>
@@ -754,7 +754,7 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
               </div>
               <div className={styles.statsItem}>
                 <span>图片 / 视频</span>
-                <strong>AICSO</strong>
+                <strong>Platou</strong>
               </div>
               <div className={styles.statsItem}>
                 <span>作用范围</span>

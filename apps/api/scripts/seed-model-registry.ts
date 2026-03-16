@@ -79,26 +79,10 @@ async function main() {
   const sekoVideo = await upsertFamily('seko-video', 'Seko Video', 'VIDEO', {
     durations: [4, 6, 8],
   });
-  const geminiImage = await upsertFamily('gemini-image', 'Gemini Image', 'IMAGE', {
-    provider: 'aicso',
-    model: 'gemini-3.1-flash-image-preview',
-    aspectRatios: ['1:1', '9:16', '16:9'],
-  });
-  const deepseekText = await upsertFamily('deepseek-text', 'DeepSeek Text', 'TEXT', {
-    provider: 'aicso',
-    model: 'deepseek-v3',
-    modalities: ['text'],
-  });
   const doubaoText = await upsertFamily('doubao-text', 'Doubao Text', 'TEXT', {
     provider: 'ark',
     model: 'doubao-seed-1-8-251228',
     modalities: ['text'],
-  });
-  const veoVideo = await upsertFamily('veo-video', 'Veo Video', 'VIDEO', {
-    provider: 'aicso',
-    model: 'veo_3_1-fast-4K',
-    durations: [4, 6, 8],
-    aspectRatios: ['9:16', '16:9', '1:1'],
   });
   const platouChat = await upsertFamily('platou-google-chat', 'Platou Google Chat', 'TEXT', {
     provider: 'platou',
@@ -124,7 +108,6 @@ async function main() {
 
   const officialSeko = await upsertProvider('official-seko', 'Seko Official', 'OFFICIAL', 'https://api.seko.local');
   const proxyA = await upsertProvider('proxy-hub-a', 'Proxy Hub A', 'PROXY', 'https://proxy-hub-a.local');
-  const aicso = await upsertProvider('aicso', 'AICSO', 'PROXY', 'https://api.aicso.top');
   const ark = await upsertProvider('ark', 'Volcengine Ark', 'OFFICIAL', 'https://ark.cn-beijing.volces.com/api/v3');
   const platou = await upsertProvider('platou', 'Platou', 'PROXY', 'https://api.bltcy.ai');
 
@@ -152,30 +135,6 @@ async function main() {
     defaultParamsJson: {
       aspectRatio: '2:3',
     },
-  });
-
-  await upsertEndpoint({
-    slug: 'aicso-gemini-image-preview',
-    familyId: geminiImage.id,
-    providerId: aicso.id,
-    remoteModelKey: 'gemini-3.1-flash-image-preview',
-    label: 'Gemini 3.1 Flash Image Preview',
-    priority: 5,
-    isDefault: true,
-    defaultParamsJson: {
-      aspectRatio: '9:16',
-    },
-  });
-
-  await upsertEndpoint({
-    slug: 'aicso-deepseek-v3',
-    familyId: deepseekText.id,
-    providerId: aicso.id,
-    remoteModelKey: 'deepseek-v3',
-    label: 'DeepSeek V3',
-    priority: 12,
-    isDefault: false,
-    defaultParamsJson: {},
   });
 
   await upsertEndpoint({
@@ -251,36 +210,6 @@ async function main() {
     defaultParamsJson: {
       durationSeconds: 4,
       aspectRatio: '9:16',
-    },
-  });
-
-  await upsertEndpoint({
-    slug: 'aicso-veo-fast-4k',
-    familyId: veoVideo.id,
-    providerId: aicso.id,
-    remoteModelKey: 'veo_3_1-fast-4K',
-    label: 'Veo 3.1 Fast 4K',
-    priority: 5,
-    isDefault: true,
-    defaultParamsJson: {
-      durationSeconds: 4,
-      aspectRatio: '9:16',
-      resolution: '1080p',
-    },
-  });
-
-  await upsertEndpoint({
-    slug: 'aicso-veo-fast-components',
-    familyId: veoVideo.id,
-    providerId: aicso.id,
-    remoteModelKey: 'veo3.1-fast-components',
-    label: 'Veo 3.1 Fast Components',
-    priority: 15,
-    isDefault: false,
-    defaultParamsJson: {
-      durationSeconds: 4,
-      aspectRatio: '9:16',
-      resolution: '1080p',
     },
   });
 

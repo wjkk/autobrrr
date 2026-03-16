@@ -1,430 +1,204 @@
 # 外部接口规格（v0.3）
 
 版本：v0.3  
-日期：2026-03-13  
-状态：后端开工接口基线
+日期：2026-03-15  
+状态：按当前代码重写后的现行接口清单
 
-当前阅读说明：
+## 1. 通用约定
 
-1. Planner 接口部分已在 2026-03-14 按现有代码主干更新。
-2. 若涉及 Planner Agent / Debug / Outline-Refinement 双阶段，请同时参考：
-   - `docs/specs/planner-agent-orchestration-spec-v0.1.md`
-   - `docs/specs/planner-workflow-and-document-spec-v0.1.md`
-   - `docs/reviews/planner-agent-doc-code-gap-review-2026-03-14.md`
+### 1.1 响应结构
 
-## 1. 范围
-
-定义 Web/客户端 <-> 后端 API，覆盖：
-
-1. 用户注册与登录
-2. 项目创建与工作区读取
-3. Planner / Creation / Publish 命令
-4. `Recipe / Run / Model Registry`
-
-## 2. 通用约定
-
-### 2.1 响应结构
+当前业务接口统一使用：
 
 ```ts
 type ApiEnvelope<T> =
   | { ok: true; data: T }
-  | { ok: false; error: { code: string; message: string; details?: Record<string, unknown> } };
+  | { ok: false; error: { code: string; message: string; details?: unknown } };
 ```
 
-### 2.2 命令接口约定
+### 1.2 鉴权
 
-长任务接口返回：
+除内部 callback 外，业务接口默认要求登录。
 
-1. `runId`
-2. `resourceId`
-3. `acceptedAt`
+当前鉴权方式：
 
-### 2.3 查询接口约定
+1. 账号密码注册与登录
+2. session + HttpOnly Cookie
 
-工作区查询返回聚合 DTO，不直接暴露数据库结构。
+## 2. 认证接口
 
-### 2.4 鉴权约定
+1. `POST /api/auth/register`
+2. `POST /api/auth/login`
+3. `POST /api/auth/logout`
+4. `GET /api/auth/me`
 
-1. 第一阶段采用账号密码注册与登录。
-2. 登录态使用服务端 session + HttpOnly Cookie。
-3. 除 `register / login` 外，其余业务接口默认要求登录。
-4. 项目、剧集、任务、配方都必须按当前用户归属做访问控制。
+## 3. 首页与项目入口接口
 
-## 3. 认证接口
+### 3.1 Studio Project
 
-### `POST /api/auth/register`
+1. `GET /api/studio/projects`
+2. `POST /api/studio/projects`
+3. `GET /api/studio/projects/:projectId`
 
-请求：
-
-```ts
-interface RegisterRequest {
-  email: string;
-  password: string;
-  displayName?: string;
-}
-```
-
-约束：
-
-1. `email` 全局唯一
-2. 密码只存 hash
-
-### `POST /api/auth/login`
-
-请求：
-
-```ts
-interface LoginRequest {
-  email: string;
-  password: string;
-}
-```
-
-行为：
-
-1. 校验账号密码
-2. 创建 session
-3. 下发 HttpOnly Cookie
-
-### `POST /api/auth/logout`
-
-行为：
-
-1. 撤销当前 session
-2. 清理 Cookie
-
-### `GET /api/auth/me`
-
-返回：
-
-```ts
-interface MeResponse {
-  id: string;
-  email: string;
-  displayName: string | null;
-}
-```
-
-## 4. 项目与工作区查询接口
-
-### `GET /api/studio/projects`
-
-用途：
-
-1. 首页继续创作列表
-
-### `POST /api/studio/projects`
-
-请求：
+当前 `POST /api/studio/projects` 已支持：
 
 ```ts
 interface CreateProjectRequest {
   prompt: string;
   contentMode: 'single' | 'series';
-}
-```
-
-返回：
-
-```ts
-interface CreateProjectResponse {
-  projectId: string;
-  redirectUrl: string;
-  project: {
-    id: string;
-    title: string;
-    contentMode: 'single' | 'series';
-    status: string;
+  creationConfig?: {
+    selectedTab?: '短剧漫剧' | '音乐MV' | '知识分享';
+    selectedSubtype?: string;
+    scriptSourceName?: string;
+    scriptContent?: string;
+    imageModelEndpointSlug?: string;
+    subjectProfileSlug?: string;
+    stylePresetSlug?: string;
+    settings?: Record<string, unknown>;
   };
 }
 ```
 
-### `GET /api/studio/projects/:projectId`
+## 4. 目录与首页配置接口
 
-用途：
+### 4.1 主体 / 画风目录
 
-1. 获取项目总览
-2. 返回当前 episode 和阶段摘要
+1. `GET /api/explore/subjects`
+2. `POST /api/explore/subjects`
+3. `PATCH /api/explore/subjects/:itemId`
+4. `POST /api/explore/subjects/generate-image`
+5. `GET /api/explore/styles`
+6. `POST /api/explore/styles`
+7. `PATCH /api/explore/styles/:itemId`
 
-### `GET /api/projects/:projectId/planner/workspace`
+说明：
 
-请求参数：
+1. 主体目录支持本地上传和 AI 生成封面图。
+2. 目录支持 `PUBLIC / PERSONAL` 双可见性。
 
-1. `episodeId`
+## 5. 模型目录与 Provider 配置接口
 
-### `GET /api/projects/:projectId/creation/workspace`
+### 5.1 模型目录
 
-请求参数：
+1. `GET /api/model-families`
+2. `GET /api/model-endpoints`
+3. `POST /api/model-resolution/resolve`
 
-1. `episodeId`
+### 5.2 用户 Provider 配置
 
-### `GET /api/projects/:projectId/publish/workspace`
+1. `GET /api/provider-configs`
+2. `PUT /api/provider-configs/:providerCode`
+3. `POST /api/provider-configs/:providerCode/sync-models`
+4. `POST /api/provider-configs/:providerCode/test`
 
-请求参数：
+说明：
 
-1. `episodeId`
+1. Provider 配置是**用户级**，不是系统级。
+2. 用户可配置默认模型与启用模型列表。
 
-## 5. Planner 接口
+## 6. Planner 主流程接口
 
-### `POST /api/projects/:projectId/planner/generate-doc`
+1. `POST /api/projects/:projectId/planner/generate-doc`
+2. `GET /api/projects/:projectId/planner/workspace`
+3. `POST /api/projects/:projectId/planner/outline-versions/:versionId/activate`
+4. `POST /api/projects/:projectId/planner/outline-versions/:versionId/confirm`
+5. `POST /api/projects/:projectId/planner/refinement-versions/:versionId/activate`
+6. `POST /api/projects/:projectId/planner/partial-rerun`
+7. `PUT /api/projects/:projectId/planner/document`
 
-用途：
+### 6.1 Planner 派生实体接口
 
-1. 若当前尚未确认大纲，则生成 `outline`
-2. 若当前大纲已确认，则生成或更新 `refinement`
-3. 所有结果都进入统一的 `Run + PlannerSession + Version` 闭环
+1. `PATCH /api/projects/:projectId/planner/subjects/:subjectId`
+2. `PUT /api/projects/:projectId/planner/subjects/:subjectId/assets`
+3. `POST /api/projects/:projectId/planner/subjects/:subjectId/generate-image`
+4. `PATCH /api/projects/:projectId/planner/scenes/:sceneId`
+5. `PUT /api/projects/:projectId/planner/scenes/:sceneId/assets`
+6. `POST /api/projects/:projectId/planner/scenes/:sceneId/generate-image`
+7. `PATCH /api/projects/:projectId/planner/shot-scripts/:shotScriptId`
+8. `DELETE /api/projects/:projectId/planner/shot-scripts/:shotScriptId`
+9. `POST /api/projects/:projectId/planner/shot-scripts/:shotScriptId/generate-image`
 
-请求：
+## 7. Planner Agent 管理与调试接口
 
-```ts
-interface PlannerGenerateDocRequest {
-  episodeId: string;
-  prompt?: string;
-  subtype?: string;
-  modelFamily?: string;
-  modelEndpoint?: string;
-  idempotencyKey?: string;
-}
-```
+### 7.1 Agent Profile
 
-### `GET /api/projects/:projectId/planner/workspace`
+1. `GET /api/planner/agent-profiles`
+2. `PATCH /api/planner/sub-agent-profiles/:id`
+3. `GET /api/planner/sub-agent-profiles/:id/releases`
+4. `POST /api/planner/sub-agent-profiles/:id/publish`
 
-用途：
+### 7.2 Debug
 
-1. 返回主流程 planner 所需聚合工作区
-2. 同时包含 `plannerSession / messages / activeOutline / activeRefinement / version lists`
+1. `GET /api/planner/debug/runs`
+2. `GET /api/planner/debug/runs/:id`
+3. `POST /api/planner/debug/runs/:id/replay`
+4. `POST /api/planner/debug/run`
+5. `POST /api/planner/debug/compare`
 
-### `POST /api/projects/:projectId/planner/outline-versions/:versionId/activate`
+说明：
 
-用途：
+1. Planner Debug 已是独立调试链路。
+2. 主流程页面不直接暴露这些能力。
 
-1. 切换当前激活大纲版本
-2. 在细化尚未开始前允许回切旧大纲
+## 8. Creation 接口
 
-### `POST /api/projects/:projectId/planner/outline-versions/:versionId/confirm`
+### 8.1 Shot 与生成命令
 
-用途：
+1. `POST /api/projects/:projectId/shots`
+2. `POST /api/projects/:projectId/shots/:shotId/generate-image`
+3. `POST /api/projects/:projectId/shots/:shotId/generate-video`
 
-1. 确认某个大纲版本
-2. 使 plannerSession 进入可细化状态
+### 8.2 Creation Workspace
 
-### `POST /api/projects/:projectId/planner/refinement-versions/:versionId/activate`
+1. `GET /api/projects/:projectId/creation/workspace`
 
-用途：
+## 9. Publish 接口
 
-1. 切换当前激活细化版本
-2. 让右侧文档与派生实体同步到指定 refinement 版本
+1. `GET /api/projects/:projectId/publish/workspace`
+2. `POST /api/projects/:projectId/publish/submit`
 
-### `POST /api/projects/:projectId/planner/partial-rerun`
+## 10. 资产与运行接口
 
-用途：
+### 10.1 资产
 
-1. 对 `subject / scene / shots` 做局部重跑
-2. 在不重做整篇 refinement 的前提下，重算局部结构化结果
+1. `GET /api/projects/:projectId/assets`
+2. `POST /api/projects/:projectId/assets`
 
-请求：
+### 10.2 Run
 
-```ts
-interface PlannerPartialRerunRequest {
-  episodeId: string;
-  scope: 'subject_only' | 'scene_only' | 'shots_only';
-  targetId: string;
-  prompt?: string;
-  modelFamily?: string;
-  modelEndpoint?: string;
-  idempotencyKey?: string;
-}
-```
+1. `GET /api/runs/:runId`
+2. `POST /api/runs/:runId/cancel`
 
-### `PUT /api/projects/:projectId/planner/document`
+## 11. 内部接口
 
-用途：
+1. `POST /api/internal/provider-callbacks/:callbackToken`
 
-1. 人工回写当前 refinement 文档
-2. 将编辑结果固化为新的 refinement version
+说明：
 
-## 6. Creation 接口
+1. callback 只推进 `Run` 状态。
+2. 真正业务回写仍由 lifecycle 服务统一完成。
 
-### `POST /api/shots/:shotId/generate-image`
+## 12. 当前接口设计与旧文档的关键差异
 
-请求：
+### 12.1 当前已存在、旧文档缺失的接口
 
-```ts
-interface GenerateImageRequest {
-  prompt?: string;
-  model: {
-    familyId: string;
-    policy: 'preferOfficial' | 'preferLowestCost' | 'preferFastest' | 'forceEndpointId';
-    endpointId?: string;
-  };
-  materials?: Array<{ assetId: string; slotName?: string }>;
-  idempotencyKey?: string;
-}
-```
+1. `/api/explore/subjects/generate-image`
+2. `/api/planner/debug/*`
+3. `/api/planner/sub-agent-profiles/*`
+4. `/api/projects/:projectId/planner/subjects/:subjectId/generate-image`
+5. `/api/projects/:projectId/planner/scenes/:sceneId/generate-image`
+6. `/api/projects/:projectId/planner/shot-scripts/:shotScriptId/generate-image`
 
-### `POST /api/shots/:shotId/generate-video`
+### 12.2 当前已变化的接口形态
 
-请求：
+1. `POST /api/studio/projects` 已支持 `creationConfig`，不能再按旧版简化接口理解。
+2. `Planner` 当前不是单一 `/generate-doc + document` 模式，而是完整版本流转体系。
 
-```ts
-interface GenerateVideoRequest {
-  prompt?: string;
-  model: {
-    familyId: string;
-    policy: 'preferOfficial' | 'preferLowestCost' | 'preferFastest' | 'forceEndpointId';
-    endpointId?: string;
-  };
-  startFrameAssetId?: string;
-  endFrameAssetId?: string;
-  idempotencyKey?: string;
-}
-```
+## 13. 下一阶段 API 重构建议
 
-### `POST /api/shots/:shotId/materials`
+在不考虑兼容老数据和老业务的前提下，建议下一阶段：
 
-用途：
-
-1. 绑定已有素材
-2. 或返回直传参数后再回写绑定关系
-
-### `POST /api/shots/:shotId/versions/:versionId/apply`
-
-用途：
-
-1. 使指定版本成为 active version
-
-### `POST /api/shots/:shotId/canvas-edits`
-
-用途：
-
-1. 保存画布编辑命令
-2. 若需要生成则返回 `runId`
-
-### `POST /api/projects/:projectId/voice/upload`
-
-用途：
-
-1. 上传或绑定配音音频
-
-### `POST /api/projects/:projectId/music/generate`
-
-用途：
-
-1. 创建音乐生成任务
-
-### `POST /api/shots/:shotId/lipsync`
-
-用途：
-
-1. 创建对口型任务
-
-## 7. Recipe 接口
-
-### `POST /api/recipes`
-
-用途：
-
-1. 从项目 / episode / run 生成 recipe
-
-### `GET /api/recipes/:recipeId`
-
-用途：
-
-1. 读取 recipe 定义
-
-### `POST /api/recipes/:recipeId/export-json`
-
-用途：
-
-1. 导出 recipe JSON
-
-### `POST /api/recipes/import-json`
-
-用途：
-
-1. 导入 recipe JSON
-
-### `POST /api/recipes/:recipeId/execute`
-
-用途：
-
-1. 触发类似视频一键复用生成
-
-请求：
-
-```ts
-interface ExecuteRecipeRequest {
-  targetProjectId?: string;
-  targetEpisodeId?: string;
-  inputs: Array<{ slotName: string; assetId: string }>;
-  overrides?: {
-    title?: string;
-    modelPolicies?: Record<string, { policy: string; endpointId?: string }>;
-  };
-  idempotencyKey?: string;
-}
-```
-
-## 8. Model Registry 接口
-
-### `GET /api/model-families`
-
-### `GET /api/model-endpoints`
-
-支持过滤：
-
-1. `familyId`
-2. `providerId`
-3. `kind`
-4. `status`
-
-### `POST /api/model-resolution/resolve`
-
-用途：
-
-1. 调试或预解析模型策略
-
-## 9. Run 接口
-
-### `GET /api/runs/:runId`
-
-返回：
-
-1. `runType`
-2. `status`
-3. `progressPercent`
-4. `resourceType`
-5. `resourceId`
-6. `error`
-7. `outputSummary`
-
-### `POST /api/runs/:runId/cancel`
-
-### `POST /api/runs/:runId/retry`
-
-## 10. 上传建议
-
-大文件建议采用两段式：
-
-1. `POST /api/assets/upload-prepare`
-2. 客户端直传对象存储
-3. `POST /api/assets/complete`
-
-## 11. 联调顺序
-
-建议先打通：
-
-1. `POST /api/auth/register`
-2. `POST /api/auth/login`
-3. `POST /api/studio/projects`
-4. `GET /api/projects/:projectId/planner/workspace`
-5. `GET /api/projects/:projectId/creation/workspace`
-6. `POST /api/shots/:shotId/generate-image`
-7. `POST /api/shots/:shotId/generate-video`
-8. `GET /api/runs/:runId`
-
-## 12. 关联文档
-
-1. `docs/specs/backend-system-design-spec-v0.3.md`
-2. `docs/specs/database-schema-spec-v0.3.md`
-3. `docs/specs/state-machine-and-error-code-spec-v0.3.md`
+1. route 只保留协议转换与校验
+2. planner / catalog / provider / creation 分领域 service 化
+3. 所有 AI 外部调用统一走 capability 层
+4. 所有外部调用统一落 `external_api_call_logs`

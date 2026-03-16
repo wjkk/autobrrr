@@ -1,24 +1,83 @@
 # 内部执行接口规格（v0.3）
 
 版本：v0.3  
-日期：2026-03-13  
-状态：Worker 开工基线
+日期：2026-03-15  
+状态：按当前代码重写后的现行执行链路说明
 
-## 1. 范围
+## 1. 文档目的
 
-定义后端 <-> Worker / provider 执行层协议，覆盖：
+本文用于说明当前系统里“任务执行层”的真实实现，而不是事件总线目标态。
 
-1. 任务下发
-2. 进度回传
-3. 完成 / 失败回传
-4. Recipe 执行编排
-5. provider 解析与快照
+当前事实来源：
 
-## 2. Run 基线
+1. `/Users/jiankunwu/project/aiv/apps/api/src/lib/run-worker.ts`
+2. `/Users/jiankunwu/project/aiv/apps/api/src/lib/provider-adapters.ts`
+3. `/Users/jiankunwu/project/aiv/apps/api/src/lib/run-lifecycle.ts`
+4. `/Users/jiankunwu/project/aiv/apps/api/src/routes/provider-callbacks.ts`
+5. `/Users/jiankunwu/project/aiv/apps/api/src/worker.ts`
 
-### 2.1 RunType
+## 2. 当前执行模型
 
-建议统一使用以下类型：
+当前系统没有实现：
+
+1. `execution.jobs.v1` 事件总线
+2. `execution.events.v1` 事件回传总线
+3. 独立消息队列协议
+
+当前真实实现是：
+
+1. API 创建 `Run`
+2. `Run.status = QUEUED`
+3. `/Users/jiankunwu/project/aiv/apps/api/src/worker.ts` 调用 `processNextQueuedRun()`
+4. `run-worker.ts` 从数据库领取最早的 queued run 或待轮询 run
+5. `provider-adapters.ts` 根据 provider 与模型类型执行：
+   - submit
+   - poll
+   - callback handle
+6. `run-lifecycle.ts` 在任务完成后回写业务对象
+
+## 3. 当前正式执行账本
+
+### 3.1 `Run`
+
+当前 `Run` 是唯一正式执行账本。
+
+真实字段重点包括：
+
+1. `runType`
+2. `resourceType`
+3. `resourceId`
+4. `status`
+5. `executorType`
+6. `inputJson`
+7. `outputJson`
+8. `providerJobId`
+9. `providerStatus`
+10. `providerCallbackToken`
+11. `nextPollAt`
+12. `lastPolledAt`
+13. `pollAttemptCount`
+14. `startedAt`
+15. `finishedAt`
+16. `errorCode`
+17. `errorMessage`
+
+### 3.2 当前没有独立执行事件表
+
+当前 schema 中**没有** `event_logs`。
+
+因此当前执行相关审计主要依赖：
+
+1. `runs.inputJson`
+2. `runs.outputJson`
+3. `runs.providerStatus`
+4. `runs.errorCode / errorMessage`
+
+这能支撑基本功能，但不足以满足后期分析要求。
+
+## 4. 当前支持的 RunType
+
+当前真实枚举：
 
 1. `PLANNER_DOC_UPDATE`
 2. `STORYBOARD_GENERATION`
@@ -31,251 +90,196 @@
 9. `PUBLISH`
 10. `RECIPE_EXECUTION`
 
-### 2.2 RunStatus
+但当前主路径实际重点覆盖：
 
-1. `QUEUED`
-2. `RUNNING`
-3. `COMPLETED`
-4. `FAILED`
-5. `CANCELED`
-6. `TIMED_OUT`
+1. `PLANNER_DOC_UPDATE`
+2. `IMAGE_GENERATION`
+3. `VIDEO_GENERATION`
+4. `PUBLISH`
 
-说明：
+`RECIPE_EXECUTION` 目前尚未进入真实主流程。
 
-1. 对异步 provider，本地 `RUNNING` 覆盖 provider 的 `submitted / queued / processing` 中间态。
-2. provider 中间态进入 `providerStatus`，不单独扩展主状态枚举。
+## 5. 当前 Worker 行为
 
-## 3. 任务下发协议
+### 5.1 领取规则
 
-### 3.1 通用任务消息
+`run-worker.ts` 当前使用数据库直接领取任务：
 
-事件主题建议：`execution.jobs.v1`
+1. 先找 `status = RUNNING && providerJobId != null && nextPollAt <= now` 的待轮询任务
+2. 如果没有，再找 `status = QUEUED` 的任务
+3. 领取 queued task 时，将其原子更新为 `RUNNING`
+
+### 5.2 提交与轮询规则
+
+#### submit
+
+对于无 `providerJobId` 的任务：
+
+1. 走 `adapter.submit(run)`
+2. 若 provider 同步完成：直接写回 `outputJson.providerData`
+3. 若 provider 返回异步任务：写入
+   - `providerJobId`
+   - `providerCallbackToken`
+   - `providerStatus`
+   - `nextPollAt`
+
+#### poll
+
+对于已有 `providerJobId` 的任务：
+
+1. 走 `adapter.poll(run)`
+2. 更新 `providerStatus`
+3. 增加 `pollAttemptCount`
+4. 更新 `lastPolledAt`
+5. 成功后进入统一 lifecycle 收口
+
+## 6. 当前 Provider Adapter 协议
+
+`provider-adapters.ts` 当前抽象为：
 
 ```ts
-interface ExecutionJob {
-  runId: string;
-  parentRunId?: string;
-  recipeExecutionId?: string;
-  runType:
-    | 'PLANNER_DOC_UPDATE'
-    | 'STORYBOARD_GENERATION'
-    | 'IMAGE_GENERATION'
-    | 'VIDEO_GENERATION'
-    | 'MUSIC_GENERATION'
-    | 'VOICE_PROCESSING'
-    | 'LIPSYNC_GENERATION'
-    | 'EXPORT'
-    | 'PUBLISH'
-    | 'RECIPE_EXECUTION';
-  projectId: string;
-  episodeId?: string;
-  shotId?: string;
-  resourceType?: string;
-  resourceId?: string;
-  modelResolution?: {
-    familyId?: string;
-    providerId?: string;
-    endpointId?: string;
-    remoteModelKey?: string;
-  };
-  providerExecution?: {
-    mode: 'sync' | 'async-poll' | 'async-callback';
-    callbackUrl?: string;
-    callbackToken?: string;
-  };
-  payload: Record<string, unknown>;
-  idempotencyKey: string;
-  createdAt: string;
+interface ProviderAdapter {
+  submit(run: Run): Promise<ProviderAdapterUpdate>;
+  poll(run: Run): Promise<ProviderAdapterUpdate>;
+  handleCallback(run: Run, payload: ProviderCallbackPayload): Promise<ProviderAdapterUpdate>;
 }
 ```
 
-### 3.2 Recipe 根任务
+返回值分为：
 
-`RECIPE_EXECUTION` 的 `payload` 应包含：
+1. `submitted`
+2. `running`
+3. `completed`
+4. `failed`
 
-1. `recipeId`
-2. `recipeVersion`
-3. `inputs`
-4. `workflow`
-5. `overrides`
+这是当前真实的内部执行协议，优先级高于旧文档中的事件总线设计。
 
-Worker 接到后负责拆分子任务，并为每一步创建子 `Run`。
+## 7. 当前支持的 Provider 执行模式
 
-## 4. 进度回传协议
+### 7.1 ARK
 
-事件主题建议：`execution.events.v1`
+当前主要用于文本生成。
 
-```ts
-type ExecutionEventType =
-  | 'run.started'
-  | 'run.progress'
-  | 'run.log'
-  | 'run.completed'
-  | 'run.failed'
-  | 'run.canceled';
+特点：
 
-interface ExecutionEvent {
-  runId: string;
-  eventType: ExecutionEventType;
-  projectId: string;
-  episodeId?: string;
-  shotId?: string;
-  progressPercent?: number;
-  stepCode?: string;
-  message?: string;
-  output?: Record<string, unknown>;
-  providerJobId?: string;
-  providerStatus?: string;
-  errorCode?: string;
-  errorMessage?: string;
-  occurredAt: string;
-}
-```
+1. 以同步响应为主
+2. 不支持 poll
+3. 不支持 callback
 
-## 5. provider 调用约定
+### 7.2 Platou
 
-### 5.1 调用前解析
+当前支持：
 
-Worker 执行前必须完成模型解析：
+1. 文本生成
+2. 图片生成
+3. 视频生成
 
-1. 从 `family + policy` 解析到 `endpoint`
-2. 将 `providerId / endpointId / remoteModelKey` 固化到 `Run`
-3. 若 provider 为异步模式，同时固化执行模式：`sync / async-poll / async-callback`
+特点：
 
-### 5.2 调用快照
+1. 文本 / 图片可同步完成
+2. 视频走 taskId + poll 模式
 
-执行后必须写入：
+### 7.3 Mock Proxy
 
-1. `request snapshot`
-2. `response snapshot`
-3. `provider latency`
-4. `provider request id`（若存在）
-5. `provider job id`（若存在）
-6. `provider raw status`
+当用户 provider 配置不可用时，系统当前会对部分 provider 走 mock/fallback 提交逻辑，以保持链路可演示。
 
-### 5.3 异步 provider 首次响应
+## 8. Provider Callback 真实行为
 
-若 provider 首次只返回 `jobId / taskId / uuid`，执行层必须：
+当前内部 callback 入口：
 
-1. 回传 `providerJobId`
-2. 回传 `providerStatus=submitted`
-3. 保持本地 `Run.status = RUNNING`
-4. 不得误判为 `COMPLETED`
+- `POST /api/internal/provider-callbacks/:callbackToken`
 
-### 5.4 轮询模式
+真实规则：
 
-若 provider 为 `async-poll`：
+1. 用 `providerCallbackToken` 找到 `Run`
+2. 若 `Run` 已终态，则直接返回当前 run
+3. 校验 `providerJobId` 一致性
+4. 调用 `adapter.handleCallback()`
+5. callback 本身只推进 run
+6. 真正业务写库仍走 `finalizeGeneratedRun()` 或 `finalizePlannerRun()`
 
-1. Worker 根据 `providerJobId` 调用查询接口
-2. 每次轮询更新 `providerStatus`
-3. 最终成功或失败时再回传 `run.completed / run.failed`
+这部分与旧文档中的方向一致，但实现方式是“API 直接处理 + lifecycle 收口”，不是事件总线。
 
-### 5.5 callback 模式
+## 9. 结果回写规则（按当前实现）
 
-若 provider 为 `async-callback`：
+### 9.1 Planner 文档类
 
-1. API 提供 callback 入口
-2. callback 先校验签名或 token
-3. callback 只推进运行态，不直接写业务产物
-4. 业务回写仍走统一服务层
+`PLANNER_DOC_UPDATE` 完成后：
 
-## 6. 状态更新规则
+1. `finalizePlannerConversation()` 解析模型输出
+2. 写入 `planner_outline_versions` 或 `planner_refinement_versions`
+3. 写入 `planner_messages`
+4. refinement 阶段进一步同步：
+   - `planner_subjects`
+   - `planner_scenes`
+   - `planner_shot_scripts`
 
-1. 收到 `run.started`：`Run.status = RUNNING`
-2. 收到 `run.progress`：更新进度与步骤信息
-3. 收到 `run.completed`：`Run.status = COMPLETED`
-4. 收到 `run.failed`：`Run.status = FAILED`
-5. 收到 `run.canceled`：`Run.status = CANCELED`
+### 9.2 Planner 图片草稿类
 
-补充：
+Planner 主体 / 场景 / 分镜图片生成完成后：
 
-1. 收到仅包含 `providerJobId` 的中间响应时，不进入 `COMPLETED`
-2. 轮询期间仅更新 `providerStatus`
+1. 创建 `Asset`
+2. 回写对应 planner 实体的 `generatedAssetIdsJson`
+3. 同步回 `RefinementDoc`
 
-## 7. 结果回写规则
+### 9.3 Creation 图片 / 视频类
 
-### 7.1 IMAGE / VIDEO
+Shot 生成完成后：
 
-1. 生成 `Asset`
+1. 创建 `Asset`
 2. 创建 `ShotVersion`
-3. 如命令是自动应用，则更新 `Shot.activeVersionId`
+3. 必要时更新 `Shot.activeVersionId`
 
-### 7.2 MUSIC
+### 9.4 Publish 类
 
-1. 生成 `Asset(MUSIC_AUDIO)`
-2. 更新 `music_drafts`
+当前 `PUBLISH` 在业务上已支持提交，但不是一个复杂异步 provider 链路。
 
-### 7.3 VOICE
+## 10. 当前实现与旧文档的主要偏差
 
-1. 上传或处理完成后生成 `Asset(VOICE_AUDIO)`
-2. 更新 `voice_drafts`
+### 10.1 旧文档高估了事件化程度
 
-### 7.4 LIPSYNC
+旧文档中写了：
 
-1. 生成 `Asset(LIPSYNC_VIDEO)`
-2. 关联到目标 shot 或工作区
+1. 通用任务消息协议
+2. 通用事件回传协议
+3. Recipe 根任务拆分协议
 
-### 7.5 RECIPE_EXECUTION
+当前真实实现中，这些并未形成正式运行时接口。
 
-1. 根任务只汇总状态，不直接产生主资产
-2. 真正产物由子任务分别产出
-3. 子任务全部完成后根任务才可 `COMPLETED`
+### 10.2 旧文档高估了审计能力
 
-## 8. 幂等与去重
+旧文档要求：
 
-1. `runId` 是内部唯一主键。
-2. `idempotencyKey` 用于业务去重。
-3. 同一 `runId + eventType + occurredAt` 只处理一次。
-4. Worker 重投不得重复创建 `ShotVersion / Asset`。
-5. 同一 `providerId + providerJobId` 的完成事件只处理一次。
+1. request snapshot
+2. response snapshot
+3. provider latency
+4. provider request id
+5. provider raw status
 
-## 9. 超时与失败
+当前真实实现只部分记录在 `Run` 中，还没有独立审计表。
 
-### 9.1 超时
+## 11. 当前最佳实践评价
 
-规则：
+### 11.1 优点
 
-1. 后端超过阈值未收到事件，标记 `TIMED_OUT`
-2. 超时后允许重试，但必须创建新的 retry run 或显式 retry 记录
+1. 已有统一 `Run` 账本
+2. 已有统一 provider adapter 层
+3. submit / poll / callback 责任边界基本成立
+4. 业务回写统一通过 lifecycle 服务收口
 
-异步 provider 额外规则：
+### 11.2 不足
 
-1. 超过最大轮询次数仍未完成，置 `TIMED_OUT`
-2. callback 模式在回调丢失时也必须有兜底轮询或超时收敛
+1. 没有独立外部调用日志表
+2. 没有事件总线，不适合高并发扩展场景
+3. `apps/api/src/worker.ts` 仍然过轻，尚未演化为独立 worker 应用边界
+4. Provider adapter 与 provider client 仍然属于“半模块化”状态
 
-### 9.2 失败分类
+## 12. 下一阶段重构建议
 
-建议至少区分：
+在不考虑兼容老数据和老业务的前提下，建议：
 
-1. `VALIDATION_ERROR`
-2. `PROVIDER_TIMEOUT`
-3. `PROVIDER_BAD_RESPONSE`
-4. `PROVIDER_RATE_LIMITED`
-5. `ASSET_WRITE_FAILED`
-6. `WORKFLOW_CONFIG_INVALID`
-7. `INTERNAL_ERROR`
-8. `PROVIDER_ASYNC_JOB_NOT_FOUND`
-9. `PROVIDER_CALLBACK_INVALID`
-
-## 10. Recipe 工作流执行建议
-
-执行器对 recipe workflow 的最低支持：
-
-1. 顺序执行
-2. 失败即停
-3. 子步骤进度回传
-4. 局部重试
-
-第三方失败与 fallback 建议：
-
-1. 主 endpoint 失败后允许切换同 `ModelFamily` 的候选 endpoint
-2. fallback 必须生成事件日志
-3. fallback 成功后，最终 `Run` 仍需保留原失败上下文
-
-后续如 workflow 复杂度上升，再引入 DAG 调度能力。
-
-## 11. 关联文档
-
-1. `docs/specs/backend-system-design-spec-v0.3.md`
-2. `docs/specs/backend-data-api-spec-v0.3.md`
-3. `docs/specs/state-machine-and-error-code-spec-v0.3.md`
+1. 保留 `Run` 作为业务账本
+2. 新增 `external_api_call_logs` 作为外部调用审计账本
+3. 将 provider 调用全部收拢到统一 capability 层
+4. 将 `apps/api/src/worker.ts` 演进为独立 worker 应用或独立执行进程边界
+5. 如后续确有需要，再引入 Redis / queue / event bus，而不是继续在文档中提前假定其已存在

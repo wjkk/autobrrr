@@ -1,287 +1,270 @@
 # 数据库设计规格（v0.3）
 
 版本：v0.3  
-日期：2026-03-13  
-状态：MySQL 开工基线
+日期：2026-03-15  
+状态：按当前 Prisma schema 重写后的现行实现说明
 
-## 1. 范围
+## 1. 事实来源
 
-本文件定义后端正式落地时的 MySQL 数据结构基线，覆盖：
+本文件仅以以下 schema 为准：
 
-1. 领域核心表
-2. 关键外键关系
-3. 索引与唯一约束
-4. MySQL 下的实现取舍
+- `/Users/jiankunwu/project/aiv/apps/api/prisma/schema.prisma`
 
-## 2. 总体原则
+## 2. 当前数据库总体结构
 
-1. 数据库使用 `MySQL`。
-2. 采用 Prisma 管理 schema。
-3. 不依赖 PostgreSQL partial unique index。
-4. “当前生效对象”通过主表显式外键表达。
-5. `Run` 是统一异步账本。
-6. `GenerationRecipe / RecipeExecution` 是复用生成的正式对象。
-7. `ModelFamily / ModelProvider / ModelEndpoint` 是模型目录正式对象。
+当前数据库使用：
 
-## 3. 主对象与关系
+1. `MySQL`
+2. `Prisma`
 
-### 3.0 用户与会话层
+当前 schema 的主分层为：
+
+1. 用户与会话层
+2. 项目与剧集层
+3. Planner 层
+4. Creation 层
+5. 目录与配置层
+6. 模型目录层
+7. Run 执行账本层
+
+## 3. 主对象清单
+
+### 3.1 用户与会话
 
 1. `users`
 2. `user_sessions`
 
-关系：
-
-1. `users 1:N user_sessions`
-2. `users 1:N projects`
-
-### 3.1 项目层
+### 3.2 项目与剧集
 
 1. `projects`
 2. `episodes`
+3. `project_creation_configs`
 
-关系：
-
-1. `projects 1:N episodes`
-2. `projects.current_episode_id -> episodes.id`
-
-### 3.2 策划层
+### 3.3 Planner 与 Agent
 
 1. `planner_sessions`
-2. `planner_messages`
-3. `planner_references`
-4. `planner_outline_versions`
-5. `planner_refinement_versions`
+2. `planner_outline_versions`
+3. `planner_refinement_versions`
+4. `planner_messages`
+5. `planner_step_analysis`
+6. `planner_subjects`
+7. `planner_scenes`
+8. `planner_shot_scripts`
+9. `planner_agent_profiles`
+10. `planner_sub_agent_profiles`
+11. `planner_sub_agent_profile_releases`
+12. `planner_debug_runs`
 
-关系：
-
-1. `episodes 1:N planner_sessions`
-2. `episodes.active_planner_session_id -> planner_sessions.id`
-3. `planner_sessions 1:N planner_messages`
-4. `planner_sessions 1:N planner_references`
-5. `planner_sessions 1:N planner_outline_versions`
-6. `planner_sessions 1:N planner_refinement_versions`
-
-### 3.3 创作层
+### 3.4 Creation
 
 1. `shots`
 2. `shot_versions`
 3. `assets`
-4. `shot_material_bindings`
-5. `voice_drafts`
-6. `music_drafts`
-7. `lipsync_drafts`
 
-关系：
-
-1. `episodes 1:N shots`
-2. `shots 1:N shot_versions`
-3. `shots 1:N shot_material_bindings`
-4. `shot_material_bindings N:1 assets`
-5. `shots.active_version_id -> shot_versions.id`
-6. `shots.active_material_binding_id -> shot_material_bindings.id`
-
-### 3.4 发布层
-
-1. `publish_drafts`
-2. `publish_records`
-
-### 3.5 复用生成层
-
-1. `generation_recipes`
-2. `recipe_executions`
-
-### 3.6 模型目录层
+### 3.5 模型与 provider
 
 1. `model_families`
 2. `model_providers`
 3. `model_endpoints`
+4. `user_provider_configs`
 
-### 3.7 执行账本层
+### 3.6 执行账本
 
 1. `runs`
-2. `event_logs`
 
-## 4. 关键字段约束
+### 3.7 未来扩展 / 当前非主路径
 
-### 4.0 `users`
+1. `generation_recipes`
+2. `recipe_executions`
 
-关键约束：
+## 4. 当前真实关系
 
-1. `email` 唯一。
-2. 只保存 `password_hash`。
-3. 用户删除策略第一阶段建议软删除或 `DISABLED`，避免直接级联清除项目。
+### 4.1 用户 -> 项目
 
-### 4.0.1 `user_sessions`
+1. `users 1:N projects`
+2. `users 1:N user_sessions`
+3. `users 1:N user_provider_configs`
+4. `users 1:N subject_profiles`
+5. `users 1:N style_presets`
 
-关键约束：
+### 4.2 项目 -> 剧集
 
-1. `session_token_hash` 唯一。
-2. `expires_at` 到期后会话无效。
-3. `revoked_at` 非空后会话立即失效。
+1. `projects 1:N episodes`
+2. `projects.current_episode_id -> episodes.id`
 
-### 4.1 `projects`
+### 4.3 项目入口配置
 
-关键约束：
+1. `projects 1:1 project_creation_configs`
+2. `project_creation_configs` 可关联：
+   - `model_endpoints`
+   - `subject_profiles`
+   - `style_presets`
 
-1. `content_mode` 创建后不可变。
-2. `current_episode_id` 可空，但若存在必须属于当前 project。
-3. `created_by_id` 必须关联到 `users.id`。
+### 4.4 Planner
 
-### 4.2 `episodes`
+1. `episodes 1:N planner_sessions`
+2. `episodes.active_planner_session_id -> planner_sessions.id`
+3. `planner_sessions 1:N planner_messages`
+4. `planner_sessions 1:N planner_outline_versions`
+5. `planner_sessions 1:N planner_refinement_versions`
+6. `planner_refinement_versions 1:N planner_step_analysis`
+7. `planner_refinement_versions 1:N planner_subjects`
+8. `planner_refinement_versions 1:N planner_scenes`
+9. `planner_refinement_versions 1:N planner_shot_scripts`
+10. `planner_refinement_versions` 可关联：
+   - `planner_agent_profiles`
+   - `planner_sub_agent_profiles`
+   - `runs`
 
-关键约束：
+### 4.5 Creation
 
-1. `(project_id, episode_no)` 唯一。
-2. `active_planner_session_id` 若存在，必须属于当前 episode。
+1. `episodes 1:N shots`
+2. `shots 1:N shot_versions`
+3. `shots.active_version_id -> shot_versions.id`
+4. `shot_versions.output_asset_id -> assets.id`
 
-### 4.3 `shots`
+### 4.6 Run
 
-关键约束：
+`runs` 当前可以关联：
 
-1. `(episode_id, sequence_no)` 唯一。
-2. `active_version_id` 若存在，必须属于当前 shot。
-3. `active_material_binding_id` 若存在，必须属于当前 shot。
+1. `projects`
+2. `episodes`
+3. `model_families`
+4. `model_providers`
+5. `model_endpoints`
+5. `planner_outline_versions`
+6. `planner_refinement_versions`
 
-### 4.4 `shot_versions`
+## 5. 当前真实约束
 
-关键约束：
+### 5.1 用户层
 
-1. `(shot_id, version_number)` 唯一。
-2. 每条记录必须记录 `media_kind`。
-3. 生成类版本建议记录 `model_family_id / model_endpoint_id / provider_id`。
+1. `users.email` 唯一
+2. `user_sessions.session_token_hash` 唯一
 
-### 4.5 `generation_recipes`
+### 5.2 项目层
 
-关键约束：
+1. `(project_id, episode_no)` 在 `episodes` 中唯一
+2. `project_creation_configs.project_id` 唯一
 
-1. `definition_json` 必须可独立解释。
-2. `version` 自增，支持未来升级配方格式。
+### 5.3 Planner 层
 
-### 4.6 `model_endpoints`
+1. `(planner_session_id, version_number)` 在 `planner_outline_versions` 中唯一
+2. `(planner_session_id, version_number)` 在 `planner_refinement_versions` 中唯一
+3. `(agent_profile_id, subtype)` 在 `planner_sub_agent_profiles` 中唯一
+4. `(sub_agent_profile_id, release_version)` 在 `planner_sub_agent_profile_releases` 中唯一
+5. `(refinement_version_id, step_key)` 在 `planner_step_analysis` 中唯一
 
-关键约束：
+### 5.4 Creation 层
 
-1. `(provider_id, remote_model_key)` 唯一。
-2. 必须关联一个 `family_id`。
+1. `(episode_id, sequence_no)` 在 `shots` 中唯一
+2. `(shot_id, version_number)` 在 `shot_versions` 中唯一
 
-### 4.7 `runs`
+### 5.5 模型目录层
 
-关键约束：
+1. `model_families.slug` 唯一
+2. `model_providers.code` 唯一
+3. `model_endpoints.slug` 唯一
+4. `(user_id, provider_id)` 在 `user_provider_configs` 中唯一
 
-1. `idempotency_key` 唯一或带业务域唯一。
-2. 生成类任务必须记录模型解析结果。
-3. 异步 provider 任务必须记录 `provider_job_id`。
-4. polling 模式必须记录 `provider_status / next_poll_at / poll_attempt_count`。
+### 5.6 Run 层
 
-## 5. 索引建议
+1. `runs.idempotency_key` 唯一
+2. `runs` 已索引：
+   - `(project_id, run_type, status, created_at)`
+   - `(episode_id, status, created_at)`
+   - `(model_family_id, model_endpoint_id, created_at)`
+   - `(status, next_poll_at)`
 
-### 5.1 查询高频索引
+## 6. 当前真实枚举
 
-1. `users(email)`
-2. `user_sessions(user_id, expires_at)`
-3. `user_sessions(session_token_hash)`
-1. `projects(status, updated_at)`
-2. `episodes(project_id, status, updated_at)`
-3. `planner_sessions(project_id, episode_id, created_at desc)`
-4. `shots(episode_id, sequence_no)`
-5. `shot_versions(shot_id, created_at desc)`
-6. `assets(project_id, asset_type, created_at desc)`
-7. `runs(project_id, run_type, status, created_at desc)`
-8. `event_logs(project_id, created_at desc)`
-9. `generation_recipes(project_id, created_at desc)`
-10. `recipe_executions(recipe_id, created_at desc)`
-11. `runs(status, next_poll_at)`
+### 6.1 核心业务枚举
 
-### 5.2 唯一索引
+1. `ProjectStatus`
+2. `EpisodeStatus`
+3. `PlannerStatus`
+4. `PlannerMessageRole`
+5. `PlannerMessageType`
+6. `PlannerOutlineStatus`
+7. `PlannerRefinementStatus`
+8. `PlannerStepStatus`
+9. `ProfileReleaseStatus`
+10. `ShotStatus`
+11. `ShotVersionStatus`
 
-1. `users(email)`
-2. `user_sessions(session_token_hash)`
-1. `episodes(project_id, episode_no)`
-2. `planner_outline_versions(planner_session_id, version_number)`
-3. `planner_refinement_versions(planner_session_id, version_number)`
-4. `shots(episode_id, sequence_no)`
-5. `shot_versions(shot_id, version_number)`
-6. `model_endpoints(provider_id, remote_model_key)`
-7. `runs(idempotency_key)`
+### 6.2 资源与模型枚举
 
-## 6. MySQL 实现取舍
+1. `MediaKind`
+2. `AssetSourceKind`
+3. `ModelKind`
+4. `ProviderType`
+5. `ModelEndpointStatus`
+6. `CatalogVisibility`
+7. `SubjectType`
+8. `SubjectGenderTag`
 
-### 6.1 不使用 partial unique
+### 6.3 执行枚举
 
-替代方式：
+1. `RunType`
+2. `RunStatus`
+3. `ExecutorType`
 
-1. 主表显式外键
-2. 服务层校验
-3. 事务内双写
+## 7. 当前 schema 与旧文档的关键差异
 
-### 6.2 JSON 字段使用边界
+### 7.1 当前 schema 中不存在的旧基线对象
 
-允许保留 JSON 的场景：
+旧文档中常出现、但当前真实 schema 中不存在：
 
-1. prompt 快照
-2. provider request/response 快照
-3. recipe definition
-4. 音频工作区过渡期 snapshot
+1. `event_logs`
+2. `planner_references`
+3. `voice_drafts`
+4. `music_drafts`
+5. `lipsync_drafts`
+6. `shot_material_bindings`
+7. `publish_drafts`
+8. `publish_records`
 
-异步 provider 说明：
+### 7.2 当前 schema 已新增的重要对象
 
-1. `provider raw response` 可以放 JSON snapshot
-2. `provider_job_id / provider_status / next_poll_at` 必须结构化为独立字段
+旧文档未充分体现、但当前真实存在：
 
-不建议长期保留为 JSON 的场景：
+1. `planner_agent_profiles`
+2. `planner_sub_agent_profiles`
+3. `planner_sub_agent_profile_releases`
+4. `planner_debug_runs`
+5. `project_creation_configs`
+6. `subject_profiles`
+7. `style_presets`
+8. `user_provider_configs`
 
-1. 当前 active 对象关系
-2. 可查询的核心业务对象
-3. 高并发更新字段
+## 8. 当前数据库设计的最佳实践评价
 
-### 6.3 枚举建议
+### 8.1 优点
 
-对频繁演进的状态枚举，建议优先使用 `VARCHAR` + 应用层约束，而不是 MySQL 原生 ENUM。
+1. 核心链路已回到关系型建模
+2. Planner 版本化对象独立
+3. 模型目录与用户 provider 配置分离
+4. Run 已形成统一执行账本
 
-原因：
+### 8.2 问题
 
-1. schema 演进更稳
-2. Prisma 迁移更容易控
-3. 跨环境兼容性更好
+1. 外部调用审计缺独立日志表
+2. `GenerationRecipe / RecipeExecution` 已进 schema，但尚未进入主路径
+3. `runs.inputJson / outputJson` 承担过多审计职责
+4. 缺少 AI 调用级别的调用快照表
 
-## 7. Prisma 落地建议
+## 9. 下一阶段数据库重构建议
 
-建议按以下顺序建表：
+在不考虑兼容老数据和老业务的前提下，建议下一阶段：
 
-1. `users / user_sessions`
-2. `projects / episodes`
-3. `assets`
-4. `planner_*`
-5. `shots / shot_versions / shot_material_bindings`
-6. `model_*`
-7. `runs / event_logs`
-8. `generation_recipes / recipe_executions`
-9. `voice_drafts / music_drafts / lipsync_drafts`
-10. `publish_*`
-
-## 8. 第一阶段必须建的最小表集
-
-若要优先打通创建到创作主链路，第一阶段至少需要：
-
-1. `users`
-2. `user_sessions`
-3. `projects`
-4. `episodes`
-5. `planner_sessions`
-6. `shots`
-7. `shot_versions`
-8. `assets`
-9. `shot_material_bindings`
-10. `runs`
-11. `event_logs`
-12. `model_families`
-13. `model_providers`
-14. `model_endpoints`
-
-## 9. 关联文档
-
-1. `docs/specs/backend-system-design-spec-v0.3.md`
-2. `docs/specs/backend-data-api-spec-v0.3.md`
-3. `docs/specs/internal-execution-api-spec-v0.3.md`
-4. `docs/specs/state-machine-and-error-code-spec-v0.3.md`
+1. 保留当前主干表：
+   - users / sessions
+   - projects / episodes / creation_config
+   - planner versions / entities / debug runs
+   - shots / shot_versions / assets
+   - model registry / user provider configs
+   - runs
+2. 将 `GenerationRecipe / RecipeExecution` 降级为未来扩展，不再作为当前主路径中心
+3. 新增独立表：
+   - `external_api_call_logs`
+4. 明确 `runs` 是业务账本，`external_api_call_logs` 是外部调用审计账本

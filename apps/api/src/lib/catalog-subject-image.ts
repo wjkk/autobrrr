@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { submitAicsoImageGeneration } from './aicso-client.js';
 import { resolveModelSelection } from './model-registry.js';
 import { submitPlatouImageGeneration } from './platou-client.js';
 import { findStringDeep } from './planner-text-extraction.js';
@@ -67,14 +66,7 @@ export async function generateCatalogSubjectImageForUser(args: {
   const prompt = buildCatalogSubjectPrompt(args.input);
   let providerOutput: Record<string, unknown>;
 
-  if (runtimeConfig.providerCode === 'aicso') {
-    providerOutput = await submitAicsoImageGeneration({
-      model: resolvedModel.endpoint.remoteModelKey,
-      prompt,
-      baseUrl: runtimeConfig.baseUrl,
-      apiKey: runtimeConfig.apiKey,
-    });
-  } else if (runtimeConfig.providerCode === 'platou') {
+  if (runtimeConfig.providerCode === 'platou') {
     providerOutput = await submitPlatouImageGeneration({
       model: resolvedModel.endpoint.remoteModelKey,
       prompt,

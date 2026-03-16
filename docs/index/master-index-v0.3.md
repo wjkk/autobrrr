@@ -18,18 +18,19 @@
 
 1. Planner Agent 相关内容已在 2026-03-14 做过一轮“文档 vs 代码”精确对齐。
 2. 若涉及 Planner Agent / Planner Debug / Outline-Refinement 两阶段工作流，除主规格外，还应同时参考本索引列出的两份 review 文档。
+3. 自 2026-03-15 起，系统级文档与代码一致性、以及下一阶段重构方向，额外以系统复盘文档为准。
 
 ## 2. 代码真相源
 
 当前文档以以下代码为事实来源：
 
-1. `apps/web/src/lib/studio-service.ts`
-2. `apps/web/src/app/api/studio/projects/route.ts`
-3. `apps/web/src/features/creation/lib/creation-state.ts`
-4. `apps/web/src/features/creation/lib/use-creation-workspace.ts`
-5. `packages/domain/src/*.ts`
-6. `packages/mock-data/src/fixtures/studio-fixtures.ts`
-7. `prisma/schema.prisma`
+1. `apps/api/prisma/schema.prisma`
+2. `apps/api/src/routes/*.ts`
+3. `apps/api/src/lib/*.ts`
+4. `apps/web/src/app/**/*.tsx`
+5. `apps/web/src/features/**/*.tsx`
+6. `docs/reviews/system-doc-code-audit-2026-03-15.md`
+7. `docs/reviews/system-refactor-plan-2026-03-15.md`
 
 ## 3. 现行文档清单
 
@@ -62,14 +63,28 @@
 2. `docs/reviews/planner-agent-final-decisions-2026-03-14.md`  
    说明：对剩余口径问题的最终裁决，统一 `assistant_error`、profile 创建边界、planner 规划期图片能力等说法。
 
-### 3.4 状态与实施
+### 3.4 系统级复盘与重构
+
+1. `docs/reviews/system-doc-code-audit-2026-03-15.md`
+   说明：系统级文档与代码一致性审计，标注哪些文档已偏离真实实现。
+2. `docs/reviews/system-refactor-plan-2026-03-15.md`
+   说明：在不考虑兼容老数据和老业务的前提下，定义下一阶段重构方向、AI 模块化原则与外部接口日志方案。
+3. `docs/reviews/planner-agent-refactor-design-2026-03-16.md`
+   说明：Planner Agent 重构设计草稿。诊断当前架构缺陷（版本链断裂、衍生数据非原子、scope 字符串化），定义目标能力矩阵，给出模型感知分镜提示词、Shot 级重跑、SSE 实时进度、策划确认交接的设计决策与实施顺序。
+
+### 3.5 状态与实施
 
 1. `docs/specs/state-machine-and-error-code-spec-v0.3.md`  
-   说明：项目、分镜、任务、配方执行等状态流转与错误码。
+  说明：项目、分镜、任务、配方执行等状态流转与错误码。
 2. `docs/specs/backend-implementation-checklist-v0.3.md`  
-   说明：按阶段拆分的实施清单、DoD、联调顺序与回归场景。
+  说明：按阶段拆分的实施清单、DoD、联调顺序与回归场景。
 
-### 3.5 历史基线
+### 3.6 视频模型能力
+
+1. `docs/specs/video-model-capability-spec-v0.1.md`
+   说明：各主流视频生成模型的能力参数（多镜头叙事、最大时长、分辨率、参考图数量、音效支持等），供 Planner 分镜提示词生成、前端选型 UI、Run 创建校验使用。包含结构化 JSON 字段定义（对应 `capabilityJson.videoCapability`）及分镜提示词生成规则。
+
+### 3.7 历史基线
 
 以下文档保留为上一个阶段的历史参考：
 
@@ -92,3 +107,6 @@
 10. `planner-workflow-and-document-spec-v0.1.md`
 11. `planner-agent-doc-code-gap-review-2026-03-14.md`
 12. `planner-agent-final-decisions-2026-03-14.md`
+13. `system-doc-code-audit-2026-03-15.md`
+14. `system-refactor-plan-2026-03-15.md`
+15. `video-model-capability-spec-v0.1.md`（实现 Phase 4 分镜提示词生成功能时必读）

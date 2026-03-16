@@ -1,271 +1,240 @@
 # 首页主体/画风目录与项目入口配置规范（v0.3）
 
 版本：v0.3  
-日期：2026-03-14  
-状态：已落地基础实现，作为后续扩展基线
+日期：2026-03-15  
+状态：按当前代码重写后的现行实现说明
 
-## 1. 目的
+## 1. 文档目的
 
-本文用于冻结首页 `短剧漫剧` 场景下这 4 个入口的后端设计：
+本文用于说明当前系统中以下能力的真实落地情况：
 
-1. `上传剧本`
-2. `选择主体图模型`
-3. `选择主体`
-4. `选择画风`
+1. 首页 `Explore` 的项目入口配置
+2. 主体目录与画风目录
+3. 用户侧目录管理页
+4. 后台公共目录管理页
+5. 主体图上传与 AI 生成
 
-目标不是只让前端“能点”，而是确保：
+事实来源：
 
-1. 目录数据来自后端专用表。
-2. 首页提交后，所选项会进入独立配置表，不丢失。
-3. 主体与画风后续可以通过后台接口、内部工具或直接数据库维护。
+1. `/Users/jiankunwu/project/aiv/apps/api/prisma/schema.prisma`
+2. `/Users/jiankunwu/project/aiv/apps/api/src/routes/explore-catalogs.ts`
+3. `/Users/jiankunwu/project/aiv/apps/api/src/routes/studio-projects.ts`
+4. `/Users/jiankunwu/project/aiv/apps/web/src/features/explore/components/explore-page.tsx`
+5. `/Users/jiankunwu/project/aiv/apps/web/src/features/settings/components/catalog-management-page.tsx`
+6. `/Users/jiankunwu/project/aiv/apps/web/src/app/settings/catalogs/page.tsx`
+7. `/Users/jiankunwu/project/aiv/apps/web/src/app/admin/catalogs/page.tsx`
 
-## 2. 当前已落地实现
+## 2. 当前已落地能力
 
-### 2.1 专用表
+### 2.1 首页入口配置已后端化
 
-当前 MySQL 已有以下表：
-
-1. `subject_profiles`
-2. `style_presets`
-3. `project_creation_configs`
-
-相关代码：
-
-1. [schema.prisma](/Users/jiankunwu/project/aiv/apps/api/prisma/schema.prisma)
-2. [explore-catalogs.ts](/Users/jiankunwu/project/aiv/apps/api/src/routes/explore-catalogs.ts)
-3. [studio-projects.ts](/Users/jiankunwu/project/aiv/apps/api/src/routes/studio-projects.ts)
-4. [seed-explore-catalogs.ts](/Users/jiankunwu/project/aiv/apps/api/scripts/seed-explore-catalogs.ts)
-
-### 2.2 首页使用方式
-
-首页 `Explore` 已切到真实后端目录：
+当前首页已不再使用纯前端常量，而是接入真实后端数据：
 
 1. 主体列表：`GET /api/explore/subjects`
 2. 画风列表：`GET /api/explore/styles`
 3. 主体图模型：`GET /api/model-endpoints?modelKind=image`
 4. 创建项目：`POST /api/studio/projects`
 
-相关前端代码：
+首页当前可提交的关键配置包括：
 
-1. [explore-page.tsx](/Users/jiankunwu/project/aiv/apps/web/src/features/explore/components/explore-page.tsx)
-2. [studio-service.ts](/Users/jiankunwu/project/aiv/apps/web/src/lib/studio-service.ts)
+1. 内容类型 `selectedTab`
+2. 子类型 `selectedSubtype`
+3. 剧本来源名 `scriptSourceName`
+4. 剧本文本 `scriptContent`
+5. 主体图模型 `imageModelEndpointSlug`
+6. 主体 `subjectProfileSlug`
+7. 画风 `stylePresetSlug`
+8. 其他入口设置 `settings`
 
-### 2.3 创建项目时的配置落库
+这些配置会写入：
 
-当前 `POST /api/studio/projects` 已支持：
+- `project_creation_configs`
 
-```json
-{
-  "prompt": "...",
-  "contentMode": "single",
-  "creationConfig": {
-    "selectedTab": "短剧漫剧",
-    "scriptSourceName": "demo-script.md",
-    "scriptContent": "...",
-    "imageModelEndpointSlug": "proxy-seko-image-v1",
-    "subjectProfileSlug": "little-fox",
-    "stylePresetSlug": "ink-oriental",
-    "settings": {
-      "multiEpisode": false
-    }
-  }
-}
-```
+### 2.2 主体 / 画风目录已落地为正式表
 
-落库位置：
+当前目录相关正式表：
 
-1. `projects`
-2. `project_creation_configs`
+1. `subject_profiles`
+2. `style_presets`
+3. `project_creation_configs`
 
-## 3. 表设计说明
+其中：
 
-## 3.1 `subject_profiles`
+- `subject_profiles`：主体目录
+- `style_presets`：画风目录
+- `project_creation_configs`：项目入口配置快照
 
-用途：管理首页“主体”目录，以及后续策划/创作阶段的主体复用。
+## 3. 当前真实数据模型
 
-当前字段：
+### 3.1 `subject_profiles`
 
-1. `id`
-2. `slug`
-3. `name`
-4. `visibility`
-5. `owner_user_id`
-6. `subject_type`
-7. `gender_tag`
-8. `preview_image_url`
-9. `reference_image_url`
-10. `description`
-11. `prompt_template`
-12. `negative_prompt`
-13. `tags_json`
-14. `metadata_json`
-15. `enabled`
-16. `sort_order`
-17. `created_at`
-18. `updated_at`
+当前真实字段语义：
 
-字段语义：
+1. `slug`：稳定业务标识
+2. `name`：展示名称
+3. `visibility`：`PUBLIC / PERSONAL`
+4. `owner_user_id`：个人主体的归属用户
+5. `subject_type`：`HUMAN / ANIMAL / CREATURE / OBJECT`
+6. `gender_tag`：当前筛选与展示使用
+7. `preview_image_url`：目录卡片封面图
+8. `reference_image_url`：生成一致性参考图
+9. `description`
+10. `prompt_template`
+11. `negative_prompt`
+12. `tags_json`
+13. `metadata_json`
+14. `enabled`
+15. `sort_order`
 
-1. `slug`：稳定业务标识，页面和配置表都应该优先引用它或对应 `id`。
-2. `visibility`：区分平台公共主体与用户私有主体。
-3. `subject_type`：当前只做基础枚举，后续影响默认 prompt 结构与推荐镜头。
-4. `gender_tag`：当前用于首页筛选，后续可参与配音/口型默认策略。
-5. `preview_image_url`：目录卡片用图。
-6. `reference_image_url`：真正用于生图一致性参考的图。
-7. `prompt_template`：该主体注入到生图/策划 prompt 的标准模板。
-8. `negative_prompt`：该主体关联的负面 prompt。
-9. `metadata_json`：承接短期扩展字段，但不应长期替代核心字段。
+### 3.2 `style_presets`
 
-## 3.2 主体后续建议增加的字段
+当前真实字段语义：
 
-当前这批字段足够首页使用，但如果主体要长期管理，建议下一阶段补这几类字段：
+1. `slug`
+2. `name`
+3. `visibility`
+4. `owner_user_id`
+5. `preview_image_url`
+6. `description`
+7. `prompt_template`
+8. `negative_prompt`
+9. `tags_json`
+10. `metadata_json`
+11. `enabled`
+12. `sort_order`
 
-1. `identity_key`
-说明：跨项目复用同一主体时的稳定身份键。
+### 3.3 `project_creation_configs`
 
-2. `default_age_group`
-说明：比 `gender_tag` 更适合策划和镜头语言的默认分类。
+当前真实定位：
 
-3. `species_label`
-说明：用于 `ANIMAL / CREATURE` 细分，比如狐狸、机器人猫、鹦鹉。
+1. 不是目录表
+2. 是项目创建时的配置快照表
+3. 后续 planner / creation 均可从这里读取入口初始真相
 
-4. `reference_asset_id`
-说明：改成引用统一 `assets` 表，而不是长期只存 URL。
+当前真实字段：
 
-5. `consistency_strategy`
-说明：例如 `single_ref / multi_ref / face_lock / style_lock`。
-
-6. `voice_profile_id`
-说明：后续配音或对口型时的默认声音绑定。
-
-7. `lipsync_capable`
-说明：区分适合做口型的视频主体和纯静态主体。
-
-8. `status`
-说明：建议最终从简单 `enabled` 升级为 `draft / active / archived`。
-
-结论：
-当前 `subject_profiles` 已可用，但它未来应当成为“主体资产目录”，不只是首页选项表。
-
-## 3.3 `style_presets`
-
-用途：管理首页“画风”目录，以及后续 prompt 复用。
-
-当前字段：
-
-1. `id`
-2. `slug`
-3. `name`
-4. `visibility`
-5. `owner_user_id`
-6. `preview_image_url`
-7. `description`
-8. `prompt_template`
-9. `negative_prompt`
-10. `tags_json`
-11. `metadata_json`
-12. `enabled`
-13. `sort_order`
-14. `created_at`
-15. `updated_at`
-
-设计原则：
-
-1. 画风的核心不是图片，而是 prompt 规则。
-2. `preview_image_url` 只负责选择体验，不应当成为运行时真相。
-3. `prompt_template` 才是画风真正的后端资产。
-
-后续建议补充字段：
-
-1. `style_family`
-2. `default_aspect_ratio`
-3. `recommended_model_family`
-4. `recommended_model_endpoint_id`
-5. `render_constraints_json`
-
-## 3.4 `project_creation_configs`
-
-用途：存首页提交前的入口配置快照。
-
-当前字段：
-
-1. `project_id`
-2. `selected_tab`
+1. `selected_tab`
+2. `selected_subtype`
 3. `script_source_name`
 4. `script_content`
 5. `image_model_endpoint_id`
 6. `subject_profile_id`
 7. `style_preset_id`
 8. `settings_json`
-9. `created_at`
-10. `updated_at`
-
-这张表的定位很重要：
-
-1. 它不是目录表。
-2. 它是“项目入口配置快照”。
-3. 后续策划、生成 Recipe、再次生成类似视频，都可以从这里取初始输入。
 
 ## 4. 当前接口
 
-### 4.1 目录接口
+### 4.1 主体接口
 
 1. `GET /api/explore/subjects`
 2. `POST /api/explore/subjects`
 3. `PATCH /api/explore/subjects/:itemId`
-4. `GET /api/explore/styles`
-5. `POST /api/explore/styles`
-6. `PATCH /api/explore/styles/:itemId`
+4. `POST /api/explore/subjects/generate-image`
 
-### 4.2 项目创建接口
+### 4.2 画风接口
+
+1. `GET /api/explore/styles`
+2. `POST /api/explore/styles`
+3. `PATCH /api/explore/styles/:itemId`
+
+### 4.3 项目创建接口
 
 1. `POST /api/studio/projects`
 
-说明：
+## 5. 当前页面落地状态
 
-1. 当前已支持把首页选择项写入 `project_creation_configs`。
-2. 当前还没有独立的后台管理页，但接口和表已经具备。
+### 5.1 首页 `Explore`
 
-## 5. 管理建议
+当前已落地：
 
-## 5.1 主体管理至少要有的功能
+1. 选择主体
+2. 选择画风
+3. 选择主体图模型
+4. 上传剧本/导入剧本文本
+5. 提交项目并写入 `project_creation_configs`
+6. 通过 query 参数预选主体
 
-后续建议提供一个内部管理页或后台工具，最少包含：
+### 5.2 用户侧目录页
 
-1. 新建主体
-2. 编辑名称/封面/参考图
-3. 编辑 `prompt_template / negative_prompt`
-4. 设置公开/私有
-5. 设置主体类型与性别标签
-6. 排序与启停用
-7. 查看被哪些项目引用
+当前已落地页面：
 
-## 5.2 画风管理至少要有的功能
+- `/settings/catalogs`
 
-1. 新建画风
-2. 编辑封面图
-3. 编辑正向/负向 prompt 模板
-4. 设置推荐模型
-5. 设置排序与启停用
+当前已落地能力：
 
-## 5.3 维护策略
+1. 主体库 / 画风库切换
+2. 公共 / 个人筛选
+3. 主体类型筛选
+4. 搜索
+5. 新建主体 / 新建画风
+6. 卡片列表浏览
+7. 弹层编辑主体
+8. 弹层编辑画风
+9. 使用主体直接跳转创作
+10. 主体图本地上传
+11. 主体图 AI 生成
 
-建议规则：
+### 5.3 后台公共目录页
 
-1. 公共目录项由平台维护。
-2. 用户自建目录项写成 `PERSONAL`。
-3. 项目创建时写快照，后续即使目录项被修改，历史项目也不应完全失真。
+当前已落地页面：
 
-## 6. 已验证结果
+- `/admin/catalogs`
 
-2026-03-14 已完成以下验证：
+当前已落地能力：
 
-1. 首页展开后可用正式 Chrome 打开 `上传剧本 / 主体图模型 / 主体 / 画风`。
-2. `上传剧本` 会把文本内容导入输入框。
-3. `主体图模型 / 主体 / 画风` 的选项来自数据库，不是前端常量。
-4. 提交项目后，所选项已写入 `project_creation_configs`，并与 `model_endpoints / subject_profiles / style_presets` 建立关联。
+1. 只看公共目录
+2. 共用与用户侧一致的目录管理组件
+3. 在后台语境下维护公共主体 / 公共画风
 
-验证截图：
+## 6. 当前真实管理结论
 
-1. ![explore-before-submit](/tmp/aiv-explore-selection-before-submit.png)
-2. ![explore-after-submit](/tmp/aiv-explore-after-submit.png)
+旧文档中“当前还没有独立后台管理页”的说法已经失效。
+
+今天的真实状态是：
+
+1. 用户侧已有 `/settings/catalogs`
+2. 后台侧已有 `/admin/catalogs`
+3. 二者共用目录管理主组件，但作用域不同
+
+## 7. 当前实现边界
+
+### 7.1 已经做到的
+
+1. 首页目录后端化
+2. 项目入口配置快照落库
+3. 主体 / 画风目录读写
+4. 主体图 AI 生成
+5. 主体图上传
+6. 从主体目录跳回首页继续创作
+7. 用户侧目录与后台公共目录双入口
+
+### 7.2 还未形成的更强能力
+
+1. 主体素材预处理层
+2. 封面裁切与透明背景等素材标准化流程
+3. 更细粒度的目录版本历史
+4. 更完善的引用分析（哪些项目在用某主体 / 画风）
+
+## 8. 当前最佳实践评价
+
+### 8.1 优点
+
+1. 目录表、配置快照表、项目表已分开
+2. 目录数据不再依赖前端常量
+3. 用户侧与后台侧的边界已建立
+4. 主体图生成能力已经从目录页延伸到 planner 自动能力的设计落点
+
+### 8.2 问题
+
+1. 目录管理主文件虽然已拆一轮，但仍偏大
+2. 主体图片质量问题与布局问题仍未完全分层
+3. 目录 AI 生成能力与未来统一 AI capability 层还未打通
+
+## 9. 下一阶段建议
+
+在不考虑兼容老数据和老业务的前提下，建议：
+
+1. 将目录 AI 生成统一接入未来 `ai-capabilities/image-generation`
+2. 为主体素材建立独立“预处理 / 裁切策略”层
+3. 为主体 / 画风目录增加引用分析与版本轨迹
+4. 把目录接口文档与页面文档统一回收到同一组现行基线说明中

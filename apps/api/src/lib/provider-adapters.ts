@@ -2,11 +2,6 @@ import { randomUUID } from 'node:crypto';
 
 import type { Run } from '@prisma/client';
 
-import {
-  queryAicsoVideoGeneration,
-  submitAicsoImageGeneration,
-  submitAicsoVideoGeneration,
-} from './aicso-client.js';
 import { submitArkTextResponse } from './ark-client.js';
 import { queryPlatouVideoGeneration, submitPlatouChatCompletion, submitPlatouImageGeneration, submitPlatouVideoGeneration } from './platou-client.js';
 import { resolveRunProviderRuntimeConfig } from './provider-runtime-config.js';
@@ -106,8 +101,6 @@ function secondsFromNow(seconds: number) {
   return new Date(Date.now() + seconds * 1000);
 }
 
-const AICSO_POLL_INTERVAL_SECONDS = 6;
-
 function normalizeProviderStatus(providerStatus: string) {
   const normalized = providerStatus.trim().toLowerCase();
   if (normalized === 'completed') {
@@ -140,16 +133,6 @@ function findStringDeep(value: unknown, keys: string[]): string | null {
   }
 
   return null;
-}
-
-function inferAicsoVideoState(payload: Record<string, unknown>) {
-  return (
-    findStringDeep(payload, ['state', 'status']) ?? 'processing'
-  ).toLowerCase();
-}
-
-function inferAicsoVideoJobId(payload: Record<string, unknown>) {
-  return findStringDeep(payload, ['id', 'jobId', 'job_id', 'name']);
 }
 
 function inferPlatouVideoState(payload: Record<string, unknown>) {
@@ -315,127 +298,6 @@ const arkAdapter: ProviderAdapter = {
   },
 };
 
-const aicsoAdapter: ProviderAdapter = {
-  async submit(run) {
-    const runtimeConfig = await resolveRunProviderRuntimeConfig(run);
-    if (!runtimeConfig.enabled || !runtimeConfig.apiKey || !runtimeConfig.baseUrl) {
-      return mockProxyAdapter.submit(run);
-    }
-
-    const model = getEndpointModelKey(run)
-      ?? null;
-    const prompt = getPrompt(run);
-
-    if (!prompt) {
-      return {
-        type: 'failed',
-        providerStatus: 'failed',
-        errorCode: 'PROVIDER_PROMPT_REQUIRED',
-        errorMessage: 'Run prompt is required for provider submission.',
-      };
-    }
-
-    if (!model) {
-      return {
-        type: 'failed',
-        providerStatus: 'failed',
-        errorCode: 'PROVIDER_MODEL_REQUIRED',
-        errorMessage: 'Run model key is required for AICSO submission.',
-      };
-    }
-
-    if (getModelKind(run) === 'image') {
-      const response = await submitAicsoImageGeneration({
-        model,
-        prompt,
-        apiKey: runtimeConfig.apiKey,
-        baseUrl: runtimeConfig.baseUrl,
-      });
-      return {
-        type: 'completed',
-        providerStatus: 'succeeded',
-        providerOutput: response,
-      };
-    }
-
-    const response = await submitAicsoVideoGeneration({
-      model,
-      prompt,
-      apiKey: runtimeConfig.apiKey,
-      baseUrl: runtimeConfig.baseUrl,
-    });
-    const providerJobId = inferAicsoVideoJobId(response);
-    if (!providerJobId) {
-      return {
-        type: 'failed',
-        providerStatus: 'failed',
-        errorCode: 'PROVIDER_JOB_ID_MISSING',
-        errorMessage: 'AICSO video submission did not return a job id.',
-        providerOutput: response,
-      };
-    }
-
-    return {
-      type: 'submitted',
-      providerJobId,
-      providerCallbackToken: run.providerCallbackToken ?? randomUUID(),
-      providerStatus: 'submitted',
-      nextPollAt: secondsFromNow(AICSO_POLL_INTERVAL_SECONDS),
-      providerOutput: response,
-    };
-  },
-  async poll(run) {
-    const runtimeConfig = await resolveRunProviderRuntimeConfig(run);
-    if (!runtimeConfig.enabled || !runtimeConfig.apiKey || !runtimeConfig.baseUrl) {
-      return mockProxyAdapter.poll(run);
-    }
-
-    if (!run.providerJobId) {
-      return {
-        type: 'failed',
-        providerStatus: 'failed',
-        errorCode: 'PROVIDER_JOB_ID_REQUIRED',
-        errorMessage: 'AICSO video polling requires providerJobId.',
-      };
-    }
-
-    const response = await queryAicsoVideoGeneration({
-      id: run.providerJobId,
-      apiKey: runtimeConfig.apiKey,
-      baseUrl: runtimeConfig.baseUrl,
-    });
-    const state = inferAicsoVideoState(response);
-
-    if (state === 'completed' || state === 'succeeded' || state === 'success') {
-      return {
-        type: 'completed',
-        providerStatus: 'succeeded',
-        providerOutput: response,
-      };
-    }
-
-    if (state === 'failed' || state === 'error' || state === 'canceled') {
-      return {
-        type: 'failed',
-        providerStatus: 'failed',
-        errorCode: 'PROVIDER_TASK_FAILED',
-        errorMessage: 'AICSO video task failed.',
-        providerOutput: response,
-      };
-    }
-
-    return {
-      type: 'running',
-      providerStatus: state,
-      nextPollAt: secondsFromNow(AICSO_POLL_INTERVAL_SECONDS),
-      providerOutput: response,
-    };
-  },
-  async handleCallback(_run, payload) {
-    return mockProxyAdapter.handleCallback(_run, payload);
-  },
-};
-
 const platouAdapter: ProviderAdapter = {
   async submit(run) {
     const runtimeConfig = await resolveRunProviderRuntimeConfig(run);
@@ -583,9 +445,6 @@ export function resolveProviderAdapter(run: Run): ProviderAdapter {
   const providerCode = getProviderCode(run);
   if (providerCode === 'ark') {
     return arkAdapter;
-  }
-  if (providerCode === 'aicso') {
-    return aicsoAdapter;
   }
   if (providerCode === 'platou') {
     return platouAdapter;

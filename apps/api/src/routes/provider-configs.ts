@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { submitAicsoImageGeneration } from '../lib/aicso-client.js';
 import { submitArkTextResponse } from '../lib/ark-client.js';
 import { mergeProviderConfigOptions, parseProviderConfigOptions } from '../lib/provider-config-options.js';
 import { extractPlatouCatalogModels, syncPlatouModelCatalog } from '../lib/platou-model-catalog.js';
@@ -189,14 +188,6 @@ function pickTestEndpoint(args: {
 
   if (args.providerCode === 'ark') {
     return args.endpoints.find((endpoint) => endpoint.modelKind === 'text') ?? null;
-  }
-
-  if (args.providerCode === 'aicso') {
-    return (
-      args.endpoints.find((endpoint) => endpoint.modelKind === 'image')
-      ?? args.endpoints.find((endpoint) => endpoint.modelKind === 'video')
-      ?? null
-    );
   }
 
   if (args.providerCode === 'platou') {
@@ -805,42 +796,6 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
           model: testEndpoint.remoteModelKey,
           prompt: '请只返回 ok',
         });
-      } else if (provider.code === 'aicso') {
-        if (testEndpoint.modelKind === 'image') {
-          await submitAicsoImageGeneration({
-            baseUrl,
-            apiKey: config.apiKey,
-            model: testEndpoint.remoteModelKey,
-            prompt: '一张简洁的测试图，纯色背景即可。',
-          });
-        } else if (testEndpoint.modelKind === 'video') {
-          const { submitAicsoVideoGeneration } = await import('../lib/aicso-client.js');
-          await submitAicsoVideoGeneration({
-            baseUrl,
-            apiKey: config.apiKey,
-            model: testEndpoint.remoteModelKey,
-            prompt: 'A simple short test video of moving light.',
-          });
-        } else if (testEndpoint.modelKind === 'text') {
-          const response = await fetch(`${baseUrl.replace(/\/$/, '')}/v1/chat/completions`, {
-            method: 'POST',
-            headers: {
-              Accept: 'application/json',
-              Authorization: `Bearer ${config.apiKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: testEndpoint.remoteModelKey,
-              messages: [{ role: 'user', content: 'reply with ok' }],
-            }),
-          });
-          if (!response.ok) {
-            const body = await response.text();
-            throw new Error(body || 'AICSO text test failed.');
-          }
-        } else {
-          throw new Error('Unsupported AICSO test kind.');
-        }
       } else if (provider.code === 'platou') {
         if (testEndpoint.modelKind === 'text') {
           await submitPlatouChatCompletion({

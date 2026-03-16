@@ -1,12 +1,21 @@
 # 状态机与错误码规格（v0.3）
 
 版本：v0.3  
-日期：2026-03-13  
-状态：后端开工基线
+日期：2026-03-15  
+状态：按当前代码重写后的现行实现说明
 
-## 1. 状态域
+## 1. 事实来源
 
-### 1.1 ProjectStatus
+本文件以以下代码为准：
+
+1. `/Users/jiankunwu/project/aiv/apps/api/prisma/schema.prisma`
+2. `/Users/jiankunwu/project/aiv/apps/api/src/routes/*.ts`
+3. `/Users/jiankunwu/project/aiv/apps/api/src/lib/run-worker.ts`
+4. `/Users/jiankunwu/project/aiv/apps/api/src/lib/run-lifecycle.ts`
+
+## 2. 当前正式状态域
+
+### 2.1 `ProjectStatus`
 
 1. `DRAFT`
 2. `PLANNING`
@@ -18,13 +27,51 @@
 8. `FAILED`
 9. `ARCHIVED`
 
-### 1.2 PlannerStatus
+### 2.2 `EpisodeStatus`
+
+1. `DRAFT`
+2. `PLANNING`
+3. `READY_FOR_STORYBOARD`
+4. `CREATING`
+5. `EXPORT_READY`
+6. `EXPORTED`
+7. `PUBLISHED`
+8. `ARCHIVED`
+
+### 2.3 `PlannerStatus`
 
 1. `IDLE`
 2. `UPDATING`
 3. `READY`
 
-### 1.3 ShotStatus
+### 2.4 `PlannerOutlineStatus`
+
+1. `DRAFT`
+2. `READY`
+3. `FAILED`
+
+### 2.5 `PlannerRefinementStatus`
+
+1. `DRAFT`
+2. `RUNNING`
+3. `READY`
+4. `FAILED`
+
+### 2.6 `PlannerStepStatus`
+
+1. `PENDING`
+2. `RUNNING`
+3. `DONE`
+4. `FAILED`
+
+### 2.7 `ProfileReleaseStatus`
+
+1. `DRAFT`
+2. `ACTIVE`
+3. `DEPRECATED`
+4. `ARCHIVED`
+
+### 2.8 `ShotStatus`
 
 1. `PENDING`
 2. `QUEUED`
@@ -32,13 +79,13 @@
 4. `SUCCESS`
 5. `FAILED`
 
-### 1.4 ShotVersionStatus
+### 2.9 `ShotVersionStatus`
 
 1. `PENDING_APPLY`
 2. `ACTIVE`
 3. `ARCHIVED`
 
-### 1.5 RunStatus
+### 2.10 `RunStatus`
 
 1. `QUEUED`
 2. `RUNNING`
@@ -47,46 +94,80 @@
 5. `CANCELED`
 6. `TIMED_OUT`
 
-说明：
+### 2.11 当前文档中不再作为正式状态域的旧对象
 
-1. 对异步 provider，第三方任务处于 `submitted / queued / processing` 时，本地仍保持 `RUNNING`。
-2. 第三方原始状态单独记录在 `providerStatus`，不增加主状态枚举。
+以下状态域曾出现在旧文档，但当前代码不应再视为现行基线：
 
-### 1.6 RecipeExecutionStatus
+1. `RecipeExecutionStatus`
+2. `event_logs` 相关状态机
+3. `voice_drafts / music_drafts / lipsync_drafts` 的状态机
 
-1. `QUEUED`
-2. `RUNNING`
-3. `COMPLETED`
-4. `FAILED`
-5. `CANCELED`
+## 3. 当前真实核心流转
 
-## 2. 核心流转
+### 3.1 Project 主流程
 
-### 2.1 Project 主流程
+当前真实主流转为：
 
 1. `DRAFT -> PLANNING`
 2. `PLANNING -> READY_FOR_STORYBOARD`
 3. `READY_FOR_STORYBOARD -> CREATING`
-4. `CREATING -> EXPORT_READY`
-5. `EXPORT_READY -> EXPORTED`
-6. `EXPORTED -> PUBLISHED`
-7. 任意阶段可在严重失败时转 `FAILED`
+4. `CREATING -> PUBLISHED` 或 `CREATING -> EXPORT_READY -> EXPORTED -> PUBLISHED`
+5. 严重失败时可进入 `FAILED`
 
-### 2.2 Shot 主流程
+说明：
+
+1. 当前代码并未在所有环节严格使用完整的导出链路。
+2. 实际常见主链路是：`DRAFT -> PLANNING -> READY_FOR_STORYBOARD -> CREATING -> PUBLISHED`。
+
+### 3.2 Episode 主流程
+
+1. `DRAFT -> PLANNING`
+2. `PLANNING -> READY_FOR_STORYBOARD`
+3. `READY_FOR_STORYBOARD -> CREATING`
+4. `CREATING -> PUBLISHED`
+
+### 3.3 PlannerSession 主流程
+
+1. 新建 session：`IDLE`
+2. 提交 planner 生成：`IDLE / READY -> UPDATING`
+3. 生成完成：`UPDATING -> READY`
+
+### 3.4 Planner Outline Version
+
+1. 新建 outline version：`DRAFT / READY`
+2. 当前实现中，大纲成功生成后通常直接进入 `READY`
+3. 用户确认某个大纲版本后：
+   - `isConfirmed = true`
+   - `confirmedAt != null`
+4. `isActive` 表示当前激活大纲版本
+
+### 3.5 Planner Refinement Version
+
+1. 创建 refinement version
+2. 同步结构化文档与派生实体
+3. 成功后进入 `READY`
+4. `isActive` 表示当前激活细化版本
+
+### 3.6 Shot 主流程
 
 1. `PENDING -> QUEUED`
 2. `QUEUED -> GENERATING`
 3. `GENERATING -> SUCCESS`
 4. `GENERATING -> FAILED`
-5. `FAILED -> QUEUED`（重试）
 
-### 2.3 ShotVersion 流程
+说明：
 
-1. 新生成版本默认 `PENDING_APPLY`
-2. 用户应用后：`PENDING_APPLY -> ACTIVE`
-3. 原 active 版本转 `ARCHIVED`
+1. 当前创建生成命令时，shot 会先进入 `QUEUED`
+2. 由 worker 真正领取任务后进入运行过程
+3. 完成后由 `ShotVersion` 与 `activeVersionId` 决定当前结果
 
-### 2.4 Run 流程
+### 3.7 ShotVersion 主流程
+
+1. 新生成版本：`PENDING_APPLY`
+2. 激活后：`ACTIVE`
+3. 原激活版本转为 `ARCHIVED`
+
+### 3.8 Run 主流程
 
 1. `QUEUED -> RUNNING`
 2. `RUNNING -> COMPLETED`
@@ -94,104 +175,118 @@
 4. `RUNNING -> CANCELED`
 5. `RUNNING -> TIMED_OUT`
 
-异步 provider 补充规则：
+补充规则：
 
-1. `RUNNING` 期间允许多次更新 `providerStatus`
-2. 获得 `providerJobId` 不改变主状态
-3. 轮询或 callback 成功后才进入 `COMPLETED`
+1. 对异步 provider，主状态始终保持 `RUNNING`
+2. provider 中间态写入 `providerStatus`
+3. 首次返回 `providerJobId` 不得误判为完成
 
-### 2.5 RecipeExecution 流程
+## 4. 当前关键状态判定规则
 
-1. `QUEUED -> RUNNING`
-2. `RUNNING -> COMPLETED`
-3. `RUNNING -> FAILED`
-4. `RUNNING -> CANCELED`
+### 4.1 当前生效对象的真相源
 
-## 3. 规则
+当前“当前生效对象”主要通过显式外键或 `isActive` 标记表达：
 
-### 3.1 当前生效版本规则
+1. `Project.currentEpisodeId`
+2. `Episode.activePlannerSessionId`
+3. `PlannerOutlineVersion.isActive`
+4. `PlannerRefinementVersion.isActive`
+5. `Shot.activeVersionId`
 
-1. `Shot.activeVersionId` 是当前生效版本唯一真相。
-2. 子表中的 `ACTIVE` 状态用于展示，不作为唯一事实来源。
+### 4.2 Run 与 provider 中间态
 
-### 3.2 Recipe 执行规则
+当前中间态不扩展 `RunStatus`，而是写入：
 
-1. 根 `RecipeExecution` 运行时必须存在根 `Run(RECIPE_EXECUTION)`。
-2. 任一关键子步骤失败，根执行默认失败。
-3. 部分步骤可重试，但不允许 silently 覆盖历史产物。
+1. `providerStatus`
+2. `providerJobId`
+3. `nextPollAt`
+4. `pollAttemptCount`
 
-### 3.3 任务重试规则
+## 5. 当前真实错误码范围
 
-1. 重试必须保留原始失败记录。
-2. 重试不得直接擦除旧 `Run`。
-3. 同一幂等键重复提交，不应重复创建并发任务。
-
-## 4. 错误码规范
-
-### 4.1 通用
+### 5.1 通用
 
 1. `INVALID_ARGUMENT`
 2. `NOT_FOUND`
-3. `CONFLICT`
-4. `FORBIDDEN`
-5. `RATE_LIMITED`
-6. `INTERNAL_ERROR`
+3. `UNAUTHORIZED`
+4. `INTERNAL_ERROR`
 
-### 4.2 项目与工作区
+### 5.2 AIV API / Web 代理层
 
-1. `PROMPT_REQUIRED`
-2. `PROJECT_CREATE_FAILED`
-3. `EPISODE_NOT_FOUND`
-4. `WORKSPACE_NOT_READY`
+1. `AIV_API_UNAVAILABLE`
+2. `AIV_API_INVALID_JSON`
+3. `AIV_API_HTTP_ERROR`
+4. `AIV_API_EMPTY_RESPONSE`
+5. `AIV_API_REQUEST_FAILED`
 
-### 4.3 Planner
+### 5.3 认证
 
-1. `PLANNER_REQUIREMENT_EMPTY`
-2. `PLANNER_OUTLINE_NOT_CONFIRMED`
-3. `PLANNER_REFINEMENT_RUNNING_CONFLICT`
-4. `PLANNER_VERSION_NOT_FOUND`
-5. `PLANNER_CONFIG_INVALID_MODEL`
-6. `PLANNER_CONFIG_INVALID_ASPECT_RATIO`
+1. `EMAIL_ALREADY_EXISTS`
+2. `INVALID_CREDENTIALS`
+3. `UNAUTHORIZED`
 
-### 4.4 Creation
+### 5.4 模型 / Provider
 
-1. `SHOT_NOT_FOUND`
-2. `SHOT_VERSION_NOT_FOUND`
-3. `SHOT_VERSION_APPLY_CONFLICT`
-4. `MATERIAL_UPLOAD_INVALID`
-5. `CANVAS_EDIT_INVALID`
-6. `VOICE_UPLOAD_INVALID`
-7. `MUSIC_PROMPT_INVALID`
-8. `LIPSYNC_INPUT_INVALID`
+1. `MODEL_NOT_FOUND`
+2. `INVALID_IMAGE_MODEL`
+3. `PROVIDER_NOT_CONFIGURED`
+4. `BASE_URL_REQUIRED`
+5. `ENDPOINT_NOT_FOUND`
+6. `MODEL_SYNC_FAILED`
+7. `TEST_NOT_SUPPORTED`
+8. `PROVIDER_TEST_FAILED`
+9. `SYNC_NOT_SUPPORTED`
 
-### 4.5 Model Registry
+### 5.5 Planner 主流程
 
-1. `MODEL_FAMILY_NOT_FOUND`
-2. `MODEL_ENDPOINT_NOT_FOUND`
-3. `MODEL_PROVIDER_DISABLED`
-4. `MODEL_RESOLUTION_FAILED`
-5. `MODEL_FALLBACK_EXHAUSTED`
+1. `PLANNER_AGENT_NOT_CONFIGURED`
+2. `PLANNER_SESSION_REQUIRED`
+3. `PLANNER_OUTLINE_NOT_FOUND`
+4. `PLANNER_OUTLINE_LOCKED`
+5. `PLANNER_OUTLINE_ALREADY_CONFIRMED`
+6. `PLANNER_REFINEMENT_REQUIRED`
+7. `PLANNER_REFINEMENT_NOT_FOUND`
+8. `PLANNER_DOCUMENT_REQUIRED`
+9. `PLANNER_SCOPE_TARGET_NOT_FOUND`
+10. `PLANNER_SUBJECT_NOT_FOUND`
+11. `PLANNER_SCENE_NOT_FOUND`
+12. `PLANNER_SHOT_NOT_FOUND`
+13. `PLANNER_ASSET_NOT_OWNED`
 
-### 4.6 Recipe
+### 5.6 Planner Debug
 
-1. `RECIPE_NOT_FOUND`
-2. `RECIPE_INVALID_JSON`
-3. `RECIPE_SLOT_MISSING`
-4. `RECIPE_EXECUTION_CONFLICT`
+1. `PLANNER_DEBUG_RUN_NOT_FOUND`
+2. `PLANNER_DEBUG_RUN_FAILED`
+3. `PLANNER_DEBUG_REPLAY_FAILED`
+4. `PLANNER_DEBUG_COMPARE_FAILED`
+5. `PLANNER_SUB_AGENT_NOT_FOUND`
 
-### 4.7 Execution
+### 5.7 Publish
 
-1. `RUN_TIMEOUT`
-2. `RUN_EVENT_DUPLICATED`
-3. `RUN_STATE_INVALID_TRANSITION`
-4. `PROVIDER_TIMEOUT`
-5. `PROVIDER_BAD_RESPONSE`
-6. `ASSET_WRITE_FAILED`
-7. `PROVIDER_ASYNC_JOB_NOT_FOUND`
-8. `PROVIDER_CALLBACK_INVALID`
-9. `PROVIDER_POLL_EXHAUSTED`
+1. `PUBLISH_NOT_READY`
 
-## 5. 错误响应格式
+### 5.8 Run / Execution
+
+1. `RUN_NOT_CANCELABLE`
+2. `RUN_TYPE_NOT_SUPPORTED`
+3. `RUN_RESOURCE_INVALID`
+4. `PLANNER_SESSION_NOT_FOUND`
+5. `PLANNER_ENTITY_IMAGE_FINALIZE_FAILED`
+6. `SHOT_NOT_FOUND`
+7. `PROVIDER_SUBMIT_INVALID_STATE`
+8. `PROVIDER_POLL_INVALID_STATE`
+9. `PROVIDER_JOB_MISMATCH`
+10. `PROVIDER_POLL_UNSUPPORTED`
+11. `PROVIDER_CALLBACK_UNSUPPORTED`
+12. `PROVIDER_CALLBACK_FAILED`
+13. `PROVIDER_PROMPT_REQUIRED`
+14. `PROVIDER_RUN_KIND_UNSUPPORTED`
+15. `PROVIDER_MODEL_REQUIRED`
+16. `PROVIDER_JOB_ID_MISSING`
+17. `PROVIDER_JOB_ID_REQUIRED`
+18. `PROVIDER_TASK_FAILED`
+
+## 6. 当前错误响应格式
 
 ```ts
 interface ErrorResponse {
@@ -199,21 +294,26 @@ interface ErrorResponse {
   error: {
     code: string;
     message: string;
-    details?: Record<string, unknown>;
+    details?: unknown;
   };
 }
 ```
 
-## 6. 前端提示原则
+## 7. 当前前端提示原则
 
-1. `INVALID_ARGUMENT` 类错误直接提示用户输入问题。
-2. `CONFLICT` 类错误提示当前状态冲突并建议刷新。
-3. `PROVIDER_*` 类错误提示生成失败，可重试或切换模型策略。
-4. `INTERNAL_ERROR` 只给用户通用文案，详情进入日志。
-5. fallback 发生时，前端应能展示“已切换备用通道”而不是静默切换。
+建议按当前实现统一成：
 
-## 7. 关联文档
+1. `INVALID_ARGUMENT`：直接提示用户输入或参数问题
+2. `NOT_FOUND`：提示资源不存在或已失效
+3. `UNAUTHORIZED`：跳转登录或展示统一未登录态
+4. `MODEL_* / PROVIDER_*`：提示模型或通道不可用，并提供重试/切换入口
+5. `PLANNER_*`：提示当前策划阶段状态不满足，建议刷新或切换版本
+6. `RUN_*`：提示任务状态冲突或执行失败
 
-1. `docs/specs/backend-data-api-spec-v0.3.md`
-2. `docs/specs/internal-execution-api-spec-v0.3.md`
-3. `docs/specs/backend-system-design-spec-v0.3.md`
+## 8. 当前文档与代码差异修正结论
+
+与旧版相比，本次修正的关键点：
+
+1. 删除了并不存在于当前代码主路径的 `RecipeExecutionStatus` 作为正式状态域
+2. 错误码列表改为“按当前代码真实出现过的 code 收敛”
+3. 明确当前系统主要依靠 `Run + providerStatus` 维护执行态，而非额外事件状态机

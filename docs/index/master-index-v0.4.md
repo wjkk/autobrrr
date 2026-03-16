@@ -16,8 +16,8 @@
 2. 若多份文档冲突，以"高可信"层文档为准；"草案"与"历史快照"层不作为裁决依据。
 3. `v0.2` 文档已归档，不再作为后端基线。
 
-> ⚠️ **根目录 `prisma/schema.prisma` 已废弃。**
-> 该文件是早期 PostgreSQL 设计的残留，包含已不使用的 `PipelineNode`、`EventLog`、`PublishDraft` 等模型。当前唯一有效的 schema 是 `apps/api/prisma/schema.prisma`（MySQL）。任何数据库相关决策一律以后者为准，根目录文件不得引用。
+> ⚠️ **根目录旧 `prisma/` 目录已移除。**
+> 仓库曾保留一套早期 PostgreSQL 设计残留（包含已不使用的 `PipelineNode`、`EventLog`、`PublishDraft` 等模型），现已从仓库删除。当前唯一有效的 schema 是 `apps/api/prisma/schema.prisma`（MySQL）。任何数据库相关决策一律以后者为准。
 >
 > ℹ️ **路由口径：`/internal/*` 是兼容入口，`/admin/*` 是实际入口。**
 > `apps/web/src/app/internal/` 下的页面（如 `planner-debug`、`planner-agents`）均已直接 `redirect` 到 `/admin/*`，不再有实质内容。文档中凡写 `/internal/planner-debug` 等路径的，均以 `/admin/planner-debug` 为准。
@@ -67,6 +67,18 @@
    说明：当前最权威的实施清单，按 Phase 拆分任务、DoD 和顺序。**重构以此为准。**
 3. `docs/specs/refactor-execution-guardrails-v0.1.md`
    说明：本轮重构的执行约束、Phase 前置条件、验证矩阵与停手条件。**开始动手前必读。**
+4. `docs/specs/ai-refactor-architecture-spec-v0.1.md`
+   说明：AI 重构单页基线，明确 `provider-gateway.ts`、`provider-adapters.ts`、transport client、Planner -> Creation 交接的职责边界。进入 AI 重构前必读。
+5. `docs/specs/phase-2-ai-refactor-task-breakdown-v0.1.md`
+   说明：Phase 2 的文件级执行清单，明确每个工作流对应的代码文件、目标产物和验证项。开始动手前建议先读。
+6. `docs/specs/planner-ai-capabilities-spec-v0.1.md`
+   说明：Planner AI 专项基线，基于 `plan.html` 收口剧集轨道、左侧消息流、右侧结构化文档、版本/副本/确认/重跑机制，以及 `Seedance 2.0` 多镜头叙事的 Planner 侧要求。进入 Planner 重构前必读。
+7. `docs/specs/planner-phase-4-5-task-breakdown-v0.1.md`
+   说明：Planner Phase 4/5 的文件级执行清单，按后端、前端、数据模型、API、验证拆解到实施任务。开始做 Planner 重构前建议先读。
+8. `docs/specs/refactor-todo-flat-table-v0.1.md`
+   说明：把当前重构计划压平成一张单表，适合排期、分工和看板维护。
+9. `docs/specs/refactor-execution-sequence-v0.1.md`
+   说明：把当前重构计划压成实际开工顺序，按提交批次、验证和切换条件组织。
 
 #### 视频模型能力
 
@@ -87,7 +99,9 @@
    说明：两阶段策划工作流与 Outline/Refinement 文档结构设计。同上，供专项参考。
 5. `docs/reviews/planner-agent-refactor-design-2026-03-16.md`
    说明：Planner Agent 重构设计草稿（最新）。包含 AI 功能现状盘点、模型感知分镜提示词亮点功能设计、Shot 级重跑、SSE 进度、策划确认交接的完整设计。Phase 4/5 实施时的核心参考文档。
-6. `docs/specs/frontend-workspace-contract-migration-v0.1.md`
+6. `docs/specs/planner-workflow-and-document-spec-v0.1.md`
+   说明：较早的 Planner 两阶段工作流与文档结构草案。关于当前 Planner AI 的执行口径，以 `planner-ai-capabilities-spec-v0.1.md` 为准；本文保留为工作流补充参考。
+7. `docs/specs/frontend-workspace-contract-migration-v0.1.md`
    说明：前端主工作区从 `StudioFixture` 过渡到正式 workspace DTO / view model 的迁移说明。做 Phase 7 时的直接参考。
 
 ---
@@ -100,18 +114,13 @@
    说明：2026-03-14 的 Planner Agent 文档与代码差异复盘。部分已修复问题仍在其中，阅读时注意对照代码现状。
 2. `docs/reviews/planner-agent-final-decisions-2026-03-14.md`
    说明：对 Planner 口径问题的最终裁决（`assistant_error`、profile 创建边界等）。结论仍有参考价值。
-3. `docs/specs/frontend-domain-contract-spec-v0.2.md`
-   说明：前端领域契约规格（v0.2），准确描述了当前过渡态——Planner/Creation 页面仍将真实 API 响应映射回 `StudioFixture`（见 `planner-api.server.ts`、`creation-api.server.ts`）。这是对现状的准确描述，但不代表前端重构终态，不适合直接用于指导下一阶段契约设计。
 
 ---
 
 ### 3.4 已归档（不再作为基线）
 
-1. `docs/index/master-index-v0.3.md`（存在失效引用，已由本文件替代）
-2. `docs/specs/*.md` 中的 `v0.2` 文档
-3. `docs/architecture/system-architecture-role-spec-v0.2.md`（路由描述已严重过时）
-4. `docs/web/web-route-and-page-spec-v0.2.md`（路由描述已严重过时）
-5. 根目录 `prisma/schema.prisma`（PostgreSQL 旧 schema，已废弃）
+1. 旧主索引与整组 `v0.2` 文档已从仓库移除，不再保留归档副本
+2. 根目录旧 `prisma/` 目录（PostgreSQL 历史残留，已移除）
 
 ---
 
@@ -124,8 +133,14 @@
 1. 本索引
 2. `refactor-execution-guardrails-v0.1.md`（本轮重构怎么做、哪些不能做）
 3. `backend-implementation-checklist-v0.3.md`（当前在做什么、下一步做什么）
-4. `database-schema-spec-v0.3.md`（表结构）
-5. `backend-data-api-spec-v0.3.md`（接口）
+4. `ai-refactor-architecture-spec-v0.1.md`（AI 重构到底怎么分层）
+5. `phase-2-ai-refactor-task-breakdown-v0.1.md`（Phase 2 具体改哪些文件）
+6. `planner-ai-capabilities-spec-v0.1.md`（Planner AI 到底做成什么工作台）
+7. `planner-phase-4-5-task-breakdown-v0.1.md`（Planner Phase 4/5 先改哪些文件）
+8. `refactor-todo-flat-table-v0.1.md`（看整体待办和排期时）
+9. `refactor-execution-sequence-v0.1.md`（真正准备开工时）
+10. `database-schema-spec-v0.3.md`（表结构）
+11. `backend-data-api-spec-v0.3.md`（接口）
 
 ### 第二优先级（按需读）
 
@@ -133,11 +148,14 @@
 2. `state-machine-and-error-code-spec-v0.3.md`（涉及状态流转时）
 3. `explore-catalog-management-spec-v0.3.md`（涉及 Explore 目录时）
 4. `video-model-capability-spec-v0.1.md`（实现 Phase 4 时）
+5. `ai-refactor-architecture-spec-v0.1.md`（进入 AI 重构具体实现时）
+6. `planner-ai-capabilities-spec-v0.1.md`（进入 Planner / Phase 4 / Phase 5 具体实现时）
+7. `planner-phase-4-5-task-breakdown-v0.1.md`（开始拆 Planner Phase 4/5 具体任务时）
 
 ### 第三优先级（专项参考）
 
 1. `planner-agent-refactor-design-2026-03-16.md`（做 Planner 重构时）
 2. `planner-agent-orchestration-spec-v0.1.md`（做 Planner Agent 编排时）
-3. `planner-workflow-and-document-spec-v0.1.md`（做 Planner 工作流时）
+3. `planner-workflow-and-document-spec-v0.1.md`（看较早的工作流草案时）
 4. `planner-agent-final-decisions-2026-03-14.md`（Planner 口径有争议时）
 5. `frontend-workspace-contract-migration-v0.1.md`（做前端契约迁移时）

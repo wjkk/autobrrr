@@ -59,6 +59,44 @@ interface CreateProjectRequest {
 }
 ```
 
+### 3.2 已冻结待实现的补充约束
+
+以下规则尚未在当前代码中完整实现，但已作为下一轮首页入口与接口收口的固定约束：
+
+1. 当用户在首页打开“多集”开关后，必须显式输入集数
+2. 当 `contentMode = 'series'` 时，前端必须提交 `creationConfig.settings.episodeCount`
+3. `episodeCount` 应为正整数，且最小值为 `2`
+4. 当 `contentMode = 'single'` 时，`episodeCount` 应省略或视为 `1`
+
+建议补充后的请求约束如下：
+
+```ts
+interface CreateProjectRequestVNext {
+  prompt: string;
+  contentMode: 'single' | 'series';
+  creationConfig?: {
+    selectedTab?: '短剧漫剧' | '音乐MV' | '知识分享';
+    selectedSubtype?: string;
+    scriptSourceName?: string;
+    scriptContent?: string;
+    imageModelEndpointSlug?: string;
+    subjectProfileSlug?: string;
+    stylePresetSlug?: string;
+    settings?: {
+      multiEpisode?: boolean;
+      episodeCount?: number;
+      [key: string]: unknown;
+    };
+  };
+}
+```
+
+落地要求：
+
+1. 前端在多集开关打开后，不允许跳过集数输入直接提交
+2. 后端在 `contentMode = 'series'` 且缺少有效 `episodeCount` 时返回 `400`
+3. 项目创建时应按 `episodeCount` 初始化 `episodes`
+
 ## 4. 目录与首页配置接口
 
 ### 4.1 主体 / 画风目录

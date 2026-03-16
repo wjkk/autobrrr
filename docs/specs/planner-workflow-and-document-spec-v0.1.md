@@ -10,6 +10,7 @@
 2. 如需确认剩余未完成项与最终边界，请同时参考：
    - `docs/reviews/planner-agent-doc-code-gap-review-2026-03-14.md`
    - `docs/reviews/planner-agent-final-decisions-2026-03-14.md`
+3. 关于当前 Planner AI 的执行口径，尤其是剧集轨道、左侧消息流、右侧文档字段归属、版本/副本/确认/重跑以及 `Seedance 2.0` 多镜头能力映射，请以 `docs/specs/planner-ai-capabilities-spec-v0.1.md` 为准；本文保留为较早的工作流草案与补充参考。
 
 ## 1. 文档目的
 

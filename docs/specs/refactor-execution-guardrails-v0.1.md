@@ -44,8 +44,8 @@
 
 以下内容不得作为当前重构裁决依据：
 
-1. 根目录 `prisma/schema.prisma`
-2. `docs/index/master-index-v0.3.md` 的旧口径
+1. 已移除的根目录旧 `prisma/` 目录
+2. 已移除的旧 `v0.3` 主索引口径
 3. `docs/architecture/*.md` 与 `docs/web/*.md` 中已过时的 `v0.2` 路由说明
 4. 任何只描述“目标态”、但未与当前代码对齐的旧 review 记录
 

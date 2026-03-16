@@ -100,7 +100,9 @@
 
 1. AICSO provider 已从主执行链路剔除（2026-03-16）
 2. `provider-adapters.ts` 已形成 gateway 雏形（ProviderAdapter interface + arkAdapter + platouAdapter）
-3. 当前剩余 provider：`ark`（text only）、`platou`（text + image + video）
+3. 当前剩余 provider：`ark`、`platou`
+4. 当前代码主链路中：`ark` 主要跑 TEXT；`platou` 已跑 TEXT + IMAGE + VIDEO
+5. 规划上：`ark` 不能再被视为 text-only provider，后续也要接入 IMAGE / VIDEO / AUDIO 能力
 
 仍需重构：
 
@@ -108,6 +110,8 @@
 2. `catalog-subject-image.ts` 直连 `platou-client.ts`，是唯一绕开统一 gateway 的业务 AI 调用路径
 3. `run-lifecycle.ts` 中 `resolveProviderSourceUrl` 找不到 URL 时回退到假地址 `https://generated.local/...`，静默污染 Asset 数据
 4. `ark-client.ts` / `platou-client.ts` 无 instrumentation 钩子，Phase 3 的外部调用日志无法统一落点
+5. `seed-model-registry.ts` 当前只给 `ark` 写入了 text family，规划层面低估了 ARK 的图片 / 视频 / 音频接入需求
+6. `provider-gateway.ts` 与 `/provider-configs/:providerCode/test` 的设计不能写死 `ark = text only`
 
 ### 3.3 Planner AI 专项缺口
 
@@ -124,6 +128,11 @@
 
 - Shot 图片生成：IMAGE，Platou，同步，经 gateway ✅
 - Shot 视频生成：VIDEO，Platou，异步 + 6s 轮询，经 gateway ✅
+
+补充说明：
+
+1. 上述是当前代码主链路现状，不代表长期 provider 能力边界
+2. ARK 后续同样纳入 IMAGE / VIDEO / AUDIO 能力接入计划，Phase 2 起不得再沿用 “ark = text only” 的架构假设
 
 **核心 AI 功能缺口**（影响产品差异化，优先级最高）：
 
@@ -173,6 +182,10 @@
 2. `docs/specs/refactor-execution-guardrails-v0.1.md`：定义执行约束、前置条件、验证矩阵与停手条件
 3. `docs/specs/backend-implementation-checklist-v0.3.md`：定义阶段顺序、任务清单与 DoD
 4. `docs/specs/frontend-workspace-contract-migration-v0.1.md`：定义前端主工作区契约迁移方式
+5. `docs/specs/ai-refactor-architecture-spec-v0.1.md`：定义 AI 重构的单页架构基线，收口 gateway / adapters / client / Planner -> Creation 交接口径
+6. `docs/specs/phase-2-ai-refactor-task-breakdown-v0.1.md`：定义 Phase 2 的文件级执行清单，落到具体文件和验证项
+7. `docs/specs/planner-ai-capabilities-spec-v0.1.md`：定义 Planner 工作台、两阶段 AI、版本/副本/确认/重跑以及多镜头模型映射的专项基线
+8. `docs/specs/planner-phase-4-5-task-breakdown-v0.1.md`：定义 Planner Phase 4/5 的文件级任务树、提交顺序与验证矩阵
 
 当前执行原则：
 
@@ -181,6 +194,8 @@
 3. 不继续扩展 `StudioFixture` 作为主工作区长期契约
 4. 所有 schema 变更先兼容、后回填、再收紧约束
 5. 每个 Phase 完成后至少通过类型检查、主路径 smoke 和文档同步校验
+6. 涉及 Planner 产品与 AI 口径时，以 `planner-ai-capabilities-spec-v0.1.md` 为专项裁决稿，不再散落在多个 review 文档之间找答案
+7. 进入 Planner Phase 4/5 具体实现前，先按 `planner-phase-4-5-task-breakdown-v0.1.md` 锁定文件面和提交顺序
 
 ## 5. 下一阶段实施顺序
 
@@ -194,8 +209,8 @@ DoD：
 
 1. 文档可反映真实代码
 2. 新人不再需要同时猜测“目标态”和“实现态”
-3. `master-index-v0.4.md` 可作为唯一入口，不再需要回看 `master-index-v0.3.md`
-4. 旧 `v0.2` 文档头部具有明确归档/警告说明
+3. `master-index-v0.4.md` 可作为唯一入口，不再需要回看旧主索引
+4. 已删除的旧文档不再出现在任何现行索引和执行文档中
 
 ## Phase 2：AI 层收口重构
 
@@ -208,6 +223,7 @@ ark-client.ts / platou-client.ts    ← 纯 HTTP transport，含 instrumentation
          ↓
 provider-gateway.ts（新建）          ← provider 级能力入口，暴露：
                                        generateText / generateImage / submitVideo / queryVideoTask
+                                       + 预留 audio capability entrypoints
          ↓                 ↓
 provider-adapters.ts         catalog-subject-image.ts / provider /test 路由 / 未来 planner 同步调用
 （只负责 Run 场景）           （都走 gateway，不直连 transport client）
@@ -251,6 +267,8 @@ DoD：
   - `generateImage(providerCode, config, input)`
   - `submitVideoTask(providerCode, config, input) → taskId`
   - `queryVideoTask(providerCode, config, taskId) → status`
+- gateway 设计上不得把 `ark` 写死为 text-only；后续接入 ARK 的 image / video / audio 时，不应再改 gateway 分层形态
+- `seed-model-registry.ts` 与 provider test 路径应纳入同一口径，允许未来为 `ark` 增加 image / video / audio family 与 endpoint
 - `provider-gateway.ts` 是 `ark-client.ts` / `platou-client.ts` 的**唯一直接调用方**
 - `provider-adapters.ts` 改为只负责 Run 场景，内部调用 `provider-gateway.ts` 而非直连 client
 - `catalog-subject-image.ts`、`/test` 路由、未来 planner 同步图片调用：都走 `provider-gateway.ts`
@@ -265,6 +283,7 @@ DoD：
 - `platou-client.ts` / `ark-client.ts` 的业务调用方只剩 `provider-gateway.ts`
 - `catalog-subject-image.ts` 改为经过 `provider-gateway.ts`
 - `/test` 路由改为经过 `provider-gateway.ts`（不需要塞进 Run adapter 语义）
+- `provider-gateway.ts`、`provider-configs.ts`、`seed-model-registry.ts` 中不再存在 “ark = text-only” 的硬编码设计假设
 
 ### C. 删除 generated.local stub + 建立本地文件存储
 
@@ -353,7 +372,33 @@ DoD：
 - hook interface 已定义，Phase 3 只需替换实现
 - 敏感字段脱敏逻辑在 hook 层统一处理，不依赖各调用方自行过滤
 
-### E. AICSO 语义完全清除 ✓ 已完成（2026-03-16）
+### E. ARK 多能力接入纳入开发计划
+
+目标：
+
+1. 明确 ARK 不是 text-only provider
+2. 将 ARK 的 IMAGE / VIDEO / AUDIO 接入列入本轮规划，而不是留成口头假设
+3. 保证本轮 gateway / registry / test / run input 设计不需要为 ARK 多能力接入返工
+
+阶段计划：
+
+1. Phase 2：完成 gateway、registry、provider test、run input 的结构预留，移除一切 `ark = text only` 假设
+2. Phase 3：外部调用审计表和 transport hook 对 ARK 新能力同样适用，不额外开旁路
+3. Phase 4 之后：按 endpoint readiness 逐项接入 ARK 的 IMAGE / VIDEO / AUDIO 能力，不要求在本阶段一次性全部落地
+
+本阶段至少完成：
+
+1. `provider-gateway.ts` 的接口设计允许 ARK 接入图片 / 视频 / 音频能力
+2. `apps/api/scripts/seed-model-registry.ts` 不再把 ARK 限定为仅 text family
+3. `apps/api/src/routes/provider-configs.ts` 的 `/test` 路径设计允许后续扩展 ARK 的 image / video / audio 测试
+4. 文档与任务清单中不再出现 “ARK = text-only provider” 的现行口径
+
+DoD：
+
+1. ARK 多能力接入已经成为正式开发计划，而不是备注
+2. 后续新增 ARK image / video / audio endpoint 时，不需要重构 Phase 2 的分层设计
+
+### F. AICSO 语义完全清除 ✓ 已完成（2026-03-16）
 
 全仓库 AICSO 字符串已清零，执行 `seed:model-registry` 不再写入 AICSO 数据。
 
@@ -372,10 +417,11 @@ DoD：
 6. `ark-client` / `platou-client` 有可替换的 instrumentation 钩子，敏感字段在 hook 层统一脱敏
 7. 仓库内 AICSO 语义完全清除
 8. Planner 版本链完整，版本数据原子同步，Rerun scope 有编译期约束
+9. ARK 不再被文档和架构设计默认成 text-only provider，后续 IMAGE / VIDEO / AUDIO 接入不需要推翻 Phase 2 分层
 
-### F. Planner 架构基础修复（Phase 4 前置）
+### G. Planner 架构基础修复（Phase 4 前置）
 
-#### F-1. 版本链完整性
+#### G-1. 版本链完整性
 
 现状：
 
@@ -393,7 +439,7 @@ DoD：
 - 任意 RefinementVersion 可追溯其来源 OutlineVersion
 - 历史版本链可完整重建
 
-#### F-2. 衍生数据原子同步
+#### G-2. 衍生数据原子同步
 
 现状：
 
@@ -409,7 +455,7 @@ DoD：
 
 - 数据库中不存在"有 RefinementVersion 但无 Subject/Scene/Shot"的脏记录
 
-#### F-3. Partial Rerun scope 类型化
+#### G-3. Partial Rerun scope 类型化
 
 现状：
 
@@ -428,8 +474,8 @@ type PlannerRerunScope =
   | { type: 'shots_only' }
   | { type: 'subject'; subjectId: string }
   | { type: 'scene'; sceneId: string }
-  | { type: 'act'; actKey: string }
-  | { type: 'shot'; shotId: string };
+  | { type: 'act'; actId: string }
+  | { type: 'shot'; shotIds: string[] };
 ```
 
 - 路由层和 orchestrator 统一使用该类型
@@ -438,8 +484,10 @@ DoD：
 
 - `PlannerRerunScope` 字段变动触发编译错误
 - 路由层 Zod 校验与 orchestrator 使用同一类型定义
+- `shotIds` 支持单镜头与小批量镜头重跑，不再把 shot 粒度写死为单个 `shotId`
+- `subjects_only / scenes_only / shots_only` 兼容现有 route；`subject / scene / act / shot` 作为新实现主路径
 
-#### F-4. Asset 关联稳定性修复
+#### G-4. Asset 关联稳定性修复
 
 现状：
 
@@ -480,6 +528,13 @@ Planner agent 在生成 `planner_shot_scripts` 时，不再输出通用描述，
 - 音效描述规则按模型能力自动选择（内联叙事 vs 忽略）
 - 运镜词汇按模型语言习惯适配（中文分镜词 vs 英文电影术语）
 
+补充裁决：
+
+1. `Seedance 2.0` 这类多镜头模型，不仅支持“多个相邻 shot 合并为一次生成”，也支持“单个 shot 内部通过提示词生成多次镜头切换”
+2. Phase 4 先在 prompt 生成层支持这两种模式
+3. Phase 4 不引入 `subShot` / `shotSegments` 新表或新字段；单个 shot 内部的多镜头切换先体现在 prompt 中
+4. 只有当后续明确需要对单个 shot 内部镜头节奏做可视化编辑时，才再立项扩展数据模型
+
 ### A. 模型能力注册表结构化
 
 现状：
@@ -518,12 +573,14 @@ DoD：
 - 按模型能力实现两种核心模式：
   1. **多镜头叙事模式**（Seedance 2.0 / Veo 3.1 / Kling 3.0 等）：将多个 shot 合并为单次生成的分镜段落，包含景别切换词、运镜指令、内联音效描述
   2. **单镜头分拆模式**（Wan / Runway / Pika 等）：每个 shot 独立输出，保持简洁，去除音效字段
+- 对 `supportsMultiShot = true` 的模型，单个 shot 也允许输出“内部含多次镜头切换”的叙事段落，不要求必须由多个 shot 合并触发
 
 DoD：
 
 - `generateShotPrompt` 对多镜头模型输出可直接投入使用的叙事段落
 - 对单镜头模型输出按 shot 数量对应的独立提示词列表
 - 音效描述内联/忽略逻辑由 `audioDescStyle` 字段驱动，不硬编码模型名
+- 单个 shot 在多镜头模型下可生成含镜头变化的 prompt，而不需要先引入 `subShot` 数据结构
 
 ### C. Planner Agent 注入目标模型上下文
 
@@ -563,6 +620,7 @@ DoD：
 3. 单镜头模型输出拆分后的逐镜独立描述
 4. Planner agent 在多镜头模型语境下主动产出更适合该模型的原始描述
 5. Shot prompt 预览接口可用，支持前端切换模型实时重新格式化
+6. `Seedance 2.0` 这类模型支持“单个 shot 内部多镜头切换”的 prompt 输出，且不要求新增 `subShot` 模型
 
 ---
 
@@ -600,7 +658,7 @@ DoD：
 
 目标：
 
-- 路由支持 `PlannerRerunScope = { type: 'shot', shotId }` 和 `{ type: 'act', actKey }`
+- 路由支持 `PlannerRerunScope = { type: 'shot', shotIds }` 和 `{ type: 'act', actId }`
 - agent 接收单 shot 上下文：前后镜头 + 所在幕 + 角色信息 + 目标模型能力
 - 只更新目标 Shot 字段，不修改其他 Shot
 
@@ -609,7 +667,33 @@ DoD：
 - 用户可对任意 Shot 发起"仅重生成此镜头"操作
 - 其他 Shot 不受影响
 
-### C. 策划确认 → Creation 交接
+### C. 已确认版本创建草稿副本
+
+现状：
+
+- 当前文档已区分“未确认版本可原地 patch”和“已确认版本不应直接修改”，但尚未把继续修改的正式实现路径写进 Phase 5
+- 若不定义草稿副本机制，后续实现很容易直接改写已确认版本，破坏版本链与审计边界
+
+目标：
+
+- 新增“从已确认版本创建草稿副本”的正式能力，至少覆盖当前激活 `RefinementVersion`
+- 新副本创建后：
+  1. 源版本保持 `isConfirmed = true`
+  2. 新副本获得新的 `versionNumber`
+  3. 新副本成为 `isActive = true` 的草稿版本
+  4. 后续 patch / rerun / AI 修改都落在新副本，而不是回写源版本
+
+建议接口：
+
+- `POST /api/projects/:projectId/planner/refinement-versions/:versionId/create-draft`
+
+DoD：
+
+- 已确认版本不能继续被原地 patch
+- 用户在已确认版本上点击“继续修改”时，系统先创建草稿副本再进入编辑
+- 草稿副本与源确认版本之间有稳定来源关联，可审计、可回溯
+
+### D. 策划确认 → Creation 交接
 
 现状：
 
@@ -630,12 +714,14 @@ DoD：
 
 - 用户点击"确认策划"后，Creation 中立即出现按分镜结构排好的 Shot 列表
 - 每个 Shot 带有草稿图引用和目标模型关联
+- 已 finalize 的版本如需继续修改，必须先创建草稿副本，而不是直接修改当前确认版本
 
 ### Phase 5 总 DoD
 
 1. Planner 生成过程有实时步骤进度，不再是黑盒等待
 2. 用户可对任意 Shot 发起单独重跑，不影响其他内容
-3. "确认策划"动作可以一键打通 Planner → Creation 数据链路
+3. 已确认版本不能被原地 patch，继续修改必须先创建草稿副本
+4. "确认策划"动作可以一键打通 Planner → Creation 数据链路
 
 ---
 

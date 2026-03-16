@@ -158,13 +158,18 @@ interface ProviderAdapter {
 
 ### 7.1 ARK
 
-当前主要用于文本生成。
+当前代码主路径主要用于文本生成。
 
 特点：
 
 1. 以同步响应为主
 2. 不支持 poll
 3. 不支持 callback
+
+补充说明：
+
+1. 上述是当前代码现状，不是长期 provider 能力边界
+2. 规划上 ARK 也应纳入 IMAGE / VIDEO / AUDIO 能力接入，架构上不得再把它固化为 text-only provider
 
 ### 7.2 Platou
 

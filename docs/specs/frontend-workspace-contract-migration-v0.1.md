@@ -206,4 +206,3 @@ Publish：
 1. `docs/index/master-index-v0.4.md`
 2. `docs/specs/refactor-execution-guardrails-v0.1.md`
 3. `docs/specs/backend-implementation-checklist-v0.3.md`
-4. `docs/specs/frontend-domain-contract-spec-v0.2.md`

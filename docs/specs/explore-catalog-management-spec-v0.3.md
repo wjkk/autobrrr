@@ -50,6 +50,21 @@
 
 - `project_creation_configs`
 
+### 2.1.1 已冻结待实现的首页创建规则
+
+首页项目入口在下一轮收口时，增加以下固定规则：
+
+1. 当用户打开“多集”开关后，必须输入集数，不能只提交一个布尔开关
+2. 多集模式下，前端提交 `contentMode = 'series'` 时，需同时提交 `creationConfig.settings.episodeCount`
+3. `episodeCount` 的有效值为正整数，最小值为 `2`
+4. 单集模式下，`episodeCount` 应省略或按 `1` 处理
+
+这条规则的目的不是扩展首页 UI，而是确保：
+
+1. `projects` 与 `episodes` 的初始化数量一致
+2. Planner 在多集模式下拿到明确集数，而不是继续使用隐式默认值
+3. `project_creation_configs` 中保留真实入口意图，而不是只有 `multiEpisode: true`
+
 ### 2.2 主体 / 画风目录已落地为正式表
 
 当前目录相关正式表：
@@ -121,6 +136,11 @@
 6. `subject_profile_id`
 7. `style_preset_id`
 8. `settings_json`
+
+补充约束：
+
+1. `settings_json` 应承载入口层的多集配置
+2. 当项目为多集模式时，`settings_json.episodeCount` 应作为正式快照字段保存
 
 ## 4. 当前接口
 

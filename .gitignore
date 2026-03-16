@@ -42,3 +42,6 @@ Thumbs.db
 
 archive/
 
+# Local output files (screenshots, generated assets, etc.)
+output/
+

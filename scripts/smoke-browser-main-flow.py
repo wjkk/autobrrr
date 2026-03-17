@@ -77,7 +77,9 @@ def main():
             "if (!user) throw new Error('No planner refactor smoke user found');"
             "const project = await prisma.project.findFirst({ where: { createdById: user.id }, orderBy: { createdAt: 'desc' } });"
             "if (!project) throw new Error('No planner refactor smoke project found');"
-            "console.log(JSON.stringify({ email: user.email, projectId: project.id, title: project.title }));"
+            "const episode = await prisma.episode.findFirst({ where: { projectId: project.id }, orderBy: { episodeNo: 'asc' } });"
+            "if (!episode) throw new Error('No planner refactor smoke episode found');"
+            "console.log(JSON.stringify({ email: user.email, projectId: project.id, episodeId: episode.id, title: project.title }));"
             "await prisma.$disconnect();"
             "})().catch(async (error)=>{ console.error(error); process.exit(1); });",
         ])
@@ -102,13 +104,48 @@ def main():
             page.screenshot(path=str(OUT_DIR / 'planner.png'), full_page=True)
 
             creation_url = f'{WEB_BASE}/projects/{info["projectId"]}/creation'
+            creation_workspace_response = context.request.get(
+                f'{WEB_BASE}/api/creation/projects/{info["projectId"]}/workspace?episodeId={info["episodeId"]}',
+                headers={'Accept': 'application/json'},
+            )
+            if not creation_workspace_response.ok:
+                raise RuntimeError(f'Creation workspace request failed: {creation_workspace_response.status} {creation_workspace_response.text()}')
+            creation_workspace_payload = creation_workspace_response.json()
+            creation_workspace = creation_workspace_payload.get('data') if isinstance(creation_workspace_payload, dict) else None
+            if not creation_workspace or not creation_workspace.get('shots'):
+                raise RuntimeError('Creation workspace did not return any shots.')
+            first_creation_shot = creation_workspace['shots'][0]
+            if not first_creation_shot.get('promptJson'):
+                raise RuntimeError('Creation workspace missing finalized promptJson on first shot.')
+            if not first_creation_shot.get('targetVideoModelFamilySlug'):
+                raise RuntimeError('Creation workspace missing targetVideoModelFamilySlug on first shot.')
             page.goto(creation_url, wait_until='domcontentloaded')
             page.get_by_role('button', name='一键转视频').wait_for(timeout=UI_TIMEOUT_MS)
+            page.get_by_text(first_creation_shot['title']).first.wait_for(timeout=UI_TIMEOUT_MS)
             page.screenshot(path=str(OUT_DIR / 'creation.png'), full_page=True)
 
             publish_url = f'{WEB_BASE}/projects/{info["projectId"]}/publish'
+            publish_workspace_response = context.request.get(
+                f'{WEB_BASE}/api/publish/projects/{info["projectId"]}/workspace?episodeId={info["episodeId"]}',
+                headers={'Accept': 'application/json'},
+            )
+            if not publish_workspace_response.ok:
+                raise RuntimeError(f'Publish workspace request failed: {publish_workspace_response.status} {publish_workspace_response.text()}')
+            publish_workspace_payload = publish_workspace_response.json()
+            publish_workspace = publish_workspace_payload.get('data') if isinstance(publish_workspace_payload, dict) else None
+            publish_summary = publish_workspace.get('summary') if isinstance(publish_workspace, dict) else None
+            if not publish_summary:
+                raise RuntimeError('Publish workspace missing summary.')
+            if int(publish_summary.get('totalShots', 0)) <= 0:
+                raise RuntimeError('Publish workspace reports zero shots.')
+            publish_shots = publish_workspace.get('shots') if isinstance(publish_workspace, dict) else None
+            if not isinstance(publish_shots, list) or len(publish_shots) == 0:
+                raise RuntimeError('Publish workspace missing shot list.')
+            if int(publish_summary.get('totalShots', 0)) != len(publish_shots):
+                raise RuntimeError('Publish workspace summary totalShots does not match shot list length.')
             page.goto(publish_url, wait_until='domcontentloaded')
             page.get_by_role('button', name='发布作品').first.wait_for(timeout=UI_TIMEOUT_MS)
+            page.get_by_text('发布作品').first.wait_for(timeout=UI_TIMEOUT_MS)
             page.screenshot(path=str(OUT_DIR / 'publish.png'), full_page=True)
 
             browser.close()

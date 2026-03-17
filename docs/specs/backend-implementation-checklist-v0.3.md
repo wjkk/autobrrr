@@ -402,6 +402,7 @@ DoD：
 12. Platou client 与 provider config test 决策逻辑已补单测，包括嵌套/顶层错误消息解析、i2v 参考图判定、测试 endpoint 选择顺序，以及 `ModelNotOpen` 到业务错误码的稳定映射
 13. `planner-debug` 已补失败路径与 replay 断言，包括存档 input 非法时拒绝 replay、已发布配置缺少 release snapshot 时硬失败，以及 replay 时必须透传 `replaySourceRunId`
 14. `planner-debug compare` 已补固定断言，包括左右任一 side 缺失时返回 `null`、两边必须共享同一个 `compareGroupKey`、以及 compare label 固定为 `A/B`
+15. 浏览器主链路回归已增强为“页面 + workspace 数据”双断言：Creation 必须读到 finalized `promptJson / targetVideoModelFamilySlug`，Publish 必须返回有效 summary 与 shots 列表
 
 DoD：
 

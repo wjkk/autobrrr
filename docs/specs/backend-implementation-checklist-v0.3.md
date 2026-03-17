@@ -464,6 +464,8 @@ DoD：
 74. provider adapters 已补 API 单测，当前覆盖 provider code/type 解析、Ark/Platou/proxy/official adapter 选择、mock proxy 的 submit/poll/callback 状态机，以及 Ark/Platou task id 与状态字段提取，避免执行链路在 provider 扩容后静默落到错误 adapter 或错误状态
 75. asset storage 已补 API 单测，当前覆盖图片/视频扩展名推断、文件后缀 -> mime 反推，以及基于日期的本地 storage key 生成，避免本地落盘路径和公开 URL 推断在重构中静默漂移
 76. external api call logs 已补 API 单测，当前覆盖 request/response JSON 裁剪、深度截断、字符串截断和 provider request id 提取，避免审计落库在 payload 变大或 provider 返回结构变化后静默失真
+77. platou model catalog 已补 API 单测，当前覆盖 model id 归一化、人类可读 label、slug 化、metadata/model-id 双通道分类，以及目录去重与 unsupported 模型过滤，避免 Platou 模型同步把文本/图片/视频分错类
+78. planner subject auto image 已补 API 单测，当前覆盖 Planner 主体自动生图输入到 Catalog 生图输入的桥接，避免自动主体图链路在参数扩展后静默漏传 model family / endpoint / subjectType
 
 DoD：
 

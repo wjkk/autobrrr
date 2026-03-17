@@ -28,3 +28,7 @@ export async function generatePlannerSubjectAutoImageForUser(args: {
     input: buildPlannerSubjectAutoImageInput(args.input),
   });
 }
+
+export const __testables = {
+  buildPlannerSubjectAutoImageInput,
+};

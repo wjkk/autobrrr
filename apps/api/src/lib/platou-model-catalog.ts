@@ -314,3 +314,11 @@ export async function syncPlatouModelCatalog(args: {
     ),
   };
 }
+
+export const __testables = {
+  normalizeModelId,
+  humanizeModelId,
+  slugifyModelId,
+  inferModelKindFromMetadata,
+  inferModelKind,
+};

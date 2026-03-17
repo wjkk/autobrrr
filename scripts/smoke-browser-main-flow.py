@@ -122,11 +122,16 @@ def main():
                 raise RuntimeError('Creation workspace missing finalized promptJson on first shot.')
             if not first_creation_shot.get('targetVideoModelFamilySlug'):
                 raise RuntimeError('Creation workspace missing targetVideoModelFamilySlug on first shot.')
+            creation_stage_nav = page.get_by_role('navigation', name='项目阶段')
+            creation_stage_nav.get_by_role('link', name='分片生成').wait_for(timeout=UI_TIMEOUT_MS)
+            if creation_stage_nav.get_by_role('link', name='分片生成').get_attribute('aria-current') != 'page':
+                raise RuntimeError('Creation page stage navigation did not mark 分片生成 as active.')
+            creation_stage_nav.get_by_role('link', name='发布').wait_for(timeout=UI_TIMEOUT_MS)
             page.get_by_role('button', name='一键转视频').wait_for(timeout=UI_TIMEOUT_MS)
             page.get_by_text(first_creation_shot['title']).first.wait_for(timeout=UI_TIMEOUT_MS)
             page.screenshot(path=str(OUT_DIR / 'creation.png'), full_page=True)
 
-            page.get_by_role('link', name='发布').click()
+            creation_stage_nav.get_by_role('link', name='发布').click()
             page.wait_for_url(f'**/projects/{info["projectId"]}/publish', timeout=UI_TIMEOUT_MS)
 
             publish_workspace_response = context.request.get(
@@ -147,6 +152,10 @@ def main():
                 raise RuntimeError('Publish workspace missing shot list.')
             if int(publish_summary.get('totalShots', 0)) != len(publish_shots):
                 raise RuntimeError('Publish workspace summary totalShots does not match shot list length.')
+            publish_stage_nav = page.get_by_role('navigation', name='项目阶段')
+            publish_stage_nav.get_by_role('link', name='发布').wait_for(timeout=UI_TIMEOUT_MS)
+            if publish_stage_nav.get_by_role('link', name='发布').get_attribute('aria-current') != 'page':
+                raise RuntimeError('Publish page stage navigation did not mark 发布 as active.')
             page.get_by_role('button', name='发布作品').first.wait_for(timeout=UI_TIMEOUT_MS)
             page.get_by_text('发布作品').first.wait_for(timeout=UI_TIMEOUT_MS)
             page.screenshot(path=str(OUT_DIR / 'publish.png'), full_page=True)

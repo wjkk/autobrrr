@@ -13,6 +13,7 @@
     "test:unit:api": "pnpm --filter @aiv/api test:unit",
     "test:web:unit": "pnpm --filter @aiv/web test:unit",
     "test:ai:regression": "pnpm --filter @aiv/api test:ai:regression",
-    "test:web:regression": "python scripts/smoke-browser-main-flow.py"
+    "test:web:regression": "python scripts/smoke-browser-main-flow.py",
+    "test:quality": "pnpm test:unit:api && pnpm test:web:unit && pnpm test:ai:regression && pnpm test:web:regression"
   }
 }

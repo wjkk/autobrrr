@@ -457,6 +457,8 @@ DoD：
 67. planner run service 已补 API 单测，当前覆盖 active session 复用/创建、`NOT_FOUND / MODEL_NOT_FOUND / PLANNER_AGENT_NOT_CONFIGURED` 早失败，以及 outline/refinement 两阶段的 `targetStage / triggerType` 决策，避免策划主入口静默排错 run 类型
 68. planner refinement projection 已补 API 单测，当前覆盖 asset id 过滤、fallback structured doc 恢复、projection rows -> structured doc 的重建，以及 sourceRun 存在时对 run.outputJson.structuredDoc 的同步，避免投影重建把 `entityKey / targetModelFamilySlug / scriptSummary` 静默写坏
 69. planner refinement sync 已补 API 单测，当前覆盖 key 归一化、场景时间/室内外推断、previousProjection 资产继承，以及 subject/scene/shot 重建时的 `entityKey / subjectBindings / targetModelFamilySlug` 延续，避免 structured doc 回写后实体层静默丢素材或换键
+70. planner outline doc 已补 API 单测，当前覆盖 content type 归一化、series fallback、fenced JSON 解析，以及 JSON 缺失/非法时的大纲 fallback，避免 outline 入口在 provider 输出轻微漂移后静默退化
+71. api mappers 已补 API 单测，当前覆盖 Asset/Run/Shot 的 enum lowercase、activeVersion 归一化和 timestamp 输出，避免公共 API 响应在 service seam 或 schema 扩展后静默改形
 
 DoD：
 

@@ -52,6 +52,11 @@ function readBaseDoc(value: Prisma.JsonValue | null) {
   });
 }
 
+export const __testables = {
+  readAssetIds,
+  readBaseDoc,
+};
+
 export function rebuildPlannerStructuredDocFromProjection(input: ProjectionInput): PlannerStructuredDoc {
   const baseDoc = readBaseDoc(input.refinementVersion.structuredDocJson);
   const subjects = input.subjects.slice().sort((left, right) => left.sortOrder - right.sortOrder);

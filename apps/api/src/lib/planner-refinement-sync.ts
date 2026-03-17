@@ -60,6 +60,14 @@ function inferLocationType(text: string) {
   return 'other';
 }
 
+export const __testables = {
+  normalizeKey,
+  readProjectionKey,
+  toAssetIdList,
+  inferSceneTime,
+  inferLocationType,
+};
+
 export async function syncPlannerRefinementDerivedData(args: {
   db: PlannerDbClient;
   refinementVersionId: string;

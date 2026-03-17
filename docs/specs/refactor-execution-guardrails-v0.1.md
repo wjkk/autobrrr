@@ -250,6 +250,8 @@
 47. debug preset 初始化、JSON 输入校验和目录管理标签映射这类后台/运营页面规则也必须进入 web unit；这些页面虽然不是创作主链路，但一旦静默漂移，会直接影响排障和运营配置准确性
 48. model registry 这类“默认选哪个 family/endpoint”的决策层必须有 API 单测，至少锁住显式 endpoint 命中、`preferOfficial` 排序和空结果返回；否则 provider 扩容后最容易把默认模型 silently 带偏
 49. planner agent registry 这类“内容类型 + subtype -> agent/sub-agent”的选择层也必须进 API 单测，至少锁住 subtype trim、按 subtype 命中和 latest active fallback；否则策划链路很容易在 agent 配置增长后静默选错模版
+50. planner refinement projection 这类“实体层 -> structured doc / run output”重建逻辑必须有 API 单测，至少锁住 asset id 清洗、fallback 文档恢复、`entityKey` 继承和 `targetModelFamilySlug` 回写；否则投影层一旦漂移，页面看起来能打开，但文档与 run 快照会悄悄失真
+51. planner refinement sync 这类“structured doc -> subject/scene/shot 实体”回填逻辑也必须有 API 单测，至少锁住 key 归一化、旧资产继承、subjectBindings 重建和场景推断；否则局部编辑或整包保存后最容易出现素材丢失、实体换键或镜头绑定错位
 50. project title / slug / label 这类入口级小 helper 也应补最小单测；它们看起来简单，但一旦截断或 fallback 规则漂移，会直接污染项目列表、回归截图和 debug 追踪定位
 51. planner refinement access / media generation 这类 guard-heavy service 不能只靠路由或 smoke 覆盖；至少要锁住资产归属校验、entity kind 到 resourceType 的映射、默认模型回退以及 refinement locked 时的硬失败
 52. creation run service 这类“真正把用户点击转成 queued run”的入口层，也必须有 API 单测，至少锁住 `NOT_FOUND / MODEL_NOT_FOUND`、显式模型覆盖、用户默认模型回退、prompt override 持久化和 run input 序列化；否则生成链路最容易出现“页面能点但后台排到了错模型”的静默回归

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { parseVideoModelCapability } from './model-capability.js';
 import { __testables } from './planner-run-service.js';
 
 function buildOwnedEpisode() {
@@ -204,7 +205,29 @@ test('queuePlannerGenerateDocRunWithDeps builds outline and refinement trigger t
       agentProfile: { id: 'agent-1', slug: 'agent', displayName: 'Agent', defaultSystemPrompt: 'system', defaultDeveloperPrompt: null, defaultStepDefinitionsJson: [] },
       subAgentProfile: { id: 'sub-1', slug: 'sub', displayName: 'Sub', systemPromptOverride: null, developerPromptOverride: null, stepDefinitionsJson: [] },
     } as never),
-    resolvePlannerTargetVideoModel: async () => ({ familySlug: 'seedance-2-0', familyName: 'Seedance 2.0', summary: 'multi-shot' }),
+    resolvePlannerTargetVideoModel: async () => ({
+      familyId: 'family-seedance-2-0',
+      familySlug: 'seedance-2-0',
+      familyName: 'Seedance 2.0',
+      summary: 'multi-shot',
+      capability: parseVideoModelCapability({
+        supportsMultiShot: true,
+        maxShotsPerGeneration: 6,
+        timestampMeaning: 'narrative-hint',
+        audioDescStyle: 'inline',
+        referenceImageSupport: 'character',
+        maxReferenceImages: 1,
+        maxReferenceVideos: 0,
+        maxReferenceAudios: 0,
+        cameraVocab: 'english-cinematic',
+        maxDurationSeconds: 10,
+        maxResolution: '1080p',
+        promptStyle: 'narrative',
+        qualityNote: 'multi-shot',
+        knownIssues: [],
+        integrationStatus: 'active',
+      }, 'seedance-2-0'),
+    }),
     buildPlannerGenerationPrompt: () => buildPromptPackage() as never,
     createPlannerUserMessage: async () => buildUserMessage() as never,
     prisma: {

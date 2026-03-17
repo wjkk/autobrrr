@@ -396,6 +396,7 @@ DoD：
 6. 文档与任务清单中不再出现 “ARK = text-only provider” 的现行口径
 7. Planner 最终 prompt 已作为 artifact 固化到版本快照；provider client 支持通过 `AIV_PROVIDER_CAPTURE_DIR` / `AIV_PROVIDER_REPLAY_DIR` 做 file-based capture / replay
 8. 浏览器主链路回归已入仓，当前执行入口为 `pnpm test:web:regression`
+9. 关键失败分支已补单测，包括 unsupported provider capability，以及 finalize 试图删除已有生成历史的 Creation shot 时必须硬失败
 
 DoD：
 

@@ -12,11 +12,13 @@ import { publishCopy } from '@/lib/copy';
 import type { ApiPublishWorkspace, PublishRuntimeApiContext, PublishSubmitResult } from '../lib/publish-api';
 import {
   applyPublishHistoryBinding,
+  buildPublishSubmitPayload,
   buildPublishMetricSummary,
   filterPublishHistoryWorks,
   listPublishHistoryCategories,
   resolveInitialPublishHistoryId,
   type PublishHistoryCategory,
+  validatePublishDraftSubmission,
 } from '../lib/publish-page-helpers';
 import type { PublishPageData } from '../lib/publish-page-data';
 import styles from './publish-page.module.css';
@@ -82,8 +84,9 @@ export function PublishPage({ studio, runtimeApi, initialPublishWorkspace }: Pub
   };
 
   const submitPublish = async () => {
-    if (!draft.title.trim() || !draft.intro.trim()) {
-      setNotice('标题和简介未完成，暂不能发布。');
+    const validationError = validatePublishDraftSubmission(draft);
+    if (validationError) {
+      setNotice(validationError);
       return;
     }
 
@@ -96,14 +99,11 @@ export function PublishPage({ studio, runtimeApi, initialPublishWorkspace }: Pub
             Accept: 'application/json',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
+          body: JSON.stringify(buildPublishSubmitPayload({
             episodeId: runtimeApi.episodeId,
-            title: draft.title,
-            intro: draft.intro,
-            script: draft.script,
-            tag: draft.tag,
-            sourceHistoryId: selectedHistoryId,
-          }),
+            draft,
+            selectedHistoryId,
+          })),
         });
         const payload = (await response.json()) as { ok: boolean; data?: PublishSubmitResult; error?: { message?: string } };
         if (!response.ok || !payload.ok) {

@@ -416,6 +416,7 @@ DoD：
 26. Creation workspace 合并层已补 web unit，当前覆盖 finalize 后的 `preferredModel / materialBindings / duration / playback / lipSync baseShotId` 映射，避免页面运行时状态与后端 workspace 悄悄脱节
 27. Creation UI state 纯函数已补 web unit，当前覆盖 generation draft、canvas draft、story tool draft、model picker 分类、view mode fallback，避免前端局部编辑器默认值静默漂移
 28. Publish 页面 helper / presenter 已补 web unit，当前覆盖初始历史来源选择、分类过滤、指标摘要构造、以及历史作品回填到发布草稿的绑定逻辑
+29. Publish 提交前校验与 payload 组装已补 web unit，当前覆盖标题/简介必填校验与 trim 后的提交 payload，避免“页面能点发布但发出的数据已漂移”
 
 DoD：
 

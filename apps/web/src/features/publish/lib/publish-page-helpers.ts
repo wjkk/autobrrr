@@ -74,3 +74,26 @@ export function applyPublishHistoryBinding(args: {
     notice: '已从历史作品回填标题、简介与剧本描述。',
   };
 }
+
+export function validatePublishDraftSubmission(draft: PublishDraft) {
+  if (!draft.title.trim() || !draft.intro.trim()) {
+    return '标题和简介未完成，暂不能发布。';
+  }
+
+  return null;
+}
+
+export function buildPublishSubmitPayload(args: {
+  episodeId: string;
+  draft: PublishDraft;
+  selectedHistoryId: string | null;
+}) {
+  return {
+    episodeId: args.episodeId,
+    title: args.draft.title.trim(),
+    intro: args.draft.intro.trim(),
+    script: args.draft.script,
+    tag: args.draft.tag,
+    sourceHistoryId: args.selectedHistoryId,
+  };
+}

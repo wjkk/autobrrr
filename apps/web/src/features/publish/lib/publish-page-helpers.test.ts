@@ -4,10 +4,12 @@ import test from 'node:test';
 import type { PublishPageData } from './publish-page-data';
 import {
   applyPublishHistoryBinding,
+  buildPublishSubmitPayload,
   buildPublishMetricSummary,
   filterPublishHistoryWorks,
   listPublishHistoryCategories,
   resolveInitialPublishHistoryId,
+  validatePublishDraftSubmission,
 } from './publish-page-helpers';
 
 function buildPublishStudio(): PublishPageData {
@@ -110,4 +112,44 @@ test('applyPublishHistoryBinding updates draft from selected history work', () =
     },
     notice: '已从历史作品回填标题、简介与剧本描述。',
   });
+});
+
+test('publish submit helpers validate required fields and trim submission payload', () => {
+  const studio = buildPublishStudio();
+
+  assert.equal(
+    validatePublishDraftSubmission({
+      ...studio.publish.draft,
+      title: '   ',
+    }),
+    '标题和简介未完成，暂不能发布。',
+  );
+  assert.equal(
+    validatePublishDraftSubmission({
+      ...studio.publish.draft,
+      intro: '   ',
+    }),
+    '标题和简介未完成，暂不能发布。',
+  );
+  assert.equal(validatePublishDraftSubmission(studio.publish.draft), null);
+
+  assert.deepEqual(
+    buildPublishSubmitPayload({
+      episodeId: 'episode-1',
+      draft: {
+        ...studio.publish.draft,
+        title: '  标题A  ',
+        intro: '  简介B  ',
+      },
+      selectedHistoryId: 'history-2',
+    }),
+    {
+      episodeId: 'episode-1',
+      title: '标题A',
+      intro: '简介B',
+      script: '默认剧本',
+      tag: 'Ready',
+      sourceHistoryId: 'history-2',
+    },
+  );
 });

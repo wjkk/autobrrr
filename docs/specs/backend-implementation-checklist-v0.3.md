@@ -428,10 +428,12 @@ DoD：
 38. settings/provider 页面 helper 已补 web 单测，当前覆盖 draft 初始化、text/image/video 测试优先级、audio 模型选择读写和自动静默 sync 判定，避免配置页 UI 规则静默漂移
 39. settings/provider 请求与错误解析 helper 已补 web 单测，当前覆盖保存 payload 组装、providerConfig 失败态透传和 auth user 解析，避免配置页 fetch 层静默漂移
 40. 浏览器主链路回归已覆盖 `/settings/providers`，当前断言 Ark 卡片与 text/image/video/audio 四个模型区块真实渲染，避免 provider settings 页在回归中长期失守
-41. provider runtime config 已补 API 单测，当前覆盖 provider 缺失 fallback、用户 override 的 baseUrl/apiKey/enabled，以及 run 按 project owner 解析 provider config，避免生成链路运行时悄悄用错凭据
-42. creation / publish workspace service 已补 API 单测，当前覆盖素材绑定映射、latest run 归并、activeVersion 展示态和 readyToPublish summary，避免页面真实工作区 DTO 静默漂移
-43. creation-state 已补 web 单测，当前覆盖首屏 clone、关键帧派生新分镜、批量生成状态迁移和版本应用，避免 Creation 运行时状态机静默漂移
-44. creation-api 已补 web 单测，当前覆盖 duration/resolution/status 启发式、preferred model 推断和素材 source kind 映射，避免首屏 workspace 转换静默漂移
+41. Creation / Publish 首屏 server bootstrap 已拆成纯函数并补 web 单测，当前覆盖 currentEpisode 优先选择、首集 fallback、runtimeApi 注入，以及真实 workspace 到页面 bootstrap 结果的稳定映射
+42. `*.server.ts` 首屏装配逻辑已从 `server-only` 模块中抽出可测试 helper，避免“首屏能打开但 episode 选择、fixture fallback、runtime workspace 注入规则已漂移”这类回归长期无自动覆盖
+43. provider runtime config 已补 API 单测，当前覆盖 provider 缺失 fallback、用户 override 的 baseUrl/apiKey/enabled，以及 run 按 project owner 解析 provider config，避免生成链路运行时悄悄用错凭据
+44. creation / publish workspace service 已补 API 单测，当前覆盖素材绑定映射、latest run 归并、activeVersion 展示态和 readyToPublish summary，避免页面真实工作区 DTO 静默漂移
+45. creation-state 已补 web 单测，当前覆盖首屏 clone、关键帧派生新分镜、批量生成状态迁移和版本应用，避免 Creation 运行时状态机静默漂移
+46. creation-api 已补 web 单测，当前覆盖 duration/resolution/status 启发式、preferred model 推断和素材 source kind 映射，避免首屏 workspace 转换静默漂移
 
 DoD：
 

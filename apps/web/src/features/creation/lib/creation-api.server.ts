@@ -1,20 +1,23 @@
 import type { CreationWorkspace, ProjectStatus } from '@aiv/domain';
-import { getMockStudioProject } from '@aiv/mock-data';
 
 import { AivApiError, requestAivApiFromServer } from '@/lib/aiv-api';
 
-import { createCreationPageData, creationPageDataFromFixture } from './creation-page-data';
-import { buildCreationPageDataFromApi } from './creation-page-bootstrap';
+import {
+  buildCreationBootstrap,
+  buildCreationFixtureFallback,
+  selectCreationEpisodeId,
+  type CreationPageBootstrap,
+} from './creation-api-bootstrap';
 import { mergeCreationWorkspaceFromApi, type ApiCreationWorkspace, type ApiProjectDetail, type CreationRuntimeApiContext } from './creation-api';
 
-export async function fetchCreationStudioProject(projectId: string): Promise<{ studio: ReturnType<typeof buildCreationPageDataFromApi> | null; runtimeApi?: CreationRuntimeApiContext }> {
+export async function fetchCreationStudioProject(projectId: string): Promise<CreationPageBootstrap> {
   try {
     const project = await requestAivApiFromServer<ApiProjectDetail>(`/api/studio/projects/${encodeURIComponent(projectId)}`, { allowNotFound: true });
     if (!project) {
       return { studio: null };
     }
 
-    const episodeId = project.currentEpisodeId ?? project.episodes[0]?.id;
+    const episodeId = selectCreationEpisodeId(project);
     if (!episodeId) {
       throw new AivApiError('Project did not expose an episode id.', 'AIV_CREATION_EPISODE_REQUIRED');
     }
@@ -27,17 +30,8 @@ export async function fetchCreationStudioProject(projectId: string): Promise<{ s
       throw new AivApiError('Creation workspace is empty.', 'AIV_CREATION_WORKSPACE_EMPTY');
     }
 
-    return {
-      studio: buildCreationPageDataFromApi(project, workspace),
-      runtimeApi: {
-        projectId: project.id,
-        episodeId: workspace.episode.id,
-      },
-    };
+    return buildCreationBootstrap(project, workspace);
   } catch {
-    const fixture = getMockStudioProject(projectId);
-    return {
-      studio: fixture ? creationPageDataFromFixture(fixture) : null,
-    };
+    return buildCreationFixtureFallback(projectId);
   }
 }

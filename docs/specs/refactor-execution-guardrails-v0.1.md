@@ -230,10 +230,12 @@
 27. provider catalog / model discovery 这类“配置页能不能正确列出模型”的分类逻辑，也必须有 API 单测，不能只靠真人点 `/settings/providers` 临时验证
 28. provider config options 这类“页面保存什么配置、默认值如何合并”的纯函数，也必须有 API 单测，避免用户配置被 merge 逻辑静默抹掉
 29. provider settings presenter 这类“后端返回给配置页的展示态映射”也必须有 API 单测，避免 API key 脱敏、audio/default 状态和空态返回在 presenter 层静默漂移
-30. user default model selection 这类“运行时真正选中哪个 endpoint”的决策逻辑，也必须有 API 单测，避免配置页显示正确但生成链路落到错误模型
-31. 合并前默认执行 `pnpm test:quality`，除非明确知道本次变更只影响某个局部并已有更小验证集合
-32. service seam 引入后，provider settings 这类 route 下沉出来的 query/catalog 决策层也必须有 API 单测，避免只是把厚 route 平移到新 service 而没有锁住行为
-33. settings/provider 这类带草稿态、自动 sync 和多模型选择的页面，也必须把页面 helper 拆出来进 web 单测，不能只靠浏览器 smoke 覆盖
+30. `*.server.ts` 若承担首屏 bootstrap / episode 选择 / fixture fallback 这类装配职责，应把纯决策层抽到非 `server-only` helper，并为该 helper 补 web unit，不能因为模块边界而放弃首屏规则的自动覆盖
+31. Creation / Publish 这类依赖 currentEpisode 与 workspace 联动的首屏页面，必须锁住“currentEpisode 优先、首集 fallback、runtimeApi 注入”三类 bootstrap 规则，避免页面能打开但入口 episode 已悄悄选错
+32. user default model selection 这类“运行时真正选中哪个 endpoint”的决策逻辑，也必须有 API 单测，避免配置页显示正确但生成链路落到错误模型
+33. 合并前默认执行 `pnpm test:quality`，除非明确知道本次变更只影响某个局部并已有更小验证集合
+34. service seam 引入后，provider settings 这类 route 下沉出来的 query/catalog 决策层也必须有 API 单测，避免只是把厚 route 平移到新 service 而没有锁住行为
+35. settings/provider 这类带草稿态、自动 sync 和多模型选择的页面，也必须把页面 helper 拆出来进 web 单测，不能只靠浏览器 smoke 覆盖
 34. settings/provider 这类直接调用 fetch 的页面，还必须把请求 payload 和错误解析 helper 拆出来进 web 单测，避免 UI 层每次改交互都顺手打穿错误处理
 35. 浏览器主链路回归除 Planner / Creation / Publish 外，还应覆盖 `/settings/providers` 这类 AI 配置入口，至少锁住 provider 卡片和多模型区块真实渲染
 36. provider runtime config 这类“运行时到底读取哪个 provider 凭据和 baseUrl”的决策层，也必须有 API 单测，避免页面配置正确但执行链路落到错误 owner 或 fallback

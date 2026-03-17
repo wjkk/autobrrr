@@ -102,6 +102,8 @@ def main():
             page.goto(planner_url, wait_until='domcontentloaded')
             planner_creation_button = page.get_by_role('button', name='进入创作')
             planner_creation_button.wait_for(timeout=UI_TIMEOUT_MS)
+            page.get_by_role('region', name='分镜提示词预览').wait_for(timeout=UI_TIMEOUT_MS)
+            page.get_by_text('生成提示词预览').wait_for(timeout=UI_TIMEOUT_MS)
             page.screenshot(path=str(OUT_DIR / 'planner.png'), full_page=True)
 
             planner_creation_button.click()

@@ -472,13 +472,19 @@ export async function replayPlannerDebugRun(userId: string, runId: string) {
   });
 }
 
-export async function comparePlannerDebugRuns(userId: string, payload: PlannerDebugCompareInput) {
+async function comparePlannerDebugRunsWithDeps(
+  userId: string,
+  payload: PlannerDebugCompareInput,
+  deps: Pick<PlannerDebugDeps, 'prisma'> & {
+    executePlannerDebugRun: typeof executePlannerDebugRun;
+  },
+) {
   const [leftSubAgent, rightSubAgent] = await Promise.all([
-    prisma.plannerSubAgentProfile.findUnique({
+    deps.prisma.plannerSubAgentProfile.findUnique({
       where: { id: payload.leftSubAgentId },
       include: { agentProfile: true },
     }),
-    prisma.plannerSubAgentProfile.findUnique({
+    deps.prisma.plannerSubAgentProfile.findUnique({
       where: { id: payload.rightSubAgentId },
       include: { agentProfile: true },
     }),
@@ -491,7 +497,7 @@ export async function comparePlannerDebugRuns(userId: string, payload: PlannerDe
   const compareGroupKey = randomUUID();
 
   const [leftResult, rightResult] = await Promise.all([
-    executePlannerDebugRun({
+    deps.executePlannerDebugRun({
       userId,
       contentType: leftSubAgent.agentProfile.contentType,
       subtype: leftSubAgent.subtype,
@@ -517,7 +523,7 @@ export async function comparePlannerDebugRuns(userId: string, payload: PlannerDe
       compareGroupKey,
       compareLabel: 'A',
     }),
-    executePlannerDebugRun({
+    deps.executePlannerDebugRun({
       userId,
       contentType: rightSubAgent.agentProfile.contentType,
       subtype: rightSubAgent.subtype,
@@ -552,6 +558,13 @@ export async function comparePlannerDebugRuns(userId: string, payload: PlannerDe
   };
 }
 
+export async function comparePlannerDebugRuns(userId: string, payload: PlannerDebugCompareInput) {
+  return comparePlannerDebugRunsWithDeps(userId, payload, {
+    prisma,
+    executePlannerDebugRun,
+  });
+}
+
 export function toPrismaJsonInput(value: Prisma.JsonValue | null | undefined) {
   if (value === null || value === undefined) {
     return undefined;
@@ -564,4 +577,5 @@ export const __testables = {
   parseStoredDebugInput,
   resolvePlannerDebugSelectionWithDeps,
   replayPlannerDebugRunWithDeps,
+  comparePlannerDebugRunsWithDeps,
 };

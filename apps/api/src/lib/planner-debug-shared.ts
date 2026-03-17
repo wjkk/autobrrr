@@ -17,6 +17,18 @@ function readStructuredDoc(value: unknown): PlannerStructuredDoc | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as PlannerStructuredDoc) : null;
 }
 
+function readTargetEntityId(value: unknown) {
+  const record = readObject(value);
+  return (
+    readString(record.id)
+    ?? readString(record.subjectId)
+    ?? readString(record.sceneId)
+    ?? readString(record.shotId)
+    ?? readString(record.title)
+    ?? null
+  );
+}
+
 function estimateTokens(text: string | null | undefined) {
   if (!text) {
     return 0;
@@ -179,6 +191,7 @@ export function deriveDiffSummary(args: {
     nextDoc,
     input: {
       scope: args.partialRerunScope,
+      targetEntityId: readTargetEntityId(args.targetEntity),
       targetEntity: args.targetEntity ?? {},
     },
   });

@@ -264,6 +264,7 @@
 61. workspace shared 这类“多个工作区路由共用的 ownership 查询 helper”也必须有 API 单测，至少锁住 episode 查询同时携带 `projectId / createdById / creationConfig` 上下文；否则后续 route/service 拆分时最容易把权限边界 silently 放松
 62. planner agent package parser 这类“AI agent 输出协议与 fallback 包装”的解析层也必须有 API 单测，至少锁住 outline/refinement 默认包、stage mismatch 回退和非法 JSON fallback；否则模型输出轻微漂移时最容易把主链路直接打穿
 63. planner debug contract 这类“调试入口参数直接进入 replay/compare 执行链”的 schema 层也必须有 API 单测，至少锁住默认值、双边 compare 必填、消息/素材上限和 query coercion；否则 debug 页面最容易出现“表单能提交，但后端 silently 进入错误执行模式”的回归
+64. planner debug shared 这类“把 provider usage、prompt snapshot 和 partial rerun diff 解释给 debug UI”的 helper 也必须有 API 单测，至少锁住成本估算、snapshot 归一化和局部重跑 diff bridge；否则调试页最容易出现“执行没坏，但解释层 silently 漂移”的伪回归
 50. project title / slug / label 这类入口级小 helper 也应补最小单测；它们看起来简单，但一旦截断或 fallback 规则漂移，会直接污染项目列表、回归截图和 debug 追踪定位
 51. planner refinement access / media generation 这类 guard-heavy service 不能只靠路由或 smoke 覆盖；至少要锁住资产归属校验、entity kind 到 resourceType 的映射、默认模型回退以及 refinement locked 时的硬失败
 52. creation run service 这类“真正把用户点击转成 queued run”的入口层，也必须有 API 单测，至少锁住 `NOT_FOUND / MODEL_NOT_FOUND`、显式模型覆盖、用户默认模型回退、prompt override 持久化和 run input 序列化；否则生成链路最容易出现“页面能点但后台排到了错模型”的静默回归

@@ -459,6 +459,7 @@ DoD：
 69. planner refinement sync 已补 API 单测，当前覆盖 key 归一化、场景时间/室内外推断、previousProjection 资产继承，以及 subject/scene/shot 重建时的 `entityKey / subjectBindings / targetModelFamilySlug` 延续，避免 structured doc 回写后实体层静默丢素材或换键
 70. planner outline doc 已补 API 单测，当前覆盖 content type 归一化、series fallback、fenced JSON 解析，以及 JSON 缺失/非法时的大纲 fallback，避免 outline 入口在 provider 输出轻微漂移后静默退化
 71. api mappers 已补 API 单测，当前覆盖 Asset/Run/Shot 的 enum lowercase、activeVersion 归一化和 timestamp 输出，避免公共 API 响应在 service seam 或 schema 扩展后静默改形
+72. catalog subject image 已补 API 单测，当前覆盖主体类型 prompt 文案、显式模型选择优先级、runtime config 缺失时的硬失败、以及 provider 输出 URL 解析，避免主体图库生图链路静默用错模型或返回空地址
 
 DoD：
 

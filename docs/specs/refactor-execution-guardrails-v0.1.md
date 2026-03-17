@@ -254,6 +254,7 @@
 51. planner refinement sync 这类“structured doc -> subject/scene/shot 实体”回填逻辑也必须有 API 单测，至少锁住 key 归一化、旧资产继承、subjectBindings 重建和场景推断；否则局部编辑或整包保存后最容易出现素材丢失、实体换键或镜头绑定错位
 52. planner outline doc 这类“outline 阶段入口文档”的纯函数也必须有 API 单测，至少锁住 content type 归一化、series fallback 和 fenced JSON 解析；否则大纲入口最容易在模型输出轻微漂移时 silently 退化
 53. 公共 API mapper 这类“看似机械、实则定义外部响应形状”的模块也必须有 API 单测，至少锁住 enum lowercase、activeVersion 嵌套形状和 ISO timestamp 输出；否则 service seam 或 schema 扩展后最容易让客户端悄悄收到变形 payload
+54. catalog subject image 这类“模型选择 + provider 配置 + URL 解析”三段式链路也必须有 API 单测，至少锁住显式模型优先级、runtime config 缺失硬失败和 provider 输出地址提取；否则图库生图最容易出现“成功调用但回不来图”或“悄悄用了错误默认模型”
 50. project title / slug / label 这类入口级小 helper 也应补最小单测；它们看起来简单，但一旦截断或 fallback 规则漂移，会直接污染项目列表、回归截图和 debug 追踪定位
 51. planner refinement access / media generation 这类 guard-heavy service 不能只靠路由或 smoke 覆盖；至少要锁住资产归属校验、entity kind 到 resourceType 的映射、默认模型回退以及 refinement locked 时的硬失败
 52. creation run service 这类“真正把用户点击转成 queued run”的入口层，也必须有 API 单测，至少锁住 `NOT_FOUND / MODEL_NOT_FOUND`、显式模型覆盖、用户默认模型回退、prompt override 持久化和 run input 序列化；否则生成链路最容易出现“页面能点但后台排到了错模型”的静默回归

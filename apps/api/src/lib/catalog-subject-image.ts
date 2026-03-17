@@ -35,15 +35,20 @@ export function buildCatalogSubjectPrompt(input: CatalogSubjectImageGenerationIn
   ].join('\n');
 }
 
-export async function generateCatalogSubjectImageForUser(args: {
+async function generateCatalogSubjectImageForUserWithDeps(args: {
   userId: string;
   input: CatalogSubjectImageGenerationInput;
+}, deps: {
+  resolveUserDefaultModelSelection: typeof resolveUserDefaultModelSelection;
+  resolveModelSelection: typeof resolveModelSelection;
+  resolveProviderRuntimeConfigForUser: typeof resolveProviderRuntimeConfigForUser;
+  submitImageGeneration: typeof submitImageGeneration;
 }) {
   const userDefaultModel = !args.input.modelFamily && !args.input.modelEndpoint
-    ? await resolveUserDefaultModelSelection(args.userId, 'IMAGE')
+    ? await deps.resolveUserDefaultModelSelection(args.userId, 'IMAGE')
     : null;
 
-  const resolvedModel = await resolveModelSelection({
+  const resolvedModel = await deps.resolveModelSelection({
     modelKind: 'IMAGE',
     familySlug: args.input.modelFamily ?? userDefaultModel?.familySlug,
     endpointSlug: args.input.modelEndpoint ?? userDefaultModel?.endpointSlug,
@@ -53,7 +58,7 @@ export async function generateCatalogSubjectImageForUser(args: {
     throw new Error('No active image model endpoint matched the selection.');
   }
 
-  const runtimeConfig = await resolveProviderRuntimeConfigForUser({
+  const runtimeConfig = await deps.resolveProviderRuntimeConfigForUser({
     userId: args.userId,
     providerId: resolvedModel.provider.id,
     fallbackCode: resolvedModel.provider.code,
@@ -66,7 +71,7 @@ export async function generateCatalogSubjectImageForUser(args: {
   const prompt = buildCatalogSubjectPrompt(args.input);
   let providerOutput: Record<string, unknown>;
 
-  providerOutput = await submitImageGeneration({
+  providerOutput = await deps.submitImageGeneration({
     providerCode: runtimeConfig.providerCode ?? resolvedModel.provider.code,
     model: resolvedModel.endpoint.remoteModelKey,
     prompt,
@@ -98,3 +103,19 @@ export async function generateCatalogSubjectImageForUser(args: {
     },
   };
 }
+
+export async function generateCatalogSubjectImageForUser(args: {
+  userId: string;
+  input: CatalogSubjectImageGenerationInput;
+}) {
+  return generateCatalogSubjectImageForUserWithDeps(args, {
+    resolveUserDefaultModelSelection,
+    resolveModelSelection,
+    resolveProviderRuntimeConfigForUser,
+    submitImageGeneration,
+  });
+}
+
+export const __testables = {
+  generateCatalogSubjectImageForUserWithDeps,
+};

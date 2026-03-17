@@ -413,6 +413,7 @@ DoD：
 23. 根目录已新增聚合质量入口 `pnpm test:quality`，用于合并前一次性执行 API unit / web unit / AI regression / web regression
 24. 浏览器主链路回归现已走真实页面交互：Planner 点击“进入创作”，Creation 通过阶段导航进入 Publish，不再用脚本直接跳转页面绕过集成层
 25. Planner -> Creation 的 CTA 决策逻辑已抽成纯函数并补 web unit，当前覆盖“是否需要重新 finalize”“何时允许直接进入创作”“无分镜或积分不足时禁用 CTA”三类高风险规则
+26. Creation workspace 合并层已补 web unit，当前覆盖 finalize 后的 `preferredModel / materialBindings / duration / playback / lipSync baseShotId` 映射，避免页面运行时状态与后端 workspace 悄悄脱节
 
 DoD：
 

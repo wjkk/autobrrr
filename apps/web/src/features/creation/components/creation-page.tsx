@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { cx } from '@aiv/ui';
 import { useEffect, useRef, useState } from 'react';
 
+import { StageLinks } from '@/features/shared/components/stage-links';
+
 import type { CreationRuntimeApiContext } from '../lib/creation-api';
 import type { CreationPageData } from '../lib/creation-page-data';
 import { useCreationWorkspace } from '../lib/use-creation-workspace';
@@ -65,6 +67,7 @@ export function CreationPage({ studio, runtimeApi, initialShotId, initialView }:
             <h1 className={styles.title}>{episodeTitle}</h1>
           </div>
           <div className={styles.creationHeaderActions}>
+            <StageLinks projectId={studio.project.id} activeStage="creation" />
             <div className={styles.membershipPill}>
               <span className={styles.pointBadge}>{`✦ ${controller.creation.points}`}</span>
               <span className={styles.membershipDivider} aria-hidden="true" />

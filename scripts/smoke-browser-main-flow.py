@@ -100,10 +100,13 @@ def main():
 
             planner_url = f'{WEB_BASE}/projects/{info["projectId"]}/planner'
             page.goto(planner_url, wait_until='domcontentloaded')
-            page.get_by_role('button', name='进入创作').wait_for(timeout=UI_TIMEOUT_MS)
+            planner_creation_button = page.get_by_role('button', name='进入创作')
+            planner_creation_button.wait_for(timeout=UI_TIMEOUT_MS)
             page.screenshot(path=str(OUT_DIR / 'planner.png'), full_page=True)
 
-            creation_url = f'{WEB_BASE}/projects/{info["projectId"]}/creation'
+            planner_creation_button.click()
+            page.wait_for_url(f'**/projects/{info["projectId"]}/creation', timeout=UI_TIMEOUT_MS)
+
             creation_workspace_response = context.request.get(
                 f'{WEB_BASE}/api/creation/projects/{info["projectId"]}/workspace?episodeId={info["episodeId"]}',
                 headers={'Accept': 'application/json'},
@@ -119,12 +122,13 @@ def main():
                 raise RuntimeError('Creation workspace missing finalized promptJson on first shot.')
             if not first_creation_shot.get('targetVideoModelFamilySlug'):
                 raise RuntimeError('Creation workspace missing targetVideoModelFamilySlug on first shot.')
-            page.goto(creation_url, wait_until='domcontentloaded')
             page.get_by_role('button', name='一键转视频').wait_for(timeout=UI_TIMEOUT_MS)
             page.get_by_text(first_creation_shot['title']).first.wait_for(timeout=UI_TIMEOUT_MS)
             page.screenshot(path=str(OUT_DIR / 'creation.png'), full_page=True)
 
-            publish_url = f'{WEB_BASE}/projects/{info["projectId"]}/publish'
+            page.get_by_role('link', name='发布').click()
+            page.wait_for_url(f'**/projects/{info["projectId"]}/publish', timeout=UI_TIMEOUT_MS)
+
             publish_workspace_response = context.request.get(
                 f'{WEB_BASE}/api/publish/projects/{info["projectId"]}/workspace?episodeId={info["episodeId"]}',
                 headers={'Accept': 'application/json'},
@@ -143,7 +147,6 @@ def main():
                 raise RuntimeError('Publish workspace missing shot list.')
             if int(publish_summary.get('totalShots', 0)) != len(publish_shots):
                 raise RuntimeError('Publish workspace summary totalShots does not match shot list length.')
-            page.goto(publish_url, wait_until='domcontentloaded')
             page.get_by_role('button', name='发布作品').first.wait_for(timeout=UI_TIMEOUT_MS)
             page.get_by_text('发布作品').first.wait_for(timeout=UI_TIMEOUT_MS)
             page.screenshot(path=str(OUT_DIR / 'publish.png'), full_page=True)

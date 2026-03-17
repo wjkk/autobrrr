@@ -279,6 +279,7 @@
 38. Creation 这类以本地状态机承载大量交互的页面，核心状态迁移函数必须有 web 单测，不能只靠页面 smoke 间接覆盖
 39. 前端 workspace adapter 这类带启发式推断的转换层，也必须补分支单测，不能只测 happy path merge
 40. planner api 这类“前端工作区请求 helper 与 envelope 解析层”也必须有 web 单测，至少锁住路径拼装、错误消息优先级和 multipart 上传；否则页面最容易表现成“交互正常、请求悄悄打错路径”的伪回归
+41. server bootstrap 这类“请求真实 API 后再决定首屏 studio/runtimeApi/initialWorkspace 的页面入口”，也应拆成无 `server-only` 依赖的纯 bootstrap 模块并补 web 单测；否则首屏最容易出现 episode 选错、structured doc 优先级错位、fixture fallback 漂移
 
 ## 8. 回滚与停手条件
 

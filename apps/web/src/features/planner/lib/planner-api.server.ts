@@ -1,11 +1,8 @@
-import { getMockStudioProject } from '@aiv/mock-data';
-
 import { requestAivApiFromServer } from '@/lib/aiv-api';
 
 import type { PlannerPageBootstrap, ApiPlannerWorkspace } from './planner-api';
-import { buildPlannerPageDataFromApi, type ApiPlannerProjectDetail } from './planner-page-bootstrap';
-import { plannerPageDataFromFixture } from './planner-page-data';
-import { outlineToPreviewStructuredPlannerDoc } from './planner-structured-doc';
+import { buildPlannerBootstrap, buildPlannerFixtureFallback, selectPlannerEpisodeId } from './planner-api-bootstrap';
+import type { ApiPlannerProjectDetail } from './planner-page-bootstrap';
 
 export async function fetchPlannerStudioProject(projectId: string): Promise<PlannerPageBootstrap> {
   try {
@@ -14,7 +11,7 @@ export async function fetchPlannerStudioProject(projectId: string): Promise<Plan
       return { studio: null };
     }
 
-    const episodeId = project.currentEpisodeId ?? project.episodes[0]?.id;
+    const episodeId = selectPlannerEpisodeId(project);
     if (!episodeId) {
       return { studio: null };
     }
@@ -27,25 +24,8 @@ export async function fetchPlannerStudioProject(projectId: string): Promise<Plan
       return { studio: null };
     }
 
-    return {
-      studio: buildPlannerPageDataFromApi(project, workspace),
-      runtimeApi: {
-        projectId: project.id,
-        episodeId: workspace.episode.id,
-      },
-      initialGeneratedText: workspace.latestPlannerRun?.generatedText ?? null,
-      initialStructuredDoc:
-        workspace.activeRefinement?.structuredDoc
-        ?? (workspace.activeOutline?.outlineDoc ? outlineToPreviewStructuredPlannerDoc(workspace.activeOutline.outlineDoc) : null)
-        ?? workspace.latestPlannerRun?.structuredDoc
-        ?? null,
-      initialPlannerReady: workspace.plannerSession?.status === 'ready',
-      initialWorkspace: workspace,
-    };
+    return buildPlannerBootstrap(project, workspace);
   } catch {
-    const fixture = getMockStudioProject(projectId);
-    return {
-      studio: fixture ? plannerPageDataFromFixture(fixture) : null,
-    };
+    return buildPlannerFixtureFallback(projectId);
   }
 }

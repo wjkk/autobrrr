@@ -155,10 +155,12 @@ async function findActiveRefinement(plannerSessionId: string) {
 async function findTargetEntity(args: {
   refinementVersionId: string;
   rerunScope: PlannerRerunScope;
+}, deps: {
+  prisma: Pick<typeof prisma, 'plannerSubject' | 'plannerScene' | 'plannerShotScript'>;
 }) {
   const [targetSubject, targetScene, targetShots, targetActShots] = await Promise.all([
     args.rerunScope.type === 'subject'
-      ? prisma.plannerSubject.findFirst({
+      ? deps.prisma.plannerSubject.findFirst({
           where: {
             id: args.rerunScope.subjectId,
             refinementVersionId: args.refinementVersionId,
@@ -166,7 +168,7 @@ async function findTargetEntity(args: {
         })
       : Promise.resolve(null),
     args.rerunScope.type === 'scene'
-      ? prisma.plannerScene.findFirst({
+      ? deps.prisma.plannerScene.findFirst({
           where: {
             id: args.rerunScope.sceneId,
             refinementVersionId: args.refinementVersionId,
@@ -174,7 +176,7 @@ async function findTargetEntity(args: {
         })
       : Promise.resolve(null),
     args.rerunScope.type === 'shot'
-      ? prisma.plannerShotScript.findMany({
+      ? deps.prisma.plannerShotScript.findMany({
           where: {
             id: { in: args.rerunScope.shotIds },
             refinementVersionId: args.refinementVersionId,
@@ -183,7 +185,7 @@ async function findTargetEntity(args: {
         })
       : Promise.resolve([]),
     args.rerunScope.type === 'act'
-      ? prisma.plannerShotScript.findMany({
+      ? deps.prisma.plannerShotScript.findMany({
           where: {
             actKey: args.rerunScope.actId,
             refinementVersionId: args.refinementVersionId,
@@ -265,7 +267,7 @@ export async function queuePlannerPartialRerun(
     findTargetEntity({
       refinementVersionId: activeRefinement.id,
       rerunScope: args.rerunScope,
-    }),
+    }, { prisma }),
     prisma.plannerMessage.findMany({
       where: {
         plannerSessionId: plannerSession.id,
@@ -451,3 +453,9 @@ export async function queuePlannerPartialRerun(
     run,
   };
 }
+
+export const __testables = {
+  cloneJson,
+  buildScopeInstruction,
+  findTargetEntity,
+};

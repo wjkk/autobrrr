@@ -434,6 +434,7 @@ DoD：
 44. creation / publish workspace service 已补 API 单测，当前覆盖素材绑定映射、latest run 归并、activeVersion 展示态和 readyToPublish summary，避免页面真实工作区 DTO 静默漂移
 45. creation-state 已补 web 单测，当前覆盖首屏 clone、关键帧派生新分镜、批量生成状态迁移和版本应用，避免 Creation 运行时状态机静默漂移
 46. creation-api 已补 web 单测，当前覆盖 duration/resolution/status 启发式、preferred model 推断和素材 source kind 映射，避免首屏 workspace 转换静默漂移
+47. Planner / Creation / Publish `page-data` 纯函数已补 web 单测，当前覆盖默认值、fixture fallback 映射和 mock-only 页面数据桥接，避免 demo/fallback 路径在重构中静默失真
 
 DoD：
 

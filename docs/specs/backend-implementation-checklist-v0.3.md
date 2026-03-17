@@ -395,6 +395,7 @@ DoD：
 5. 当前最小 AI 回归入口为 `pnpm test:ai:regression`
 6. 文档与任务清单中不再出现 “ARK = text-only provider” 的现行口径
 7. Planner 最终 prompt 已作为 artifact 固化到版本快照；provider client 支持通过 `AIV_PROVIDER_CAPTURE_DIR` / `AIV_PROVIDER_REPLAY_DIR` 做 file-based capture / replay
+8. 浏览器主链路回归已入仓，当前执行入口为 `pnpm test:web:regression`
 
 DoD：
 

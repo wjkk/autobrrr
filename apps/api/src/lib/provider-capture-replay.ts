@@ -50,8 +50,28 @@ function stableNormalize(value: unknown): unknown {
   return value;
 }
 
+function normalizeReplayRequest(request: ProviderCaptureReplayRequest) {
+  let normalizedUrl = request.request.url;
+  try {
+    const parsed = new URL(request.request.url);
+    normalizedUrl = `${parsed.pathname}${parsed.search}`;
+  } catch {
+    normalizedUrl = request.request.url;
+  }
+
+  return {
+    providerCode: request.providerCode,
+    capability: request.capability,
+    operation: request.operation,
+    request: {
+      ...request.request,
+      url: normalizedUrl,
+    },
+  } satisfies ProviderCaptureReplayRequest;
+}
+
 function buildReplayHash(request: ProviderCaptureReplayRequest) {
-  const normalized = stableNormalize(request);
+  const normalized = stableNormalize(normalizeReplayRequest(request));
   return crypto.createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
 }
 

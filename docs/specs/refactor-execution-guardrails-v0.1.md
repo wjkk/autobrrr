@@ -195,6 +195,7 @@
 
 1. `pnpm test:unit:api`
 2. `pnpm test:ai:regression`
+3. `pnpm test:web:regression`
 
 当前辅助机制：
 
@@ -202,6 +203,7 @@
 2. provider client 支持 file-based capture / replay：
    `AIV_PROVIDER_CAPTURE_DIR=/abs/path`
    `AIV_PROVIDER_REPLAY_DIR=/abs/path`
+3. 浏览器主链路回归脚本已入仓：`scripts/smoke-browser-main-flow.py`
 
 ## 8. 回滚与停手条件
 

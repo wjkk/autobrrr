@@ -186,6 +186,14 @@ function inferPlatouVideoTaskId(payload: Record<string, unknown>) {
   return findStringDeep(payload, ['task_id', 'id']);
 }
 
+function inferArkVideoState(payload: Record<string, unknown>) {
+  return (findStringDeep(payload, ['status', 'state', 'task_status']) ?? 'processing').toLowerCase();
+}
+
+function inferArkVideoTaskId(payload: Record<string, unknown>) {
+  return findStringDeep(payload, ['id', 'task_id']);
+}
+
 const officialAdapter: ProviderAdapter = {
   async submit() {
     return {
@@ -283,15 +291,6 @@ const arkAdapter: ProviderAdapter = {
       };
     }
 
-    if (getModelKind(run) !== 'text') {
-      return {
-        type: 'failed',
-        providerStatus: 'failed',
-        errorCode: 'PROVIDER_RUN_KIND_UNSUPPORTED',
-        errorMessage: 'ARK provider currently supports text runs only.',
-      };
-    }
-
     if (!runtimeConfig.enabled || !runtimeConfig.apiKey || !runtimeConfig.baseUrl) {
       return {
         type: 'completed',
@@ -313,29 +312,151 @@ const arkAdapter: ProviderAdapter = {
         errorMessage: 'Run model key is required for ARK submission.',
       };
     }
-    const response = await submitTextGeneration({
+    if (getModelKind(run) === 'text') {
+      const response = await submitTextGeneration({
+        providerCode: runtimeConfig.providerCode ?? 'ark',
+        model,
+        prompt,
+        apiKey: runtimeConfig.apiKey,
+        baseUrl: runtimeConfig.baseUrl,
+        hookMetadata,
+      });
+      return {
+        type: 'completed',
+        providerStatus: 'succeeded',
+        providerOutput: {
+          ...response,
+          modelUsed: model,
+        },
+      };
+    }
+
+    if (getModelKind(run) === 'image') {
+      const response = await submitImageGeneration({
+        providerCode: runtimeConfig.providerCode ?? 'ark',
+        baseUrl: runtimeConfig.baseUrl,
+        apiKey: runtimeConfig.apiKey,
+        model,
+        prompt,
+        hookMetadata,
+      });
+      return {
+        type: 'completed',
+        providerStatus: 'succeeded',
+        providerOutput: {
+          ...response,
+          modelUsed: model,
+        },
+      };
+    }
+
+    if (getModelKind(run) !== 'video') {
+      return {
+        type: 'failed',
+        providerStatus: 'failed',
+        errorCode: 'PROVIDER_RUN_KIND_UNSUPPORTED',
+        errorMessage: 'ARK provider currently supports text, image, and video runs only.',
+      };
+    }
+
+    const input = getProviderBackedRunInput(run);
+    const options = readObject('options' in input ? input.options : null);
+    const images = [
+      readString(options.firstFrameUrl),
+      readString(options.lastFrameUrl),
+    ].filter((value): value is string => !!value);
+
+    const response = await submitVideoGeneration({
       providerCode: runtimeConfig.providerCode ?? 'ark',
+      baseUrl: runtimeConfig.baseUrl,
+      apiKey: runtimeConfig.apiKey,
       model,
       prompt,
-      apiKey: runtimeConfig.apiKey,
-      baseUrl: runtimeConfig.baseUrl,
+      images,
+      duration: typeof options.durationSeconds === 'number' ? options.durationSeconds : undefined,
+      aspectRatio: readString(options.aspectRatio) ?? undefined,
       hookMetadata,
     });
+    const providerJobId = inferArkVideoTaskId(response);
+    if (!providerJobId) {
+      return {
+        type: 'failed',
+        providerStatus: 'failed',
+        errorCode: 'PROVIDER_JOB_ID_MISSING',
+        errorMessage: 'ARK video submission did not return a task id.',
+        providerOutput: response,
+      };
+    }
+
     return {
-      type: 'completed',
-      providerStatus: 'succeeded',
-      providerOutput: {
-        ...response,
-        modelUsed: model,
-      },
+      type: 'submitted',
+      providerJobId,
+      providerCallbackToken: run.providerCallbackToken ?? randomUUID(),
+      providerStatus: 'submitted',
+      nextPollAt: secondsFromNow(6),
+      providerOutput: response,
     };
   },
-  async poll() {
+  async poll(run) {
+    if (getModelKind(run) !== 'video') {
+      return {
+        type: 'failed',
+        providerStatus: 'failed',
+        errorCode: 'PROVIDER_POLL_UNSUPPORTED',
+        errorMessage: 'ARK provider does not support polling for non-video runs.',
+      };
+    }
+
+    const runtimeConfig = await resolveRunProviderRuntimeConfig(run);
+    const hookMetadata = buildRunTransportMetadata({
+      run,
+      ownerUserId: runtimeConfig.ownerUserId,
+      traceId: `run:${run.id}:poll`,
+    });
+    if (!runtimeConfig.enabled || !runtimeConfig.apiKey || !runtimeConfig.baseUrl) {
+      return mockProxyAdapter.poll(run);
+    }
+    if (!run.providerJobId) {
+      return {
+        type: 'failed',
+        providerStatus: 'failed',
+        errorCode: 'PROVIDER_JOB_ID_REQUIRED',
+        errorMessage: 'ARK video polling requires providerJobId.',
+      };
+    }
+
+    const response = await queryVideoGenerationTask({
+      providerCode: runtimeConfig.providerCode ?? 'ark',
+      baseUrl: runtimeConfig.baseUrl,
+      apiKey: runtimeConfig.apiKey,
+      taskId: run.providerJobId,
+      hookMetadata,
+    });
+    const state = inferArkVideoState(response);
+
+    if (state === 'completed' || state === 'succeeded' || state === 'success') {
+      return {
+        type: 'completed',
+        providerStatus: 'succeeded',
+        providerOutput: response,
+      };
+    }
+
+    if (state === 'failed' || state === 'error' || state === 'canceled' || state === 'cancelled' || state === 'expired') {
+      return {
+        type: 'failed',
+        providerStatus: 'failed',
+        errorCode: 'PROVIDER_TASK_FAILED',
+        errorMessage: 'ARK video task failed.',
+        providerOutput: response,
+      };
+    }
+
     return {
-      type: 'failed',
-      providerStatus: 'failed',
-      errorCode: 'PROVIDER_POLL_UNSUPPORTED',
-      errorMessage: 'ARK provider does not support polling for text runs.',
+      type: 'running',
+      providerStatus: state,
+      nextPollAt: secondsFromNow(6),
+      providerOutput: response,
     };
   },
   async handleCallback() {

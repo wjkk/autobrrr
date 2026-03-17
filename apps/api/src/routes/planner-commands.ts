@@ -3,14 +3,7 @@ import { z } from 'zod';
 
 import { mapRun } from '../lib/api-mappers.js';
 import { requireUser } from '../lib/auth.js';
-import { resolveModelSelection } from '../lib/model-registry.js';
-import { resolvePlannerAgentSelection } from '../lib/planner-agent-registry.js';
-import { buildPlannerGenerationPrompt, createPlannerUserMessage } from '../lib/planner-orchestrator.js';
-import { findOwnedEpisode } from '../lib/ownership.js';
-import { resolvePlannerTargetVideoModel } from '../lib/planner-target-video-model.js';
-import { prisma } from '../lib/prisma.js';
-import { serializeRunInput } from '../lib/run-input.js';
-import { resolveUserDefaultModelSelection } from '../lib/user-model-defaults.js';
+import { queuePlannerGenerateDocRun } from '../lib/planner-run-service.js';
 
 const paramsSchema = z.object({
   projectId: z.string().min(1),
@@ -25,40 +18,6 @@ const payloadSchema = z.object({
   targetVideoModelFamilySlug: z.string().trim().max(120).optional(),
   idempotencyKey: z.string().trim().max(191).optional(),
 });
-
-async function findOrCreateActivePlannerSession(projectId: string, episodeId: string, userId: string) {
-  const existing = await prisma.plannerSession.findFirst({
-    where: {
-      projectId,
-      episodeId,
-      isActive: true,
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-
-  if (existing) {
-    return existing;
-  }
-
-  const created = await prisma.plannerSession.create({
-    data: {
-      projectId,
-      episodeId,
-      status: 'IDLE',
-      isActive: true,
-      createdById: userId,
-    },
-  });
-
-  await prisma.episode.update({
-    where: { id: episodeId },
-    data: {
-      activePlannerSessionId: created.id,
-    },
-  });
-
-  return created;
-}
 
 export async function registerPlannerCommandRoutes(app: FastifyInstance) {
   app.post('/api/projects/:projectId/planner/generate-doc', async (request, reply) => {
@@ -80,73 +39,39 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
       });
     }
 
-    const episode = await findOwnedEpisode(params.data.projectId, payload.data.episodeId, user.id);
-    if (!episode) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Episode not found.',
-        },
-      });
-    }
-
-    const userDefaultModel = !payload.data.modelFamily && !payload.data.modelEndpoint
-      ? await resolveUserDefaultModelSelection(user.id, 'TEXT')
-      : null;
-
-    const resolvedModel = await resolveModelSelection({
-      modelKind: 'TEXT',
-      familySlug: payload.data.modelFamily ?? userDefaultModel?.familySlug,
-      endpointSlug: payload.data.modelEndpoint ?? userDefaultModel?.endpointSlug,
-      strategy: 'default',
+    const result = await queuePlannerGenerateDocRun({
+      projectId: params.data.projectId,
+      episodeId: payload.data.episodeId,
+      userId: user.id,
+      prompt: payload.data.prompt,
+      subtype: payload.data.subtype,
+      modelFamily: payload.data.modelFamily,
+      modelEndpoint: payload.data.modelEndpoint,
+      targetVideoModelFamilySlug: payload.data.targetVideoModelFamilySlug,
+      idempotencyKey: payload.data.idempotencyKey,
     });
-    if (!resolvedModel) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'MODEL_NOT_FOUND',
-          message: 'No active text model endpoint matched the selection.',
-        },
-      });
-    }
 
-    const plannerSession = await findOrCreateActivePlannerSession(episode.project.id, episode.id, user.id);
-    const creationConfig = await prisma.projectCreationConfig.findUnique({
-      where: {
-        projectId: episode.project.id,
-      },
-      include: {
-        subjectProfile: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
+    if (!result.ok) {
+      if (result.error === 'NOT_FOUND') {
+        return reply.code(404).send({
+          ok: false,
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Episode not found.',
           },
-        },
-        stylePreset: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
+        });
+      }
+
+      if (result.error === 'MODEL_NOT_FOUND') {
+        return reply.code(404).send({
+          ok: false,
+          error: {
+            code: 'MODEL_NOT_FOUND',
+            message: 'No active text model endpoint matched the selection.',
           },
-        },
-        imageModelEndpoint: {
-          select: {
-            id: true,
-            slug: true,
-            label: true,
-          },
-        },
-      },
-    });
-    const rawPrompt = payload.data.prompt ?? episode.summary ?? episode.project.title;
-    const selectedContentType = creationConfig?.selectedTab ?? '短剧漫剧';
-    const selection = await resolvePlannerAgentSelection({
-      contentType: selectedContentType,
-      subtype: payload.data.subtype ?? creationConfig?.selectedSubtype,
-    });
-    if (!selection) {
+        });
+      }
+
       return reply.code(409).send({
         ok: false,
         error: {
@@ -156,195 +81,13 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
       });
     }
 
-    const recentMessages = await prisma.plannerMessage.findMany({
-      where: {
-        plannerSessionId: plannerSession.id,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 8,
-    });
-
-    const activeOutline = await prisma.plannerOutlineVersion.findFirst({
-      where: {
-        plannerSessionId: plannerSession.id,
-        isActive: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        versionNumber: true,
-        outlineDocJson: true,
-      },
-    });
-
-    const activeRefinement = await prisma.plannerRefinementVersion.findFirst({
-      where: {
-        plannerSessionId: plannerSession.id,
-        isActive: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        versionNumber: true,
-        structuredDocJson: true,
-      },
-    });
-
-    const targetStage: 'outline' | 'refinement' = plannerSession.outlineConfirmedAt ? 'refinement' : 'outline';
-    const triggerType = targetStage === 'outline'
-      ? (activeOutline ? 'update_outline' : 'generate_outline')
-      : (activeRefinement ? 'follow_up' : 'generate_doc');
-    const targetVideoModel = await resolvePlannerTargetVideoModel({
-      requestedFamilySlug: payload.data.targetVideoModelFamilySlug,
-      settingsJson: creationConfig?.settingsJson,
-    });
-
-    const promptPackage = buildPlannerGenerationPrompt({
-      selection,
-      targetStage,
-      userPrompt: rawPrompt,
-      projectTitle: episode.project.title,
-      episodeTitle: episode.title,
-      contentMode: episode.project.contentMode,
-      scriptContent: creationConfig?.scriptContent,
-      selectedSubjectName: creationConfig?.subjectProfile?.name,
-      selectedStyleName: creationConfig?.stylePreset?.name,
-      selectedImageModelLabel: creationConfig?.imageModelEndpoint?.label,
-      targetVideoModelFamilySlug: targetVideoModel?.familySlug ?? null,
-      targetVideoModelSummary: targetVideoModel?.summary ?? null,
-      priorMessages: recentMessages
-        .reverse()
-        .map((message) => {
-          const content = message.contentJson && typeof message.contentJson === 'object' && !Array.isArray(message.contentJson)
-            ? (message.contentJson as Record<string, unknown>)
-            : {};
-
-          return {
-            role: message.role.toLowerCase(),
-            text: typeof content.text === 'string' ? content.text : JSON.stringify(content),
-          };
-        }),
-      currentOutlineDoc: activeOutline?.outlineDocJson,
-      currentStructuredDoc: activeRefinement?.structuredDocJson,
-    });
-
-    const result = await prisma.$transaction(async (tx) => {
-      await tx.plannerSession.update({
-        where: { id: plannerSession.id },
-        data: {
-          status: 'UPDATING',
-        },
-      });
-
-      await createPlannerUserMessage({
-        db: tx,
-        plannerSessionId: plannerSession.id,
-        userId: user.id,
-        prompt: rawPrompt,
-      });
-
-      const run = await tx.run.create({
-        data: {
-          projectId: episode.project.id,
-          episodeId: episode.id,
-          modelFamilyId: resolvedModel.family.id,
-          modelProviderId: resolvedModel.provider.id,
-          modelEndpointId: resolvedModel.endpoint.id,
-          runType: 'PLANNER_DOC_UPDATE',
-          resourceType: 'planner_session',
-          resourceId: plannerSession.id,
-          status: 'QUEUED',
-          executorType: 'SYSTEM_WORKER',
-          idempotencyKey: payload.data.idempotencyKey ?? null,
-          inputJson: serializeRunInput({
-            plannerSessionId: plannerSession.id,
-            episodeId: episode.id,
-            projectId: episode.project.id,
-            prompt: promptPackage.promptText,
-            rawPrompt,
-            projectTitle: episode.project.title,
-            episodeTitle: episode.title,
-            contentMode: episode.project.contentMode,
-            contentType: selection.contentType,
-            subtype: selection.subtype,
-            targetStage,
-            triggerType,
-            ...(activeOutline ? { sourceOutlineVersionId: activeOutline.id } : {}),
-            ...(targetVideoModel ? { targetVideoModelFamilySlug: targetVideoModel.familySlug } : {}),
-            stepDefinitions: promptPackage.stepDefinitions,
-            promptSnapshot: promptPackage.promptSnapshot,
-            agentProfile: selection.agentProfile,
-            subAgentProfile: selection.subAgentProfile,
-            contextSnapshot: {
-              selectedTab: creationConfig?.selectedTab ?? selection.contentType,
-              selectedSubtype: payload.data.subtype ?? creationConfig?.selectedSubtype ?? selection.subtype,
-              scriptSourceName: creationConfig?.scriptSourceName ?? null,
-              hasScriptContent: Boolean(creationConfig?.scriptContent),
-              selectedSubject: creationConfig?.subjectProfile,
-              selectedStyle: creationConfig?.stylePreset,
-              selectedImageModel: creationConfig?.imageModelEndpoint,
-              selectedVideoModel: targetVideoModel
-                ? {
-                    familySlug: targetVideoModel.familySlug,
-                    familyName: targetVideoModel.familyName,
-                    capabilitySummary: targetVideoModel.summary,
-                  }
-                : null,
-              priorMessages: recentMessages.map((message) => ({
-                role: message.role.toLowerCase(),
-                messageType: message.messageType.toLowerCase(),
-                content: message.contentJson,
-                createdAt: message.createdAt.toISOString(),
-              })),
-              activeOutline: activeOutline
-                ? {
-                    id: activeOutline.id,
-                    versionNumber: activeOutline.versionNumber,
-                    outlineDoc: activeOutline.outlineDocJson,
-                  }
-                : null,
-              activeRefinement: activeRefinement
-                ? {
-                    id: activeRefinement.id,
-                    versionNumber: activeRefinement.versionNumber,
-                    structuredDoc: activeRefinement.structuredDocJson,
-                  }
-                : null,
-            },
-            modelFamily: {
-              id: resolvedModel.family.id,
-              slug: resolvedModel.family.slug,
-              name: resolvedModel.family.name,
-            },
-            modelProvider: {
-              id: resolvedModel.provider.id,
-              code: resolvedModel.provider.code,
-              name: resolvedModel.provider.name,
-              providerType: resolvedModel.provider.providerType.toLowerCase(),
-            },
-            modelEndpoint: {
-              id: resolvedModel.endpoint.id,
-              slug: resolvedModel.endpoint.slug,
-              label: resolvedModel.endpoint.label,
-              remoteModelKey: resolvedModel.endpoint.remoteModelKey,
-            },
-          }),
-        },
-      });
-
-      return run;
-    });
-
     return reply.code(202).send({
       ok: true,
       data: {
-        plannerSession: {
-          id: plannerSession.id,
-          status: 'updating',
-        },
-        targetStage,
-        triggerType,
-        run: mapRun(result),
+        plannerSession: result.plannerSession,
+        targetStage: result.targetStage,
+        triggerType: result.triggerType,
+        run: mapRun(result.run),
       },
     });
   });

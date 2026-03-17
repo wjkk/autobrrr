@@ -1,11 +1,16 @@
 import type { FastifyInstance } from 'fastify';
-import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { requireUser } from '../lib/auth.js';
-import { PLANNER_REFINEMENT_LOCKED_ERROR } from '../lib/planner-refinement-drafts.js';
-import { syncPlannerRefinementProjection } from '../lib/planner-refinement-projection.js';
-import { prisma } from '../lib/prisma.js';
+import {
+  deletePlannerShot,
+  PLANNER_REFINEMENT_LOCKED_ERROR,
+  updatePlannerScene,
+  updatePlannerSceneAssets,
+  updatePlannerShot,
+  updatePlannerSubject,
+  updatePlannerSubjectAssets,
+} from '../lib/planner-refinement-entity-service.js';
 
 const subjectParamsSchema = z.object({
   projectId: z.string().min(1),
@@ -57,28 +62,62 @@ const assetBindingPayloadSchema = scopedPayloadSchema.extend({
   generatedAssetIds: z.array(z.string().min(1)).max(16).optional(),
 });
 
-async function findOwnedActiveRefinement(projectId: string, episodeId: string, userId: string) {
-  return prisma.plannerRefinementVersion.findFirst({
-    where: {
-      isActive: true,
-      plannerSession: {
-        projectId,
-        episodeId,
-        isActive: true,
-        project: {
-          createdById: userId,
-        },
+function sendPlannerRefinementEntityError(args: {
+  reply: {
+    code: (statusCode: number) => { send: (payload: unknown) => unknown };
+  };
+  error: 'REFINEMENT_REQUIRED' | 'REFINEMENT_LOCKED' | 'ASSET_NOT_OWNED' | 'SUBJECT_NOT_FOUND' | 'SCENE_NOT_FOUND' | 'SHOT_NOT_FOUND';
+  assetLabel?: 'subject' | 'scene';
+}) {
+  if (args.error === 'REFINEMENT_REQUIRED') {
+    return args.reply.code(409).send({
+      ok: false,
+      error: {
+        code: 'PLANNER_REFINEMENT_REQUIRED',
+        message: 'No active refinement version found.',
       },
-    },
-    select: {
-      id: true,
-      isConfirmed: true,
-      plannerSession: {
-        select: {
-          projectId: true,
-          episodeId: true,
-        },
+    });
+  }
+
+  if (args.error === 'REFINEMENT_LOCKED') {
+    return args.reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
+  }
+
+  if (args.error === 'ASSET_NOT_OWNED') {
+    return args.reply.code(400).send({
+      ok: false,
+      error: {
+        code: 'PLANNER_ASSET_NOT_OWNED',
+        message: `One or more ${args.assetLabel} assets are invalid or not owned by the current user.`,
       },
+    });
+  }
+
+  if (args.error === 'SUBJECT_NOT_FOUND') {
+    return args.reply.code(404).send({
+      ok: false,
+      error: {
+        code: 'PLANNER_SUBJECT_NOT_FOUND',
+        message: 'Planner subject not found.',
+      },
+    });
+  }
+
+  if (args.error === 'SCENE_NOT_FOUND') {
+    return args.reply.code(404).send({
+      ok: false,
+      error: {
+        code: 'PLANNER_SCENE_NOT_FOUND',
+        message: 'Planner scene not found.',
+      },
+    });
+  }
+
+  return args.reply.code(404).send({
+    ok: false,
+    error: {
+      code: 'PLANNER_SHOT_NOT_FOUND',
+      message: 'Planner shot not found.',
     },
   });
 }
@@ -103,70 +142,31 @@ export async function registerPlannerRefinementEntityRoutes(app: FastifyInstance
       });
     }
 
-    const activeRefinement = await findOwnedActiveRefinement(params.data.projectId, payload.data.episodeId, user.id);
-    if (!activeRefinement) {
-      return reply.code(409).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_REFINEMENT_REQUIRED',
-          message: 'No active refinement version found.',
-        },
-      });
-    }
-
-    if (activeRefinement.isConfirmed) {
-      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
-    }
-
-    const subject = await prisma.plannerSubject.findFirst({
-      where: {
-        id: params.data.subjectId,
-        refinementVersionId: activeRefinement.id,
+    const result = await updatePlannerSubject({
+      projectId: params.data.projectId,
+      subjectId: params.data.subjectId,
+      episodeId: payload.data.episodeId,
+      userId: user.id,
+      patch: {
+        name: payload.data.name,
+        role: payload.data.role,
+        appearance: payload.data.appearance,
+        personality: payload.data.personality,
+        prompt: payload.data.prompt,
+        negativePrompt: payload.data.negativePrompt,
       },
-      select: { id: true },
     });
-    if (!subject) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_SUBJECT_NOT_FOUND',
-          message: 'Planner subject not found.',
-        },
+
+    if (!result.ok) {
+      return sendPlannerRefinementEntityError({
+        reply,
+        error: result.error,
       });
     }
-
-    const updated = await prisma.$transaction(async (tx) => {
-      const nextSubject = await tx.plannerSubject.update({
-        where: { id: subject.id },
-        data: {
-          ...(payload.data.name ? { name: payload.data.name } : {}),
-          ...(payload.data.role ? { role: payload.data.role } : {}),
-          ...(payload.data.appearance ? { appearance: payload.data.appearance } : {}),
-          ...(payload.data.personality !== undefined ? { personality: payload.data.personality } : {}),
-          ...(payload.data.prompt ? { prompt: payload.data.prompt } : {}),
-          ...(payload.data.negativePrompt !== undefined ? { negativePrompt: payload.data.negativePrompt } : {}),
-        },
-      });
-
-      await syncPlannerRefinementProjection({
-        db: tx,
-        refinementVersionId: activeRefinement.id,
-      });
-
-      return nextSubject;
-    });
 
     return reply.send({
       ok: true,
-      data: {
-        id: updated.id,
-        name: updated.name,
-        role: updated.role,
-        appearance: updated.appearance,
-        personality: updated.personality,
-        prompt: updated.prompt,
-        negativePrompt: updated.negativePrompt,
-      },
+      data: result.data,
     });
   });
 
@@ -189,68 +189,30 @@ export async function registerPlannerRefinementEntityRoutes(app: FastifyInstance
       });
     }
 
-    const activeRefinement = await findOwnedActiveRefinement(params.data.projectId, payload.data.episodeId, user.id);
-    if (!activeRefinement) {
-      return reply.code(409).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_REFINEMENT_REQUIRED',
-          message: 'No active refinement version found.',
-        },
-      });
-    }
-
-    if (activeRefinement.isConfirmed) {
-      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
-    }
-
-    const scene = await prisma.plannerScene.findFirst({
-      where: {
-        id: params.data.sceneId,
-        refinementVersionId: activeRefinement.id,
+    const result = await updatePlannerScene({
+      projectId: params.data.projectId,
+      sceneId: params.data.sceneId,
+      episodeId: payload.data.episodeId,
+      userId: user.id,
+      patch: {
+        name: payload.data.name,
+        time: payload.data.time,
+        description: payload.data.description,
+        prompt: payload.data.prompt,
+        negativePrompt: payload.data.negativePrompt,
       },
-      select: { id: true },
     });
-    if (!scene) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_SCENE_NOT_FOUND',
-          message: 'Planner scene not found.',
-        },
+
+    if (!result.ok) {
+      return sendPlannerRefinementEntityError({
+        reply,
+        error: result.error,
       });
     }
-
-    const updated = await prisma.$transaction(async (tx) => {
-      const nextScene = await tx.plannerScene.update({
-        where: { id: scene.id },
-        data: {
-          ...(payload.data.name ? { name: payload.data.name } : {}),
-          ...(payload.data.time ? { time: payload.data.time } : {}),
-          ...(payload.data.description ? { description: payload.data.description } : {}),
-          ...(payload.data.prompt ? { prompt: payload.data.prompt } : {}),
-          ...(payload.data.negativePrompt !== undefined ? { negativePrompt: payload.data.negativePrompt } : {}),
-        },
-      });
-
-      await syncPlannerRefinementProjection({
-        db: tx,
-        refinementVersionId: activeRefinement.id,
-      });
-
-      return nextScene;
-    });
 
     return reply.send({
       ok: true,
-      data: {
-        id: updated.id,
-        name: updated.name,
-        time: updated.time,
-        description: updated.description,
-        prompt: updated.prompt,
-        negativePrompt: updated.negativePrompt,
-      },
+      data: result.data,
     });
   });
 
@@ -273,84 +235,26 @@ export async function registerPlannerRefinementEntityRoutes(app: FastifyInstance
       });
     }
 
-    const activeRefinement = await findOwnedActiveRefinement(params.data.projectId, payload.data.episodeId, user.id);
-    if (!activeRefinement) {
-      return reply.code(409).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_REFINEMENT_REQUIRED',
-          message: 'No active refinement version found.',
-        },
-      });
-    }
-
-    if (activeRefinement.isConfirmed) {
-      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
-    }
-
-    const subject = await prisma.plannerSubject.findFirst({
-      where: {
-        id: params.data.subjectId,
-        refinementVersionId: activeRefinement.id,
-      },
-      select: { id: true },
+    const result = await updatePlannerSubjectAssets({
+      projectId: params.data.projectId,
+      subjectId: params.data.subjectId,
+      episodeId: payload.data.episodeId,
+      userId: user.id,
+      referenceAssetIds: payload.data.referenceAssetIds,
+      generatedAssetIds: payload.data.generatedAssetIds,
     });
-    if (!subject) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_SUBJECT_NOT_FOUND',
-          message: 'Planner subject not found.',
-        },
+
+    if (!result.ok) {
+      return sendPlannerRefinementEntityError({
+        reply,
+        error: result.error,
+        assetLabel: 'subject',
       });
     }
-
-    const allAssetIds = [...(payload.data.referenceAssetIds ?? []), ...(payload.data.generatedAssetIds ?? [])];
-    if (allAssetIds.length > 0) {
-      const ownedAssets = await prisma.asset.findMany({
-        where: {
-          id: { in: allAssetIds },
-          projectId: params.data.projectId,
-          ownerUserId: user.id,
-          mediaKind: 'IMAGE',
-        },
-        select: { id: true },
-      });
-      if (ownedAssets.length !== new Set(allAssetIds).size) {
-        return reply.code(400).send({
-          ok: false,
-          error: {
-            code: 'PLANNER_ASSET_NOT_OWNED',
-            message: 'One or more subject assets are invalid or not owned by the current user.',
-          },
-        });
-      }
-    }
-
-    const updated = await prisma.$transaction(async (tx) => {
-      const nextSubject = await tx.plannerSubject.update({
-        where: { id: subject.id },
-        data: {
-          ...(payload.data.referenceAssetIds ? { referenceAssetIdsJson: payload.data.referenceAssetIds as Prisma.InputJsonValue } : {}),
-          ...(payload.data.generatedAssetIds ? { generatedAssetIdsJson: payload.data.generatedAssetIds as Prisma.InputJsonValue } : {}),
-        },
-      });
-
-      await syncPlannerRefinementProjection({
-        db: tx,
-        refinementVersionId: activeRefinement.id,
-      });
-
-      return nextSubject;
-    });
 
     return reply.send({
       ok: true,
-      data: {
-        id: updated.id,
-        referenceAssetIds: Array.isArray(updated.referenceAssetIdsJson) ? updated.referenceAssetIdsJson : [],
-        generatedAssetIds: Array.isArray(updated.generatedAssetIdsJson) ? updated.generatedAssetIdsJson : [],
-      },
+      data: result.data,
     });
   });
 
@@ -373,84 +277,26 @@ export async function registerPlannerRefinementEntityRoutes(app: FastifyInstance
       });
     }
 
-    const activeRefinement = await findOwnedActiveRefinement(params.data.projectId, payload.data.episodeId, user.id);
-    if (!activeRefinement) {
-      return reply.code(409).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_REFINEMENT_REQUIRED',
-          message: 'No active refinement version found.',
-        },
-      });
-    }
-
-    if (activeRefinement.isConfirmed) {
-      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
-    }
-
-    const scene = await prisma.plannerScene.findFirst({
-      where: {
-        id: params.data.sceneId,
-        refinementVersionId: activeRefinement.id,
-      },
-      select: { id: true },
+    const result = await updatePlannerSceneAssets({
+      projectId: params.data.projectId,
+      sceneId: params.data.sceneId,
+      episodeId: payload.data.episodeId,
+      userId: user.id,
+      referenceAssetIds: payload.data.referenceAssetIds,
+      generatedAssetIds: payload.data.generatedAssetIds,
     });
-    if (!scene) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_SCENE_NOT_FOUND',
-          message: 'Planner scene not found.',
-        },
+
+    if (!result.ok) {
+      return sendPlannerRefinementEntityError({
+        reply,
+        error: result.error,
+        assetLabel: 'scene',
       });
     }
-
-    const allAssetIds = [...(payload.data.referenceAssetIds ?? []), ...(payload.data.generatedAssetIds ?? [])];
-    if (allAssetIds.length > 0) {
-      const ownedAssets = await prisma.asset.findMany({
-        where: {
-          id: { in: allAssetIds },
-          projectId: params.data.projectId,
-          ownerUserId: user.id,
-          mediaKind: 'IMAGE',
-        },
-        select: { id: true },
-      });
-      if (ownedAssets.length !== new Set(allAssetIds).size) {
-        return reply.code(400).send({
-          ok: false,
-          error: {
-            code: 'PLANNER_ASSET_NOT_OWNED',
-            message: 'One or more scene assets are invalid or not owned by the current user.',
-          },
-        });
-      }
-    }
-
-    const updated = await prisma.$transaction(async (tx) => {
-      const nextScene = await tx.plannerScene.update({
-        where: { id: scene.id },
-        data: {
-          ...(payload.data.referenceAssetIds ? { referenceAssetIdsJson: payload.data.referenceAssetIds as Prisma.InputJsonValue } : {}),
-          ...(payload.data.generatedAssetIds ? { generatedAssetIdsJson: payload.data.generatedAssetIds as Prisma.InputJsonValue } : {}),
-        },
-      });
-
-      await syncPlannerRefinementProjection({
-        db: tx,
-        refinementVersionId: activeRefinement.id,
-      });
-
-      return nextScene;
-    });
 
     return reply.send({
       ok: true,
-      data: {
-        id: updated.id,
-        referenceAssetIds: Array.isArray(updated.referenceAssetIdsJson) ? updated.referenceAssetIdsJson : [],
-        generatedAssetIds: Array.isArray(updated.generatedAssetIdsJson) ? updated.generatedAssetIdsJson : [],
-      },
+      data: result.data,
     });
   });
 
@@ -473,70 +319,31 @@ export async function registerPlannerRefinementEntityRoutes(app: FastifyInstance
       });
     }
 
-    const activeRefinement = await findOwnedActiveRefinement(params.data.projectId, payload.data.episodeId, user.id);
-    if (!activeRefinement) {
-      return reply.code(409).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_REFINEMENT_REQUIRED',
-          message: 'No active refinement version found.',
-        },
-      });
-    }
-
-    if (activeRefinement.isConfirmed) {
-      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
-    }
-
-    const shot = await prisma.plannerShotScript.findFirst({
-      where: {
-        id: params.data.shotScriptId,
-        refinementVersionId: activeRefinement.id,
+    const result = await updatePlannerShot({
+      projectId: params.data.projectId,
+      shotScriptId: params.data.shotScriptId,
+      episodeId: payload.data.episodeId,
+      userId: user.id,
+      patch: {
+        title: payload.data.title,
+        visualDescription: payload.data.visualDescription,
+        composition: payload.data.composition,
+        cameraMotion: payload.data.cameraMotion,
+        voiceRole: payload.data.voiceRole,
+        dialogue: payload.data.dialogue,
       },
-      select: { id: true },
     });
-    if (!shot) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_SHOT_NOT_FOUND',
-          message: 'Planner shot not found.',
-        },
+
+    if (!result.ok) {
+      return sendPlannerRefinementEntityError({
+        reply,
+        error: result.error,
       });
     }
-
-    const updated = await prisma.$transaction(async (tx) => {
-      const nextShot = await tx.plannerShotScript.update({
-        where: { id: shot.id },
-        data: {
-          ...(payload.data.title ? { title: payload.data.title, shotNo: payload.data.title } : {}),
-          ...(payload.data.visualDescription ? { visualDescription: payload.data.visualDescription } : {}),
-          ...(payload.data.composition ? { composition: payload.data.composition } : {}),
-          ...(payload.data.cameraMotion ? { cameraMotion: payload.data.cameraMotion } : {}),
-          ...(payload.data.voiceRole ? { voiceRole: payload.data.voiceRole } : {}),
-          ...(payload.data.dialogue ? { dialogue: payload.data.dialogue } : {}),
-        },
-      });
-
-      await syncPlannerRefinementProjection({
-        db: tx,
-        refinementVersionId: activeRefinement.id,
-      });
-
-      return nextShot;
-    });
 
     return reply.send({
       ok: true,
-      data: {
-        id: updated.id,
-        title: updated.title,
-        visualDescription: updated.visualDescription,
-        composition: updated.composition,
-        cameraMotion: updated.cameraMotion,
-        voiceRole: updated.voiceRole,
-        dialogue: updated.dialogue,
-      },
+      data: result.data,
     });
   });
 
@@ -559,55 +366,23 @@ export async function registerPlannerRefinementEntityRoutes(app: FastifyInstance
       });
     }
 
-    const activeRefinement = await findOwnedActiveRefinement(params.data.projectId, payload.data.episodeId, user.id);
-    if (!activeRefinement) {
-      return reply.code(409).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_REFINEMENT_REQUIRED',
-          message: 'No active refinement version found.',
-        },
-      });
-    }
-
-    if (activeRefinement.isConfirmed) {
-      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
-    }
-
-    const shot = await prisma.plannerShotScript.findFirst({
-      where: {
-        id: params.data.shotScriptId,
-        refinementVersionId: activeRefinement.id,
-      },
-      select: { id: true },
+    const result = await deletePlannerShot({
+      projectId: params.data.projectId,
+      shotScriptId: params.data.shotScriptId,
+      episodeId: payload.data.episodeId,
+      userId: user.id,
     });
-    if (!shot) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_SHOT_NOT_FOUND',
-          message: 'Planner shot not found.',
-        },
+
+    if (!result.ok) {
+      return sendPlannerRefinementEntityError({
+        reply,
+        error: result.error,
       });
     }
-
-    await prisma.$transaction(async (tx) => {
-      await tx.plannerShotScript.delete({
-        where: { id: shot.id },
-      });
-
-      await syncPlannerRefinementProjection({
-        db: tx,
-        refinementVersionId: activeRefinement.id,
-      });
-    });
 
     return reply.send({
       ok: true,
-      data: {
-        deleted: true,
-        shotScriptId: shot.id,
-      },
+      data: result.data,
     });
   });
 }

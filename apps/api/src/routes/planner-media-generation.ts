@@ -3,11 +3,7 @@ import { z } from 'zod';
 
 import { mapRun } from '../lib/api-mappers.js';
 import { requireUser } from '../lib/auth.js';
-import { resolveModelSelection } from '../lib/model-registry.js';
-import { PLANNER_REFINEMENT_LOCKED_ERROR } from '../lib/planner-refinement-drafts.js';
-import { prisma } from '../lib/prisma.js';
-import { serializeRunInput } from '../lib/run-input.js';
-import { resolveUserDefaultModelSelection } from '../lib/user-model-defaults.js';
+import { PLANNER_REFINEMENT_LOCKED_ERROR, queuePlannerImageGeneration } from '../lib/planner-media-generation-service.js';
 
 const scopedPayloadSchema = z.object({
   episodeId: z.string().min(1),
@@ -35,149 +31,81 @@ const shotParamsSchema = projectParamsSchema.extend({
   shotScriptId: z.string().min(1),
 });
 
-async function findOwnedActiveRefinement(projectId: string, episodeId: string, userId: string) {
-  return prisma.plannerRefinementVersion.findFirst({
-    where: {
-      isActive: true,
-      plannerSession: {
-        projectId,
-        episodeId,
-        isActive: true,
-        project: {
-          createdById: userId,
-        },
-      },
-    },
-    include: {
-      plannerSession: {
-        include: {
-          project: {
-            include: {
-              creationConfig: {
-                include: {
-                  imageModelEndpoint: {
-                    select: {
-                      id: true,
-                      slug: true,
-                      label: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-          episode: {
-            select: {
-              id: true,
-              title: true,
-            },
-          },
-        },
-      },
-    },
-  });
-}
-
-async function resolvePlannerImageModel(args: {
-  userId: string;
-  modelFamily?: string;
-  modelEndpoint?: string;
-  preferredEndpointSlug?: string | null;
+function sendPlannerImageError(args: {
+  reply: {
+    code: (statusCode: number) => { send: (payload: unknown) => unknown };
+  };
+  error:
+    | 'REFINEMENT_REQUIRED'
+    | 'REFINEMENT_LOCKED'
+    | 'MODEL_NOT_FOUND'
+    | 'ASSET_NOT_OWNED'
+    | 'SUBJECT_NOT_FOUND'
+    | 'SCENE_NOT_FOUND'
+    | 'SHOT_NOT_FOUND';
+  assetLabel: string;
 }) {
-  const userDefaultModel = !args.modelFamily && !args.modelEndpoint
-    ? await resolveUserDefaultModelSelection(args.userId, 'IMAGE')
-    : null;
-
-  return resolveModelSelection({
-    modelKind: 'IMAGE',
-    familySlug: args.modelFamily ?? userDefaultModel?.familySlug,
-    endpointSlug: args.modelEndpoint ?? args.preferredEndpointSlug ?? userDefaultModel?.endpointSlug,
-    strategy: 'default',
-  });
-}
-
-async function createPlannerImageGenerationRun(args: {
-  userId: string;
-  projectId: string;
-  episodeId: string;
-  prompt: string;
-  resourceType: 'planner_subject' | 'planner_scene' | 'planner_shot_script';
-  resourceId: string;
-  entityName: string;
-  modelFamily?: string;
-  modelEndpoint?: string;
-  preferredEndpointSlug?: string | null;
-  referenceAssetIds: string[];
-  idempotencyKey?: string;
-  options?: Record<string, unknown>;
-}) {
-  if (args.referenceAssetIds.length > 0) {
-    const ownedAssets = await prisma.asset.findMany({
-      where: {
-        id: { in: args.referenceAssetIds },
-        projectId: args.projectId,
-        ownerUserId: args.userId,
-        mediaKind: 'IMAGE',
+  if (args.error === 'REFINEMENT_REQUIRED') {
+    return args.reply.code(409).send({
+      ok: false,
+      error: {
+        code: 'PLANNER_REFINEMENT_REQUIRED',
+        message: 'No active refinement version found.',
       },
-      select: { id: true },
     });
-    if (ownedAssets.length !== new Set(args.referenceAssetIds).size) {
-      return { error: 'ASSET_NOT_OWNED' as const };
-    }
   }
 
-  const resolvedModel = await resolvePlannerImageModel({
-    userId: args.userId,
-    modelFamily: args.modelFamily,
-    modelEndpoint: args.modelEndpoint,
-    preferredEndpointSlug: args.preferredEndpointSlug,
-  });
-  if (!resolvedModel) {
-    return { error: 'MODEL_NOT_FOUND' as const };
+  if (args.error === 'REFINEMENT_LOCKED') {
+    return args.reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
   }
 
-  const run = await prisma.run.create({
-    data: {
-      projectId: args.projectId,
-      episodeId: args.episodeId,
-      modelFamilyId: resolvedModel.family.id,
-      modelProviderId: resolvedModel.provider.id,
-      modelEndpointId: resolvedModel.endpoint.id,
-      runType: 'IMAGE_GENERATION',
-      resourceType: args.resourceType,
-      resourceId: args.resourceId,
-      status: 'QUEUED',
-      executorType: 'SYSTEM_WORKER',
-      idempotencyKey: args.idempotencyKey ?? null,
-      inputJson: serializeRunInput({
-        prompt: args.prompt,
-        entityName: args.entityName,
-        resourceType: args.resourceType,
-        resourceId: args.resourceId,
-        modelFamily: {
-          id: resolvedModel.family.id,
-          slug: resolvedModel.family.slug,
-          name: resolvedModel.family.name,
-        },
-        modelProvider: {
-          id: resolvedModel.provider.id,
-          code: resolvedModel.provider.code,
-          name: resolvedModel.provider.name,
-          providerType: resolvedModel.provider.providerType.toLowerCase(),
-        },
-        modelEndpoint: {
-          id: resolvedModel.endpoint.id,
-          slug: resolvedModel.endpoint.slug,
-          label: resolvedModel.endpoint.label,
-          remoteModelKey: resolvedModel.endpoint.remoteModelKey,
-        },
-        referenceAssetIds: args.referenceAssetIds,
-        options: args.options ?? null,
-      }),
+  if (args.error === 'MODEL_NOT_FOUND') {
+    return args.reply.code(404).send({
+      ok: false,
+      error: {
+        code: 'MODEL_NOT_FOUND',
+        message: 'No active image model endpoint matched the selection.',
+      },
+    });
+  }
+
+  if (args.error === 'ASSET_NOT_OWNED') {
+    return args.reply.code(400).send({
+      ok: false,
+      error: {
+        code: 'PLANNER_ASSET_NOT_OWNED',
+        message: `One or more ${args.assetLabel} reference assets are invalid or not owned by the current user.`,
+      },
+    });
+  }
+
+  if (args.error === 'SUBJECT_NOT_FOUND') {
+    return args.reply.code(404).send({
+      ok: false,
+      error: {
+        code: 'PLANNER_SUBJECT_NOT_FOUND',
+        message: 'Planner subject not found.',
+      },
+    });
+  }
+
+  if (args.error === 'SCENE_NOT_FOUND') {
+    return args.reply.code(404).send({
+      ok: false,
+      error: {
+        code: 'PLANNER_SCENE_NOT_FOUND',
+        message: 'Planner scene not found.',
+      },
+    });
+  }
+
+  return args.reply.code(404).send({
+    ok: false,
+    error: {
+      code: 'PLANNER_SHOT_NOT_FOUND',
+      message: 'Planner shot script not found.',
     },
   });
-
-  return { run };
 }
 
 export async function registerPlannerMediaGenerationRoutes(app: FastifyInstance) {
@@ -200,81 +128,25 @@ export async function registerPlannerMediaGenerationRoutes(app: FastifyInstance)
       });
     }
 
-    const activeRefinement = await findOwnedActiveRefinement(params.data.projectId, payload.data.episodeId, user.id);
-    if (!activeRefinement) {
-      return reply.code(409).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_REFINEMENT_REQUIRED',
-          message: 'No active refinement version found.',
-        },
-      });
-    }
-
-    if (activeRefinement.isConfirmed) {
-      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
-    }
-
-    const subject = await prisma.plannerSubject.findFirst({
-      where: {
-        id: params.data.subjectId,
-        refinementVersionId: activeRefinement.id,
-      },
-      select: {
-        id: true,
-        name: true,
-        prompt: true,
-        referenceAssetIdsJson: true,
-      },
-    });
-    if (!subject) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_SUBJECT_NOT_FOUND',
-          message: 'Planner subject not found.',
-        },
-      });
-    }
-
-    const result = await createPlannerImageGenerationRun({
+    const result = await queuePlannerImageGeneration({
+      projectId: params.data.projectId,
+      episodeId: payload.data.episodeId,
       userId: user.id,
-      projectId: activeRefinement.plannerSession.project.id,
-      episodeId: activeRefinement.plannerSession.episode.id,
-      prompt: payload.data.prompt?.trim() || subject.prompt,
-      resourceType: 'planner_subject',
-      resourceId: subject.id,
-      entityName: subject.name,
+      entityId: params.data.subjectId,
+      entityKind: 'subject',
+      prompt: payload.data.prompt,
       modelFamily: payload.data.modelFamily,
       modelEndpoint: payload.data.modelEndpoint,
-      preferredEndpointSlug: activeRefinement.plannerSession.project.creationConfig?.imageModelEndpoint?.slug ?? null,
-      referenceAssetIds:
-        payload.data.referenceAssetIds.length > 0
-          ? payload.data.referenceAssetIds
-          : (Array.isArray(subject.referenceAssetIdsJson) ? subject.referenceAssetIdsJson.filter((assetId): assetId is string => typeof assetId === 'string') : []),
+      referenceAssetIds: payload.data.referenceAssetIds,
       idempotencyKey: payload.data.idempotencyKey,
-      options: {
-        ...(payload.data.options ?? {}),
-        plannerImageKind: 'subject',
-      },
+      options: payload.data.options,
     });
 
-    if ('error' in result) {
-      if (result.error === 'ASSET_NOT_OWNED') {
-        return reply.code(400).send({
-          ok: false,
-          error: {
-            code: 'PLANNER_ASSET_NOT_OWNED',
-            message: 'One or more subject image reference assets are invalid or not owned by the current user.',
-          },
-        });
-      }
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'MODEL_NOT_FOUND',
-          message: 'No active image model endpoint matched the selection.',
-        },
+    if (!result.ok) {
+      return sendPlannerImageError({
+        reply,
+        error: result.error,
+        assetLabel: 'subject image',
       });
     }
 
@@ -305,82 +177,25 @@ export async function registerPlannerMediaGenerationRoutes(app: FastifyInstance)
       });
     }
 
-    const activeRefinement = await findOwnedActiveRefinement(params.data.projectId, payload.data.episodeId, user.id);
-    if (!activeRefinement) {
-      return reply.code(409).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_REFINEMENT_REQUIRED',
-          message: 'No active refinement version found.',
-        },
-      });
-    }
-
-    if (activeRefinement.isConfirmed) {
-      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
-    }
-
-    const scene = await prisma.plannerScene.findFirst({
-      where: {
-        id: params.data.sceneId,
-        refinementVersionId: activeRefinement.id,
-      },
-      select: {
-        id: true,
-        name: true,
-        prompt: true,
-        description: true,
-        referenceAssetIdsJson: true,
-      },
-    });
-    if (!scene) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_SCENE_NOT_FOUND',
-          message: 'Planner scene not found.',
-        },
-      });
-    }
-
-    const result = await createPlannerImageGenerationRun({
+    const result = await queuePlannerImageGeneration({
+      projectId: params.data.projectId,
+      episodeId: payload.data.episodeId,
       userId: user.id,
-      projectId: activeRefinement.plannerSession.project.id,
-      episodeId: activeRefinement.plannerSession.episode.id,
-      prompt: payload.data.prompt?.trim() || scene.prompt || scene.description,
-      resourceType: 'planner_scene',
-      resourceId: scene.id,
-      entityName: scene.name,
+      entityId: params.data.sceneId,
+      entityKind: 'scene',
+      prompt: payload.data.prompt,
       modelFamily: payload.data.modelFamily,
       modelEndpoint: payload.data.modelEndpoint,
-      preferredEndpointSlug: activeRefinement.plannerSession.project.creationConfig?.imageModelEndpoint?.slug ?? null,
-      referenceAssetIds:
-        payload.data.referenceAssetIds.length > 0
-          ? payload.data.referenceAssetIds
-          : (Array.isArray(scene.referenceAssetIdsJson) ? scene.referenceAssetIdsJson.filter((assetId): assetId is string => typeof assetId === 'string') : []),
+      referenceAssetIds: payload.data.referenceAssetIds,
       idempotencyKey: payload.data.idempotencyKey,
-      options: {
-        ...(payload.data.options ?? {}),
-        plannerImageKind: 'scene',
-      },
+      options: payload.data.options,
     });
 
-    if ('error' in result) {
-      if (result.error === 'ASSET_NOT_OWNED') {
-        return reply.code(400).send({
-          ok: false,
-          error: {
-            code: 'PLANNER_ASSET_NOT_OWNED',
-            message: 'One or more scene image reference assets are invalid or not owned by the current user.',
-          },
-        });
-      }
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'MODEL_NOT_FOUND',
-          message: 'No active image model endpoint matched the selection.',
-        },
+    if (!result.ok) {
+      return sendPlannerImageError({
+        reply,
+        error: result.error,
+        assetLabel: 'scene image',
       });
     }
 
@@ -411,85 +226,25 @@ export async function registerPlannerMediaGenerationRoutes(app: FastifyInstance)
       });
     }
 
-    const activeRefinement = await findOwnedActiveRefinement(params.data.projectId, payload.data.episodeId, user.id);
-    if (!activeRefinement) {
-      return reply.code(409).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_REFINEMENT_REQUIRED',
-          message: 'No active refinement version found.',
-        },
-      });
-    }
-
-    if (activeRefinement.isConfirmed) {
-      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
-    }
-
-    const shotScript = await prisma.plannerShotScript.findFirst({
-      where: {
-        id: params.data.shotScriptId,
-        refinementVersionId: activeRefinement.id,
-      },
-      select: {
-        id: true,
-        title: true,
-        visualDescription: true,
-        composition: true,
-        cameraMotion: true,
-        referenceAssetIdsJson: true,
-      },
-    });
-    if (!shotScript) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_SHOT_NOT_FOUND',
-          message: 'Planner shot script not found.',
-        },
-      });
-    }
-
-    const result = await createPlannerImageGenerationRun({
+    const result = await queuePlannerImageGeneration({
+      projectId: params.data.projectId,
+      episodeId: payload.data.episodeId,
       userId: user.id,
-      projectId: activeRefinement.plannerSession.project.id,
-      episodeId: activeRefinement.plannerSession.episode.id,
-      prompt:
-        payload.data.prompt?.trim()
-        || [shotScript.visualDescription, shotScript.composition, shotScript.cameraMotion].filter(Boolean).join('\n'),
-      resourceType: 'planner_shot_script',
-      resourceId: shotScript.id,
-      entityName: shotScript.title,
+      entityId: params.data.shotScriptId,
+      entityKind: 'shot',
+      prompt: payload.data.prompt,
       modelFamily: payload.data.modelFamily,
       modelEndpoint: payload.data.modelEndpoint,
-      preferredEndpointSlug: activeRefinement.plannerSession.project.creationConfig?.imageModelEndpoint?.slug ?? null,
-      referenceAssetIds:
-        payload.data.referenceAssetIds.length > 0
-          ? payload.data.referenceAssetIds
-          : (Array.isArray(shotScript.referenceAssetIdsJson) ? shotScript.referenceAssetIdsJson.filter((assetId): assetId is string => typeof assetId === 'string') : []),
+      referenceAssetIds: payload.data.referenceAssetIds,
       idempotencyKey: payload.data.idempotencyKey,
-      options: {
-        ...(payload.data.options ?? {}),
-        plannerImageKind: 'storyboard_sketch',
-      },
+      options: payload.data.options,
     });
 
-    if ('error' in result) {
-      if (result.error === 'ASSET_NOT_OWNED') {
-        return reply.code(400).send({
-          ok: false,
-          error: {
-            code: 'PLANNER_ASSET_NOT_OWNED',
-            message: 'One or more shot storyboard reference assets are invalid or not owned by the current user.',
-          },
-        });
-      }
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'MODEL_NOT_FOUND',
-          message: 'No active image model endpoint matched the selection.',
-        },
+    if (!result.ok) {
+      return sendPlannerImageError({
+        reply,
+        error: result.error,
+        assetLabel: 'shot storyboard',
       });
     }
 

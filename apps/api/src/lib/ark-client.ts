@@ -10,6 +10,15 @@ interface ArkRequestOptions {
   metadata?: TransportHookMetadata;
 }
 
+interface ArkBinaryRequestOptions {
+  baseUrl: string;
+  apiKey: string;
+  path: string;
+  body: Record<string, unknown>;
+  capability: 'audio';
+  metadata?: TransportHookMetadata;
+}
+
 export class ArkApiError extends Error {
   status: number;
   payload?: unknown;
@@ -89,6 +98,86 @@ async function requestArk<T>({
   return payload;
 }
 
+async function requestArkBinary({
+  baseUrl,
+  apiKey,
+  path,
+  body,
+  capability,
+  metadata,
+}: ArkBinaryRequestOptions) {
+  const url = `${baseUrl.replace(/\/$/, '')}${path}`;
+  const startedAt = Date.now();
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Accept: 'audio/*,application/json',
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!response.ok) {
+    const text = await response.text();
+    let payload: unknown = text;
+    let message = `ARK request failed: ${path}`;
+    let code: string | undefined;
+
+    try {
+      const parsed = JSON.parse(text) as { error?: { message?: string; code?: string } };
+      payload = parsed;
+      message = parsed.error?.message ?? message;
+      code = parsed.error?.code;
+    } catch {
+      if (text.trim()) {
+        message = text.trim();
+      }
+    }
+
+    await emitTransportHook({
+      providerCode: 'ark',
+      capability,
+      operation: path,
+      request: {
+        url,
+        method: 'POST',
+        body,
+      },
+      response: payload,
+      error: { message },
+      latencyMs: Date.now() - startedAt,
+      metadata,
+    });
+    throw new ArkApiError(message, response.status, payload, code);
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  await emitTransportHook({
+    providerCode: 'ark',
+    capability,
+    operation: path,
+    request: {
+      url,
+      method: 'POST',
+      body,
+    },
+    response: {
+      contentType,
+      byteLength: buffer.byteLength,
+    },
+    latencyMs: Date.now() - startedAt,
+    metadata,
+  });
+
+  return {
+    contentType,
+    buffer,
+  };
+}
+
 export async function submitArkTextResponse(args: {
   model: string;
   prompt: string;
@@ -149,6 +238,7 @@ export async function submitArkVideoGeneration(args: {
   aspectRatio?: string;
   hookMetadata?: TransportHookMetadata;
 }) {
+  const taskType = args.images?.length ? 'i2v' : 't2v';
   return requestArk<Record<string, unknown>>({
     baseUrl: args.baseUrl,
     apiKey: args.apiKey,
@@ -157,6 +247,7 @@ export async function submitArkVideoGeneration(args: {
     metadata: args.hookMetadata,
     body: {
       model: args.model,
+      task_type: taskType,
       content: [
         {
           type: 'text',
@@ -211,4 +302,28 @@ export async function queryArkVideoGeneration(args: {
 
     throw error;
   }
+}
+
+export async function submitArkAudioSpeech(args: {
+  model: string;
+  prompt: string;
+  baseUrl: string;
+  apiKey: string;
+  voice?: string;
+  responseFormat?: 'mp3' | 'wav';
+  hookMetadata?: TransportHookMetadata;
+}) {
+  return requestArkBinary({
+    baseUrl: args.baseUrl,
+    apiKey: args.apiKey,
+    path: '/audio/speech',
+    capability: 'audio',
+    metadata: args.hookMetadata,
+    body: {
+      model: args.model,
+      input: args.prompt,
+      voice: args.voice ?? 'alloy',
+      response_format: args.responseFormat ?? 'mp3',
+    },
+  });
 }

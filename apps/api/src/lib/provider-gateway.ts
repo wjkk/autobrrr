@@ -1,5 +1,6 @@
 import {
   queryArkVideoGeneration,
+  submitArkAudioSpeech,
   submitArkImageGeneration,
   submitArkTextResponse,
   submitArkVideoGeneration,
@@ -41,6 +42,13 @@ interface ProviderGatewayVideoPollRequest extends ProviderGatewayBaseRequest {
   taskId: string;
 }
 
+interface ProviderGatewayAudioRequest extends ProviderGatewayBaseRequest {
+  model: string;
+  prompt: string;
+  voice?: string;
+  responseFormat?: 'mp3' | 'wav';
+}
+
 export type ProviderGatewayCapability = 'text' | 'image' | 'video' | 'audio' | 'lipsync';
 
 function normalizeProviderCode(providerCode: string) {
@@ -55,7 +63,7 @@ export function getProviderGatewayCapabilities(providerCode: string): Record<Pro
       text: true,
       image: true,
       video: true,
-      audio: false,
+      audio: true,
       lipsync: false,
     };
   }
@@ -189,4 +197,22 @@ export async function queryVideoGenerationTask(args: ProviderGatewayVideoPollReq
   }
 
   throw new Error(`Provider ${args.providerCode} does not support video polling in provider gateway.`);
+}
+
+export async function submitAudioGeneration(args: ProviderGatewayAudioRequest) {
+  const providerCode = normalizeProviderCode(args.providerCode);
+
+  if (providerCode === 'ark') {
+    return submitArkAudioSpeech({
+      baseUrl: args.baseUrl,
+      apiKey: args.apiKey,
+      model: args.model,
+      prompt: args.prompt,
+      voice: args.voice,
+      responseFormat: args.responseFormat,
+      hookMetadata: args.hookMetadata,
+    });
+  }
+
+  throw new Error(`Provider ${args.providerCode} does not support audio generation in provider gateway.`);
 }

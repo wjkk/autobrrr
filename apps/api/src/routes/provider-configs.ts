@@ -1,19 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { extractArkCatalogModels, listArkModels, syncArkModelCatalog } from '../lib/ark-model-catalog.js';
-import { mergeProviderConfigOptions, parseProviderConfigOptions } from '../lib/provider-config-options.js';
-import { extractPlatouCatalogModels, syncPlatouModelCatalog } from '../lib/platou-model-catalog.js';
-import { listPlatouModels } from '../lib/platou-client.js';
-import {
-  queryVideoGenerationTask,
-  submitImageGeneration,
-  submitTextGeneration,
-  submitVideoGeneration,
-  supportsProviderGatewayCapability,
-} from '../lib/provider-gateway.js';
 import { requireUser } from '../lib/auth.js';
-import { prisma } from '../lib/prisma.js';
+import {
+  listProviderConfigItems,
+  syncProviderModelsForUser,
+  testProviderConfigForUser,
+  updateProviderConfigForUser,
+} from '../lib/provider-config-service.js';
 
 const providerCodeParamsSchema = z.object({
   providerCode: z.string().trim().min(1),
@@ -45,330 +39,21 @@ const testProviderConfigSchema = z.object({
   testKind: z.enum(['text', 'image', 'video', 'audio']).optional(),
 });
 
-function mapProviderConfig(args: {
-  provider: {
-    id: string;
-    code: string;
-    name: string;
-    providerType: string;
-    baseUrl: string | null;
-    enabled: boolean;
-  };
-  endpoints?: Array<{
-    id: string;
-    slug: string;
-    label: string;
-    modelKind: string;
-    familySlug: string;
-    isDefault: boolean;
-  }>;
-  config?: {
-    id: string;
-    enabled: boolean;
-    apiKey: string | null;
-    baseUrlOverride: string | null;
-    optionsJson: unknown;
-    lastTestStatus?: string | null;
-    lastTestMessage?: string | null;
-    lastTestAt?: Date | null;
-    lastTestEndpointSlug?: string | null;
-    updatedAt: Date;
-  } | null;
-}) {
-  const options = parseProviderConfigOptions(args.config?.optionsJson);
-  const maskedApiKey =
-    args.config?.apiKey && args.config.apiKey.length > 8
-      ? `${args.config.apiKey.slice(0, 4)}••••${args.config.apiKey.slice(-4)}`
-      : args.config?.apiKey
-        ? '••••'
-        : null;
-  return {
-    provider: {
-      id: args.provider.id,
-      code: args.provider.code,
-      name: args.provider.name,
-      providerType: args.provider.providerType.toLowerCase(),
-      baseUrl: args.provider.baseUrl,
-      enabled: args.provider.enabled,
-    },
-    endpoints: (args.endpoints ?? []).map((endpoint) => ({
-      id: endpoint.id,
-      slug: endpoint.slug,
-      label: endpoint.label,
-      modelKind: endpoint.modelKind,
-      familySlug: endpoint.familySlug,
-      isDefault: endpoint.isDefault,
-    })),
-    userConfig: args.config
-      ? {
-          id: args.config.id,
-          configured: !!args.config.apiKey,
-          hasApiKey: !!args.config.apiKey,
-          maskedApiKey,
-          enabled: args.config.enabled,
-          baseUrlOverride: args.config.baseUrlOverride,
-          defaults: options.defaults,
-          enabledModels: options.enabledModels,
-          catalogSync: options.catalogSync,
-          lastTest: {
-            status: args.config.lastTestStatus ?? null,
-            message: args.config.lastTestMessage ?? null,
-            endpointSlug: args.config.lastTestEndpointSlug ?? null,
-            testedAt: args.config.lastTestAt?.toISOString() ?? null,
-          },
-          updatedAt: args.config.updatedAt.toISOString(),
-        }
-      : {
-          id: null,
-          configured: false,
-          hasApiKey: false,
-          maskedApiKey: null,
-          enabled: true,
-          baseUrlOverride: null,
-          defaults: {
-            textEndpointSlug: null,
-            imageEndpointSlug: null,
-            videoEndpointSlug: null,
-            audioEndpointSlug: null,
-          },
-          enabledModels: {
-            textEndpointSlugs: [],
-            imageEndpointSlugs: [],
-            videoEndpointSlugs: [],
-            audioEndpointSlugs: [],
-          },
-          catalogSync: {
-            status: null,
-            message: null,
-            syncedAt: null,
-            modelCount: null,
-          },
-          lastTest: {
-            status: null,
-            message: null,
-            endpointSlug: null,
-            testedAt: null,
-          },
-          updatedAt: null,
-        },
-  };
-}
-
-function pickTestEndpoint(args: {
-  providerCode: string;
-  requestedKind?: 'text' | 'image' | 'video' | 'audio';
-  endpoints: Array<{
-    id: string;
-    slug: string;
-    label: string;
-    modelKind: string;
-    familySlug: string;
-    isDefault: boolean;
-    remoteModelKey: string;
-  }>;
-  defaults: {
-    textEndpointSlug: string | null;
-    imageEndpointSlug: string | null;
-    videoEndpointSlug: string | null;
-    audioEndpointSlug: string | null;
-  };
-}) {
-  const bySlug = new Map(args.endpoints.map((endpoint) => [endpoint.slug, endpoint]));
-  const candidates = args.requestedKind
-    ? args.endpoints.filter((endpoint) => endpoint.modelKind === args.requestedKind)
-    : args.endpoints;
-  const requested = [
-    args.requestedKind === 'text'
-      ? args.defaults.textEndpointSlug
-      : args.requestedKind === 'image'
-        ? args.defaults.imageEndpointSlug
-        : args.requestedKind === 'video'
-          ? args.defaults.videoEndpointSlug
-          : args.requestedKind === 'audio'
-            ? args.defaults.audioEndpointSlug
-            : args.defaults.textEndpointSlug,
-  ]
-    .filter((value): value is string => !!value)
-    .map((slug) => bySlug.get(slug))
-    .filter((value): value is NonNullable<typeof value> => !!value);
-
-  if (requested.length > 0) {
-    return requested[0];
+function mapServiceErrorToStatus(code: string) {
+  switch (code) {
+    case 'NOT_FOUND':
+      return 404;
+    case 'PROVIDER_NOT_CONFIGURED':
+    case 'BASE_URL_REQUIRED':
+    case 'ENDPOINT_NOT_FOUND':
+    case 'SYNC_NOT_SUPPORTED':
+    case 'MODEL_SYNC_FAILED':
+    case 'PROVIDER_TEST_FAILED':
+    case 'PROVIDER_MODEL_NOT_OPEN':
+      return 400;
+    default:
+      return 400;
   }
-
-  if (args.requestedKind) {
-    return candidates[0] ?? null;
-  }
-
-  if (args.providerCode === 'platou') {
-    return (
-      args.requestedKind
-        ? candidates[0] ?? null
-        : args.endpoints.find((endpoint) => endpoint.modelKind === 'video')
-          ?? args.endpoints.find((endpoint) => endpoint.modelKind === 'image')
-          ?? args.endpoints.find((endpoint) => endpoint.modelKind === 'text')
-          ?? null
-    );
-  }
-
-  return args.endpoints[0] ?? null;
-}
-
-async function runProviderConnectivityTest(args: {
-  userId: string;
-  providerCode: string;
-  baseUrl: string;
-  apiKey: string;
-  modelKind: string;
-  remoteModelKey: string;
-  modelEndpointId?: string;
-  modelProviderId?: string;
-}) {
-  const kind = args.modelKind.toLowerCase();
-  const hookMetadata = {
-    traceId: `provider-test:${args.userId}:${args.providerCode}:${kind}`,
-    userId: args.userId,
-    resourceType: 'provider_config_test',
-    modelProviderId: args.modelProviderId,
-    modelEndpointId: args.modelEndpointId,
-  };
-
-  if (kind === 'text') {
-    if (!supportsProviderGatewayCapability(args.providerCode, 'text')) {
-      throw new Error(`Provider ${args.providerCode} does not support text testing yet.`);
-    }
-    await submitTextGeneration({
-      providerCode: args.providerCode,
-      baseUrl: args.baseUrl,
-      apiKey: args.apiKey,
-      model: args.remoteModelKey,
-      prompt: args.providerCode === 'ark' ? '请只返回 ok' : 'reply with ok',
-      hookMetadata,
-    });
-    return;
-  }
-
-  if (kind === 'image') {
-    if (!supportsProviderGatewayCapability(args.providerCode, 'image')) {
-      throw new Error(`Provider ${args.providerCode} does not support image testing yet.`);
-    }
-    await submitImageGeneration({
-      providerCode: args.providerCode,
-      baseUrl: args.baseUrl,
-      apiKey: args.apiKey,
-      model: args.remoteModelKey,
-      prompt: 'A clean minimal test image.',
-      hookMetadata,
-    });
-    return;
-  }
-
-  if (kind === 'video') {
-    if (!supportsProviderGatewayCapability(args.providerCode, 'video')) {
-      throw new Error(`Provider ${args.providerCode} does not support video testing yet.`);
-    }
-    const created = await submitVideoGeneration({
-      providerCode: args.providerCode,
-      baseUrl: args.baseUrl,
-      apiKey: args.apiKey,
-      model: args.remoteModelKey,
-      prompt: 'A short simple test video of moving light.',
-      hookMetadata,
-    });
-    const taskId = typeof created.task_id === 'string'
-      ? created.task_id
-      : typeof created.id === 'string'
-        ? created.id
-        : null;
-    if (!taskId) {
-      throw new Error(`${args.providerCode} video test did not return a task id.`);
-    }
-    await queryVideoGenerationTask({
-      providerCode: args.providerCode,
-      baseUrl: args.baseUrl,
-      apiKey: args.apiKey,
-      taskId,
-      hookMetadata,
-    });
-    return;
-  }
-
-  if (kind === 'audio') {
-    if (!supportsProviderGatewayCapability(args.providerCode, 'audio')) {
-      throw new Error(`Provider ${args.providerCode} does not support audio testing yet.`);
-    }
-    throw new Error(`Provider ${args.providerCode} audio testing is not implemented yet.`);
-  }
-
-  throw new Error(`Unsupported provider test kind: ${args.modelKind}`);
-}
-
-function mapProviderEndpoints(endpoints: Array<{
-  id: string;
-  slug: string;
-  label: string;
-  isDefault: boolean;
-  family: {
-    slug: string;
-    modelKind: string;
-  };
-}>) {
-  return endpoints.map((endpoint) => ({
-    id: endpoint.id,
-    slug: endpoint.slug,
-    label: endpoint.label,
-    modelKind: endpoint.family.modelKind.toLowerCase(),
-    familySlug: endpoint.family.slug,
-    isDefault: endpoint.isDefault,
-  }));
-}
-
-async function fetchProviderConfigItem(providerCode: string, userId: string) {
-  const provider = await prisma.modelProvider.findUnique({
-    where: { code: providerCode },
-    include: {
-      endpoints: {
-        where: {
-          status: 'ACTIVE',
-        },
-        include: {
-          family: {
-            select: {
-              slug: true,
-              modelKind: true,
-            },
-          },
-        },
-        orderBy: [{ family: { modelKind: 'asc' } }, { priority: 'asc' }, { createdAt: 'asc' }],
-      },
-      userConfigs: {
-        where: { userId },
-        take: 1,
-        select: {
-          id: true,
-          enabled: true,
-          apiKey: true,
-          baseUrlOverride: true,
-          optionsJson: true,
-          lastTestStatus: true,
-          lastTestMessage: true,
-          lastTestAt: true,
-          lastTestEndpointSlug: true,
-          updatedAt: true,
-        },
-      },
-    },
-  });
-
-  if (!provider) {
-    return null;
-  }
-
-  return mapProviderConfig({
-    provider,
-    endpoints: mapProviderEndpoints(provider.endpoints),
-    config: provider.userConfigs[0] ?? null,
-  });
 }
 
 export async function registerProviderConfigRoutes(app: FastifyInstance) {
@@ -378,51 +63,9 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       return;
     }
 
-    const providers = await prisma.modelProvider.findMany({
-      orderBy: [{ providerType: 'asc' }, { code: 'asc' }],
-      include: {
-        endpoints: {
-          where: {
-            status: 'ACTIVE',
-          },
-          include: {
-            family: {
-              select: {
-                slug: true,
-                modelKind: true,
-              },
-            },
-          },
-          orderBy: [{ family: { modelKind: 'asc' } }, { priority: 'asc' }, { createdAt: 'asc' }],
-        },
-        userConfigs: {
-          where: { userId: user.id },
-          take: 1,
-          select: {
-            id: true,
-            enabled: true,
-            apiKey: true,
-            baseUrlOverride: true,
-            optionsJson: true,
-            lastTestStatus: true,
-            lastTestMessage: true,
-            lastTestAt: true,
-            lastTestEndpointSlug: true,
-            updatedAt: true,
-          },
-        },
-      },
-    });
-
     return reply.send({
       ok: true,
-      data: providers.map((provider) =>
-        mapProviderConfig({
-          provider,
-          endpoints: mapProviderEndpoints(provider.endpoints),
-          config: provider.userConfigs[0] ?? null,
-        }),
-      ),
+      data: await listProviderConfigItems(user.id),
     });
   });
 
@@ -445,174 +88,26 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       });
     }
 
-    const provider = await prisma.modelProvider.findUnique({
-      where: { code: params.data.providerCode },
-      include: {
-        endpoints: {
-          where: {
-            status: 'ACTIVE',
-          },
-          include: {
-            family: {
-              select: {
-                slug: true,
-                modelKind: true,
-              },
-            },
-          },
-          orderBy: [{ family: { modelKind: 'asc' } }, { priority: 'asc' }, { createdAt: 'asc' }],
-        },
-        userConfigs: {
-          where: { userId: user.id },
-          take: 1,
-          select: {
-            id: true,
-            enabled: true,
-            apiKey: true,
-            baseUrlOverride: true,
-            optionsJson: true,
-            lastTestStatus: true,
-            lastTestMessage: true,
-            lastTestAt: true,
-            lastTestEndpointSlug: true,
-            updatedAt: true,
-          },
-        },
-      },
+    const result = await updateProviderConfigForUser({
+      providerCode: params.data.providerCode,
+      userId: user.id,
+      payload: payload.data,
     });
-
-    if (!provider) {
-      return reply.code(404).send({
+    if (!result.ok) {
+      return reply.code(mapServiceErrorToStatus(result.error.code)).send({
         ok: false,
         error: {
-          code: 'NOT_FOUND',
-          message: 'Provider not found.',
+          code: result.error.code,
+          message: result.error.message,
+          ...(result.error.details ? { details: result.error.details } : {}),
         },
+        ...(result.error.data !== undefined ? { data: result.error.data } : {}),
       });
     }
-
-    const requestedSlugs = [
-      ...Object.values(payload.data.defaults ?? {}).filter((value): value is string => !!value),
-      ...(payload.data.enabledModels?.textEndpointSlugs ?? []),
-      ...(payload.data.enabledModels?.imageEndpointSlugs ?? []),
-      ...(payload.data.enabledModels?.videoEndpointSlugs ?? []),
-      ...(payload.data.enabledModels?.audioEndpointSlugs ?? []),
-    ];
-    if (requestedSlugs.length > 0) {
-      const uniqueRequestedSlugs = [...new Set(requestedSlugs)];
-      const endpoints = await prisma.modelEndpoint.findMany({
-        where: {
-          providerId: provider.id,
-          slug: { in: uniqueRequestedSlugs },
-          status: 'ACTIVE',
-        },
-        select: { slug: true },
-      });
-      if (endpoints.length !== uniqueRequestedSlugs.length) {
-        return reply.code(400).send({
-          ok: false,
-          error: {
-            code: 'INVALID_ARGUMENT',
-            message: 'One or more endpoint selections are invalid for this provider.',
-          },
-        });
-      }
-    }
-
-    if (payload.data.defaults && payload.data.enabledModels) {
-      const mismatchedDefault =
-        (payload.data.defaults.textEndpointSlug && payload.data.enabledModels.textEndpointSlugs.length > 0 && !payload.data.enabledModels.textEndpointSlugs.includes(payload.data.defaults.textEndpointSlug))
-        || (payload.data.defaults.imageEndpointSlug && payload.data.enabledModels.imageEndpointSlugs.length > 0 && !payload.data.enabledModels.imageEndpointSlugs.includes(payload.data.defaults.imageEndpointSlug))
-        || (payload.data.defaults.videoEndpointSlug && payload.data.enabledModels.videoEndpointSlugs.length > 0 && !payload.data.enabledModels.videoEndpointSlugs.includes(payload.data.defaults.videoEndpointSlug))
-        || (payload.data.defaults.audioEndpointSlug && payload.data.enabledModels.audioEndpointSlugs.length > 0 && !payload.data.enabledModels.audioEndpointSlugs.includes(payload.data.defaults.audioEndpointSlug));
-      if (mismatchedDefault) {
-        return reply.code(400).send({
-          ok: false,
-          error: {
-            code: 'INVALID_ARGUMENT',
-            message: 'Default endpoint must be included in enabled model selections.',
-          },
-        });
-      }
-    }
-
-    const currentOptions = parseProviderConfigOptions(provider.userConfigs[0]?.optionsJson);
-    const nextOptions =
-      payload.data.defaults !== undefined || payload.data.enabledModels !== undefined
-        ? mergeProviderConfigOptions(currentOptions.raw, {
-            defaults: {
-              textEndpointSlug: payload.data.defaults?.textEndpointSlug || null,
-              imageEndpointSlug: payload.data.defaults?.imageEndpointSlug || null,
-              videoEndpointSlug: payload.data.defaults?.videoEndpointSlug || null,
-              audioEndpointSlug: payload.data.defaults?.audioEndpointSlug || null,
-            },
-            enabledModels: {
-              textEndpointSlugs: payload.data.enabledModels?.textEndpointSlugs ?? currentOptions.enabledModels.textEndpointSlugs,
-              imageEndpointSlugs: payload.data.enabledModels?.imageEndpointSlugs ?? currentOptions.enabledModels.imageEndpointSlugs,
-              videoEndpointSlugs: payload.data.enabledModels?.videoEndpointSlugs ?? currentOptions.enabledModels.videoEndpointSlugs,
-              audioEndpointSlugs: payload.data.enabledModels?.audioEndpointSlugs ?? currentOptions.enabledModels.audioEndpointSlugs,
-            },
-          })
-        : undefined;
-
-    const config = await prisma.userProviderConfig.upsert({
-      where: {
-        userId_providerId: {
-          userId: user.id,
-          providerId: provider.id,
-        },
-      },
-      update: {
-        ...(payload.data.apiKey !== undefined ? { apiKey: payload.data.apiKey || null } : {}),
-        ...(payload.data.baseUrlOverride !== undefined ? { baseUrlOverride: payload.data.baseUrlOverride || null } : {}),
-        ...(payload.data.enabled !== undefined ? { enabled: payload.data.enabled } : {}),
-        ...(nextOptions !== undefined ? { optionsJson: nextOptions } : {}),
-      },
-      create: {
-        userId: user.id,
-        providerId: provider.id,
-        apiKey: payload.data.apiKey || null,
-        baseUrlOverride: payload.data.baseUrlOverride || null,
-        enabled: payload.data.enabled ?? true,
-        optionsJson: nextOptions,
-      },
-      select: {
-        id: true,
-        enabled: true,
-        apiKey: true,
-        baseUrlOverride: true,
-        optionsJson: true,
-        lastTestStatus: true,
-        lastTestMessage: true,
-        lastTestAt: true,
-        lastTestEndpointSlug: true,
-        updatedAt: true,
-      },
-    });
-
-    const endpoints = await prisma.modelEndpoint.findMany({
-      where: {
-        providerId: provider.id,
-        status: 'ACTIVE',
-      },
-      include: {
-        family: {
-          select: {
-            slug: true,
-            modelKind: true,
-          },
-        },
-      },
-      orderBy: [{ family: { modelKind: 'asc' } }, { priority: 'asc' }, { createdAt: 'asc' }],
-    });
 
     return reply.send({
       ok: true,
-      data: mapProviderConfig({
-        provider,
-        endpoints: mapProviderEndpoints(endpoints),
-        config,
-      }),
+      data: result.data,
     });
   });
 
@@ -633,153 +128,25 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       });
     }
 
-    const provider = await prisma.modelProvider.findUnique({
-      where: { code: params.data.providerCode },
-      include: {
-        userConfigs: {
-          where: { userId: user.id },
-          take: 1,
-          select: {
-            id: true,
-            enabled: true,
-            apiKey: true,
-            baseUrlOverride: true,
-            optionsJson: true,
-          },
-        },
-      },
+    const result = await syncProviderModelsForUser({
+      providerCode: params.data.providerCode,
+      userId: user.id,
     });
-
-    if (!provider) {
-      return reply.code(404).send({
+    if (!result.ok) {
+      return reply.code(mapServiceErrorToStatus(result.error.code)).send({
         ok: false,
         error: {
-          code: 'NOT_FOUND',
-          message: 'Provider not found.',
+          code: result.error.code,
+          message: result.error.message,
         },
+        ...(result.error.data !== undefined ? { data: result.error.data } : {}),
       });
     }
 
-    if (provider.code !== 'platou' && provider.code !== 'ark') {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'SYNC_NOT_SUPPORTED',
-          message: 'This provider does not support model catalog sync yet.',
-        },
-      });
-    }
-
-    const config = provider.userConfigs[0] ?? null;
-    if (!config?.enabled || !config.apiKey) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'PROVIDER_NOT_CONFIGURED',
-          message: 'This provider is not configured for the current user.',
-        },
-      });
-    }
-
-    const baseUrl = config.baseUrlOverride ?? provider.baseUrl;
-    if (!baseUrl) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'BASE_URL_REQUIRED',
-          message: 'This provider requires a base URL to be configured.',
-        },
-      });
-    }
-
-    try {
-      const payload = provider.code === 'ark'
-        ? await listArkModels({
-            baseUrl,
-            apiKey: config.apiKey,
-          })
-        : await listPlatouModels({
-            baseUrl,
-            apiKey: config.apiKey,
-          });
-      let syncMessage = '';
-      let totalCount = 0;
-
-      if (provider.code === 'ark') {
-        const discoveredModels = extractArkCatalogModels(payload);
-        if (discoveredModels.length === 0) {
-          throw new Error('Volcengine Ark model catalog returned no supported text/image/video/audio models.');
-        }
-        const syncResult = await syncArkModelCatalog({
-          providerId: provider.id,
-          discoveredModels,
-        });
-        totalCount = syncResult.totalCount;
-        syncMessage = `已同步 ${syncResult.totalCount} 个模型（文本 ${syncResult.byKind.TEXT} / 图片 ${syncResult.byKind.IMAGE} / 视频 ${syncResult.byKind.VIDEO} / 音频 ${syncResult.byKind.AUDIO}）。`;
-      } else {
-        const discoveredModels = extractPlatouCatalogModels(payload);
-        if (discoveredModels.length === 0) {
-          throw new Error('Platou model catalog returned no supported text/image/video models.');
-        }
-        const syncResult = await syncPlatouModelCatalog({
-          providerId: provider.id,
-          discoveredModels,
-        });
-        totalCount = syncResult.totalCount;
-        syncMessage = `已同步 ${syncResult.totalCount} 个模型（文本 ${syncResult.byKind.TEXT} / 图片 ${syncResult.byKind.IMAGE} / 视频 ${syncResult.byKind.VIDEO}）。`;
-      }
-
-      await prisma.userProviderConfig.update({
-        where: {
-          userId_providerId: {
-            userId: user.id,
-            providerId: provider.id,
-          },
-        },
-        data: {
-          optionsJson: mergeProviderConfigOptions(config.optionsJson, {
-            catalogSync: {
-              status: 'passed',
-              message: syncMessage,
-              syncedAt: new Date().toISOString(),
-              modelCount: totalCount,
-            },
-          }),
-        },
-      });
-
-      return reply.send({
-        ok: true,
-        data: await fetchProviderConfigItem(provider.code, user.id),
-      });
-    } catch (error) {
-      await prisma.userProviderConfig.update({
-        where: {
-          userId_providerId: {
-            userId: user.id,
-            providerId: provider.id,
-          },
-        },
-        data: {
-          optionsJson: mergeProviderConfigOptions(config.optionsJson, {
-            catalogSync: {
-              status: 'failed',
-              message: error instanceof Error ? error.message : 'Model catalog sync failed.',
-              syncedAt: new Date().toISOString(),
-            },
-          }),
-        },
-      });
-
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'MODEL_SYNC_FAILED',
-          message: error instanceof Error ? error.message : 'Model catalog sync failed.',
-        },
-        data: await fetchProviderConfigItem(provider.code, user.id),
-      });
-    }
+    return reply.send({
+      ok: true,
+      data: result.data,
+    });
   });
 
   app.post('/api/provider-configs/:providerCode/test', async (request, reply) => {
@@ -800,169 +167,25 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       });
     }
 
-    const provider = await prisma.modelProvider.findUnique({
-      where: { code: params.data.providerCode },
-      include: {
-        endpoints: {
-          where: { status: 'ACTIVE' },
-          include: {
-            family: {
-              select: {
-                slug: true,
-                modelKind: true,
-              },
-            },
-          },
-          orderBy: [{ family: { modelKind: 'asc' } }, { priority: 'asc' }, { createdAt: 'asc' }],
-        },
-        userConfigs: {
-          where: { userId: user.id },
-          take: 1,
-        },
-      },
+    const result = await testProviderConfigForUser({
+      providerCode: params.data.providerCode,
+      userId: user.id,
+      testKind: payload.data.testKind,
     });
-
-    if (!provider) {
-      return reply.code(404).send({
+    if (!result.ok) {
+      return reply.code(mapServiceErrorToStatus(result.error.code)).send({
         ok: false,
         error: {
-          code: 'NOT_FOUND',
-          message: 'Provider not found.',
+          code: result.error.code,
+          message: result.error.message,
         },
+        ...(result.error.data !== undefined ? { data: result.error.data } : {}),
       });
     }
-
-    const buildResponse = async () => {
-      return fetchProviderConfigItem(provider.code, user.id);
-    };
-
-    const config = provider.userConfigs[0] ?? null;
-    if (!config?.enabled || !config.apiKey) {
-      await prisma.userProviderConfig.updateMany({
-        where: {
-          userId: user.id,
-          providerId: provider.id,
-        },
-        data: {
-          lastTestStatus: 'failed',
-          lastTestMessage: 'This provider is not configured for the current user.',
-          lastTestAt: new Date(),
-          lastTestEndpointSlug: null,
-        },
-      });
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'PROVIDER_NOT_CONFIGURED',
-          message: 'This provider is not configured for the current user.',
-        },
-        data: await buildResponse(),
-      });
-    }
-
-    const defaults = parseProviderConfigOptions(config.optionsJson).defaults;
-
-    const endpoints = provider.endpoints.map((endpoint) => ({
-      id: endpoint.id,
-      slug: endpoint.slug,
-      label: endpoint.label,
-      modelKind: endpoint.family.modelKind.toLowerCase(),
-      familySlug: endpoint.family.slug,
-      isDefault: endpoint.isDefault,
-      remoteModelKey: endpoint.remoteModelKey,
-    }));
-
-    const testEndpoint = pickTestEndpoint({
-      providerCode: provider.code,
-      requestedKind: payload.data.testKind,
-      endpoints,
-      defaults,
-    });
-
-    if (!testEndpoint) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'ENDPOINT_NOT_FOUND',
-          message: 'No active endpoint is available to test for this provider.',
-        },
-      });
-    }
-
-    const baseUrl = config.baseUrlOverride ?? provider.baseUrl;
-    if (!baseUrl) {
-      await prisma.userProviderConfig.updateMany({
-        where: {
-          userId: user.id,
-          providerId: provider.id,
-        },
-        data: {
-          lastTestStatus: 'failed',
-          lastTestMessage: 'This provider requires a base URL to be configured.',
-          lastTestAt: new Date(),
-          lastTestEndpointSlug: testEndpoint.slug,
-        },
-      });
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'BASE_URL_REQUIRED',
-          message: 'This provider requires a base URL to be configured.',
-        },
-        data: await buildResponse(),
-      });
-    }
-
-    try {
-      await runProviderConnectivityTest({
-        userId: user.id,
-        providerCode: provider.code,
-        baseUrl,
-        apiKey: config.apiKey,
-        modelKind: testEndpoint.modelKind,
-        remoteModelKey: testEndpoint.remoteModelKey,
-        modelEndpointId: testEndpoint.id,
-        modelProviderId: provider.id,
-      });
-    } catch (error) {
-      await prisma.userProviderConfig.updateMany({
-        where: {
-          userId: user.id,
-          providerId: provider.id,
-        },
-        data: {
-          lastTestStatus: 'failed',
-          lastTestMessage: error instanceof Error ? error.message : 'Provider test failed.',
-          lastTestAt: new Date(),
-          lastTestEndpointSlug: testEndpoint.slug,
-        },
-      });
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'PROVIDER_TEST_FAILED',
-          message: error instanceof Error ? error.message : 'Provider test failed.',
-        },
-        data: await buildResponse(),
-      });
-    }
-
-    await prisma.userProviderConfig.updateMany({
-      where: {
-        userId: user.id,
-        providerId: provider.id,
-      },
-      data: {
-        lastTestStatus: 'passed',
-        lastTestMessage: 'Provider connectivity test succeeded.',
-        lastTestAt: new Date(),
-        lastTestEndpointSlug: testEndpoint.slug,
-      },
-    });
 
     return reply.send({
       ok: true,
-      data: await buildResponse(),
+      data: result.data,
     });
   });
 }

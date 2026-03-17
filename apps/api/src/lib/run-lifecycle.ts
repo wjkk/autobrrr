@@ -40,7 +40,7 @@ function readObject(value: unknown): Record<string, unknown> {
 
 function resolveProviderSourceUrl(run: Run) {
   const providerData = readObject(run.outputJson).providerData;
-  return findStringDeep(providerData, ['uri', 'url', 'downloadUrl']);
+  return findStringDeep(providerData, ['uri', 'url', 'downloadUrl', 'video_url', 'image_url']);
 }
 
 function parseVideoOptions(run: Run) {

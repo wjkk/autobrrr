@@ -3,11 +3,7 @@ import { z } from 'zod';
 
 import { mapRun } from '../lib/api-mappers.js';
 import { requireUser } from '../lib/auth.js';
-import { resolveModelSelection } from '../lib/model-registry.js';
-import { findOwnedShot } from '../lib/ownership.js';
-import { prisma } from '../lib/prisma.js';
-import { serializeRunInput } from '../lib/run-input.js';
-import { resolveUserDefaultModelSelection } from '../lib/user-model-defaults.js';
+import { queueShotGenerationRun } from '../lib/creation-run-service.js';
 
 const paramsSchema = z.object({
   projectId: z.string().min(1),
@@ -31,119 +27,6 @@ const videoCommandSchema = commandSchema.extend({
   lastFrameUrl: z.string().trim().url().optional(),
 });
 
-async function createGenerationRun(args: {
-  projectId: string;
-  shotId: string;
-  userId: string;
-  runType: 'IMAGE_GENERATION' | 'VIDEO_GENERATION';
-  modelKind: 'IMAGE' | 'VIDEO';
-  promptField: 'imagePrompt' | 'motionPrompt';
-  promptOverride?: string;
-  modelFamily?: string;
-  modelEndpoint?: string;
-  referenceAssetIds: string[];
-  idempotencyKey?: string;
-  options?: Record<string, unknown>;
-}) {
-  const shot = await findOwnedShot(args.projectId, args.shotId, args.userId);
-  if (!shot) {
-    return { error: 'NOT_FOUND' as const };
-  }
-
-  const userDefaultModel = !args.modelFamily && !args.modelEndpoint
-    ? await resolveUserDefaultModelSelection(args.userId, args.modelKind)
-    : null;
-
-  const resolvedModel = await resolveModelSelection({
-    modelKind: args.modelKind,
-    familySlug: args.modelFamily ?? shot.targetVideoModelFamilySlug ?? userDefaultModel?.familySlug,
-    endpointSlug: args.modelEndpoint ?? userDefaultModel?.endpointSlug,
-    strategy: 'default',
-  });
-  if (!resolvedModel) {
-    return { error: 'MODEL_NOT_FOUND' as const };
-  }
-
-  const effectivePrompt = args.promptOverride ?? shot[args.promptField];
-
-  const result = await prisma.$transaction(async (tx) => {
-    await tx.project.update({
-      where: { id: shot.projectId },
-      data: { status: 'CREATING' },
-    });
-
-    await tx.episode.update({
-      where: { id: shot.episodeId },
-      data: { status: 'CREATING' },
-    });
-
-    const updatedShot = await tx.shot.update({
-      where: { id: shot.id },
-      data: {
-        status: 'QUEUED',
-        ...(args.promptOverride
-          ? args.promptField === 'imagePrompt'
-            ? { imagePrompt: args.promptOverride }
-            : { motionPrompt: args.promptOverride }
-          : {}),
-      },
-      include: {
-        activeVersion: {
-          select: {
-            id: true,
-            label: true,
-            mediaKind: true,
-            status: true,
-          },
-        },
-      },
-    });
-
-    const run = await tx.run.create({
-      data: {
-        projectId: shot.projectId,
-        episodeId: shot.episodeId,
-        modelFamilyId: resolvedModel.family.id,
-        modelProviderId: resolvedModel.provider.id,
-        modelEndpointId: resolvedModel.endpoint.id,
-        runType: args.runType,
-        resourceType: 'shot',
-        resourceId: shot.id,
-        status: 'QUEUED',
-        executorType: 'SYSTEM_WORKER',
-        idempotencyKey: args.idempotencyKey ?? null,
-        inputJson: serializeRunInput({
-          shotId: shot.id,
-          prompt: effectivePrompt,
-          modelFamily: {
-            id: resolvedModel.family.id,
-            slug: resolvedModel.family.slug,
-            name: resolvedModel.family.name,
-          },
-          modelProvider: {
-            id: resolvedModel.provider.id,
-            code: resolvedModel.provider.code,
-            name: resolvedModel.provider.name,
-            providerType: resolvedModel.provider.providerType.toLowerCase(),
-          },
-          modelEndpoint: {
-            id: resolvedModel.endpoint.id,
-            slug: resolvedModel.endpoint.slug,
-            label: resolvedModel.endpoint.label,
-            remoteModelKey: resolvedModel.endpoint.remoteModelKey,
-          },
-          referenceAssetIds: args.referenceAssetIds,
-          options: args.options ?? null,
-        }),
-      },
-    });
-
-    return { shot: updatedShot, run };
-  });
-
-  return result;
-}
-
 export async function registerCreationCommandRoutes(app: FastifyInstance) {
   app.post('/api/projects/:projectId/shots/:shotId/generate-image', async (request, reply) => {
     const user = await requireUser(request, reply);
@@ -164,7 +47,7 @@ export async function registerCreationCommandRoutes(app: FastifyInstance) {
       });
     }
 
-    const result = await createGenerationRun({
+    const result = await queueShotGenerationRun({
       projectId: params.data.projectId,
       shotId: params.data.shotId,
       userId: user.id,
@@ -179,7 +62,7 @@ export async function registerCreationCommandRoutes(app: FastifyInstance) {
       options: payload.data.options,
     });
 
-    if ('error' in result) {
+    if (!result.ok) {
       if (result.error === 'MODEL_NOT_FOUND') {
         return reply.code(404).send({
           ok: false,
@@ -231,7 +114,7 @@ export async function registerCreationCommandRoutes(app: FastifyInstance) {
       });
     }
 
-    const result = await createGenerationRun({
+    const result = await queueShotGenerationRun({
       projectId: params.data.projectId,
       shotId: params.data.shotId,
       userId: user.id,
@@ -253,7 +136,7 @@ export async function registerCreationCommandRoutes(app: FastifyInstance) {
       },
     });
 
-    if ('error' in result) {
+    if (!result.ok) {
       if (result.error === 'MODEL_NOT_FOUND') {
         return reply.code(404).send({
           ok: false,

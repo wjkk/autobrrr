@@ -3,22 +3,9 @@ import { z } from 'zod';
 
 import { mapRun } from '../lib/api-mappers.js';
 import { requireUser } from '../lib/auth.js';
-import { resolveModelSelection } from '../lib/model-registry.js';
-import { resolvePlannerAgentSelection } from '../lib/planner-agent-registry.js';
-import { buildPlannerGenerationPrompt, createPlannerUserMessage } from '../lib/planner-orchestrator.js';
 import { PLANNER_REFINEMENT_LOCKED_ERROR } from '../lib/planner-refinement-drafts.js';
-import {
-  getPlannerRerunScopeTriggerType,
-  getPlannerRerunScopeUserLabel,
-  normalizePlannerRerunScope,
-  plannerLegacyRerunScopeSchema,
-  plannerRerunScopeSchema,
-  type PlannerRerunScope,
-} from '../lib/planner-rerun-scope.js';
-import { resolvePlannerTargetVideoModel } from '../lib/planner-target-video-model.js';
-import { prisma } from '../lib/prisma.js';
-import { serializeRunInput } from '../lib/run-input.js';
-import { resolveUserDefaultModelSelection } from '../lib/user-model-defaults.js';
+import { normalizePlannerRerunScope, plannerLegacyRerunScopeSchema, plannerRerunScopeSchema } from '../lib/planner-rerun-scope.js';
+import { queuePlannerPartialRerun } from '../lib/planner-rerun-service.js';
 
 const paramsSchema = z.object({
   projectId: z.string().min(1),
@@ -39,50 +26,6 @@ const payloadSchema = z.union([
     rerunScope: plannerRerunScopeSchema,
   }),
 ]);
-
-function buildScopeInstruction(args: {
-  scope: PlannerRerunScope;
-  targetEntity: Record<string, unknown> | Record<string, unknown>[];
-  prompt: string | undefined;
-}) {
-  const customPrompt = args.prompt?.trim();
-
-  if (args.scope.type === 'subject') {
-    return [
-      '你只允许调整一个主体设定，并同步更新与该主体强相关的分镜表述。',
-      '不要重写整个故事主题，不要扩张场景数量。',
-      `当前目标主体：${JSON.stringify(args.targetEntity)}`,
-      customPrompt ? `用户补充要求：${customPrompt}` : '请根据当前主体设定自动优化角色形象、主体列表、以及关联镜头中的主体描写。',
-    ].join('\n');
-  }
-
-  if (args.scope.type === 'scene') {
-    return [
-      '你只允许调整一个场景设定，并同步更新与该场景强相关的分镜表述。',
-      '不要改动主体关系和故事主线。',
-      `当前目标场景：${JSON.stringify(args.targetEntity)}`,
-      customPrompt ? `用户补充要求：${customPrompt}` : '请根据当前场景设定自动优化场景列表、环境描述、以及关联镜头中的空间表述。',
-    ].join('\n');
-  }
-
-  if (args.scope.type === 'act') {
-    return [
-      '你只允许调整一个幕内的分镜与节奏安排，输出完整的 refinement 文档，但不要改动其他幕的核心内容。',
-      '不要重写全部故事主题，不要改动无关主体和无关场景。',
-      `当前目标幕：${JSON.stringify(args.targetEntity)}`,
-      customPrompt ? `用户补充要求：${customPrompt}` : '请围绕当前幕的节奏、镜头组织和情绪推进做局部优化。',
-    ].join('\n');
-  }
-
-  return [
-    Array.isArray(args.targetEntity) && args.targetEntity.length > 1
-      ? '你只允许调整一组指定分镜，输出完整的 refinement 文档，但仅局部修改这些分镜及其必要的上下文描述。'
-      : '你只允许调整一个分镜脚本，输出完整的 refinement 文档，但仅局部修改该分镜及其必要的上下文描述。',
-    '不要改动无关主体和场景设定。',
-    `当前目标分镜：${JSON.stringify(args.targetEntity)}`,
-    customPrompt ? `用户补充要求：${customPrompt}` : '请根据当前分镜内容自动优化画面描述、构图、运镜和台词。',
-  ].join('\n');
-}
 
 export async function registerPlannerPartialRerunRoutes(app: FastifyInstance) {
   app.post('/api/projects/:projectId/planner/partial-rerun', async (request, reply) => {
@@ -113,176 +56,63 @@ export async function registerPlannerPartialRerunRoutes(app: FastifyInstance) {
           },
     );
 
-    const plannerSession = await prisma.plannerSession.findFirst({
-      where: {
-        projectId: params.data.projectId,
-        episodeId: payload.data.episodeId,
-        isActive: true,
-        project: {
-          createdById: user.id,
-        },
-      },
-      include: {
-        project: {
-          select: {
-            id: true,
-            title: true,
-            contentMode: true,
-            creationConfig: {
-              include: {
-                subjectProfile: {
-                  select: { id: true, name: true, slug: true },
-                },
-                stylePreset: {
-                  select: { id: true, name: true, slug: true },
-                },
-                imageModelEndpoint: {
-                  select: { id: true, slug: true, label: true },
-                },
-              },
-            },
+    const result = await queuePlannerPartialRerun({
+      projectId: params.data.projectId,
+      episodeId: payload.data.episodeId,
+      userId: user.id,
+      rerunScope,
+      prompt: payload.data.prompt,
+      modelFamily: payload.data.modelFamily,
+      modelEndpoint: payload.data.modelEndpoint,
+      targetVideoModelFamilySlug: payload.data.targetVideoModelFamilySlug,
+      idempotencyKey: payload.data.idempotencyKey,
+    });
+
+    if (!result.ok) {
+      if (result.error === 'NOT_FOUND') {
+        return reply.code(404).send({
+          ok: false,
+          error: {
+            code: 'PLANNER_SESSION_NOT_FOUND',
+            message: 'Planner session not found.',
           },
-        },
-        episode: {
-          select: {
-            id: true,
-            title: true,
+        });
+      }
+
+      if (result.error === 'REFINEMENT_REQUIRED') {
+        return reply.code(409).send({
+          ok: false,
+          error: {
+            code: 'PLANNER_REFINEMENT_REQUIRED',
+            message: 'No active refinement document found.',
           },
-        },
-      },
-    });
+        });
+      }
 
-    if (!plannerSession) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_SESSION_NOT_FOUND',
-          message: 'Planner session not found.',
-        },
-      });
-    }
+      if (result.error === 'REFINEMENT_LOCKED') {
+        return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
+      }
 
-    const activeRefinement = await prisma.plannerRefinementVersion.findFirst({
-      where: {
-        plannerSessionId: plannerSession.id,
-        isActive: true,
-      },
-      select: {
-        id: true,
-        structuredDocJson: true,
-        subAgentProfileId: true,
-        isConfirmed: true,
-      },
-    });
+      if (result.error === 'SCOPE_TARGET_NOT_FOUND') {
+        return reply.code(404).send({
+          ok: false,
+          error: {
+            code: 'PLANNER_SCOPE_TARGET_NOT_FOUND',
+            message: 'Target entity for partial rerun was not found.',
+          },
+        });
+      }
 
-    if (!activeRefinement?.structuredDocJson) {
-      return reply.code(409).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_REFINEMENT_REQUIRED',
-          message: 'No active refinement document found.',
-        },
-      });
-    }
+      if (result.error === 'MODEL_NOT_FOUND') {
+        return reply.code(404).send({
+          ok: false,
+          error: {
+            code: 'MODEL_NOT_FOUND',
+            message: 'No active text model endpoint matched the selection.',
+          },
+        });
+      }
 
-    if (activeRefinement.isConfirmed) {
-      return reply.code(409).send(PLANNER_REFINEMENT_LOCKED_ERROR);
-    }
-
-    const [targetSubject, targetScene, targetShots, targetActShots, recentMessages] = await Promise.all([
-      rerunScope.type === 'subject'
-        ? prisma.plannerSubject.findFirst({
-            where: {
-              id: rerunScope.subjectId,
-              refinementVersionId: activeRefinement.id,
-            },
-          })
-        : Promise.resolve(null),
-      rerunScope.type === 'scene'
-        ? prisma.plannerScene.findFirst({
-            where: {
-              id: rerunScope.sceneId,
-              refinementVersionId: activeRefinement.id,
-            },
-          })
-        : Promise.resolve(null),
-      rerunScope.type === 'shot'
-        ? prisma.plannerShotScript.findMany({
-            where: {
-              id: { in: rerunScope.shotIds },
-              refinementVersionId: activeRefinement.id,
-            },
-            orderBy: { sortOrder: 'asc' },
-          })
-        : Promise.resolve([]),
-      rerunScope.type === 'act'
-        ? prisma.plannerShotScript.findMany({
-            where: {
-              actKey: rerunScope.actId,
-              refinementVersionId: activeRefinement.id,
-            },
-            orderBy: { sortOrder: 'asc' },
-          })
-        : Promise.resolve(null),
-      prisma.plannerMessage.findMany({
-        where: {
-          plannerSessionId: plannerSession.id,
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 8,
-      }),
-    ]);
-
-    const targetEntity =
-      targetSubject
-      ?? targetScene
-      ?? (rerunScope.type === 'act'
-        ? {
-            actKey: rerunScope.actId,
-            shots: targetActShots,
-          }
-        : targetShots);
-
-    if (
-      !targetEntity
-      || (Array.isArray(targetEntity) && targetEntity.length === 0)
-      || (rerunScope.type === 'act' && targetActShots && targetActShots.length === 0)
-    ) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_SCOPE_TARGET_NOT_FOUND',
-          message: 'Target entity for partial rerun was not found.',
-        },
-      });
-    }
-
-    const userDefaultModel = !payload.data.modelFamily && !payload.data.modelEndpoint
-      ? await resolveUserDefaultModelSelection(user.id, 'TEXT')
-      : null;
-
-    const resolvedModel = await resolveModelSelection({
-      modelKind: 'TEXT',
-      familySlug: payload.data.modelFamily ?? userDefaultModel?.familySlug,
-      endpointSlug: payload.data.modelEndpoint ?? userDefaultModel?.endpointSlug,
-      strategy: 'default',
-    });
-    if (!resolvedModel) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'MODEL_NOT_FOUND',
-          message: 'No active text model endpoint matched the selection.',
-        },
-      });
-    }
-
-    const selectedContentType = plannerSession.project.creationConfig?.selectedTab ?? '短剧漫剧';
-    const selection = await resolvePlannerAgentSelection({
-      contentType: selectedContentType,
-      subtype: plannerSession.project.creationConfig?.selectedSubtype ?? undefined,
-    });
-    if (!selection) {
       return reply.code(409).send({
         ok: false,
         error: {
@@ -292,176 +122,13 @@ export async function registerPlannerPartialRerunRoutes(app: FastifyInstance) {
       });
     }
 
-    const scopeInstruction = buildScopeInstruction({
-      scope: rerunScope,
-      targetEntity: JSON.parse(JSON.stringify(targetEntity)) as Record<string, unknown> | Record<string, unknown>[],
-      prompt: payload.data.prompt,
-    });
-    const targetVideoModel = await resolvePlannerTargetVideoModel({
-      requestedFamilySlug: payload.data.targetVideoModelFamilySlug,
-      settingsJson: plannerSession.project.creationConfig?.settingsJson,
-    });
-
-    const promptPackage = buildPlannerGenerationPrompt({
-      selection,
-      targetStage: 'refinement',
-      userPrompt: scopeInstruction,
-      projectTitle: plannerSession.project.title,
-      episodeTitle: plannerSession.episode.title,
-      contentMode: plannerSession.project.contentMode,
-      scriptContent: plannerSession.project.creationConfig?.scriptContent ?? null,
-      selectedSubjectName: plannerSession.project.creationConfig?.subjectProfile?.name ?? null,
-      selectedStyleName: plannerSession.project.creationConfig?.stylePreset?.name ?? null,
-      selectedImageModelLabel: plannerSession.project.creationConfig?.imageModelEndpoint?.label ?? null,
-      targetVideoModelFamilySlug: targetVideoModel?.familySlug ?? null,
-      targetVideoModelSummary: targetVideoModel?.summary ?? null,
-      priorMessages: recentMessages
-        .reverse()
-        .map((message) => {
-          const content = message.contentJson && typeof message.contentJson === 'object' && !Array.isArray(message.contentJson)
-            ? (message.contentJson as Record<string, unknown>)
-            : {};
-
-          return {
-            role: message.role.toLowerCase(),
-            text: typeof content.text === 'string' ? content.text : JSON.stringify(content),
-          };
-        }),
-      currentStructuredDoc: activeRefinement.structuredDocJson,
-    });
-
-    const triggerType = getPlannerRerunScopeTriggerType(rerunScope);
-    const result = await prisma.$transaction(async (tx) => {
-      await tx.plannerSession.update({
-        where: { id: plannerSession.id },
-        data: {
-          status: 'UPDATING',
-        },
-      });
-
-      await createPlannerUserMessage({
-        db: tx,
-        plannerSessionId: plannerSession.id,
-        userId: user.id,
-        prompt: payload.data.prompt?.trim() || getPlannerRerunScopeUserLabel(rerunScope),
-      });
-
-      const run = await tx.run.create({
-        data: {
-          projectId: plannerSession.project.id,
-          episodeId: plannerSession.episode.id,
-          modelFamilyId: resolvedModel.family.id,
-          modelProviderId: resolvedModel.provider.id,
-          modelEndpointId: resolvedModel.endpoint.id,
-          runType: 'PLANNER_DOC_UPDATE',
-          resourceType: 'planner_session',
-          resourceId: plannerSession.id,
-          status: 'QUEUED',
-          executorType: 'SYSTEM_WORKER',
-          idempotencyKey: payload.data.idempotencyKey ?? null,
-          inputJson: serializeRunInput({
-            plannerSessionId: plannerSession.id,
-            episodeId: plannerSession.episode.id,
-            projectId: plannerSession.project.id,
-            prompt: promptPackage.promptText,
-            rawPrompt: payload.data.prompt?.trim() || getPlannerRerunScopeUserLabel(rerunScope),
-            projectTitle: plannerSession.project.title,
-            episodeTitle: plannerSession.episode.title,
-            contentMode: plannerSession.project.contentMode,
-            contentType: selection.contentType,
-            subtype: selection.subtype,
-            targetStage: 'refinement',
-            triggerType,
-            ...(targetVideoModel ? { targetVideoModelFamilySlug: targetVideoModel.familySlug } : {}),
-            scope: triggerType,
-            targetEntityId:
-              rerunScope.type === 'subject'
-                ? rerunScope.subjectId
-                : rerunScope.type === 'scene'
-                  ? rerunScope.sceneId
-                  : rerunScope.type === 'shot'
-                    ? rerunScope.shotIds[0]
-                    : rerunScope.actId,
-            rerunScope,
-            targetEntity: JSON.parse(JSON.stringify(targetEntity)) as Record<string, unknown>,
-            stepDefinitions: promptPackage.stepDefinitions,
-            promptSnapshot: promptPackage.promptSnapshot,
-            agentProfile: selection.agentProfile,
-            subAgentProfile: selection.subAgentProfile,
-            contextSnapshot: {
-              selectedTab: plannerSession.project.creationConfig?.selectedTab ?? selection.contentType,
-              selectedSubtype: plannerSession.project.creationConfig?.selectedSubtype ?? selection.subtype,
-              selectedSubject: plannerSession.project.creationConfig?.subjectProfile,
-              selectedStyle: plannerSession.project.creationConfig?.stylePreset,
-              selectedImageModel: plannerSession.project.creationConfig?.imageModelEndpoint,
-              selectedVideoModel: targetVideoModel
-                ? {
-                    familySlug: targetVideoModel.familySlug,
-                    familyName: targetVideoModel.familyName,
-                    capabilitySummary: targetVideoModel.summary,
-                  }
-                : null,
-              activeOutline:
-                plannerSession.outlineConfirmedAt
-                  ? await tx.plannerOutlineVersion.findFirst({
-                      where: {
-                        plannerSessionId: plannerSession.id,
-                        isActive: true,
-                      },
-                      orderBy: { createdAt: 'desc' },
-                      select: {
-                        id: true,
-                        versionNumber: true,
-                        outlineDocJson: true,
-                      },
-                    }).then((outline) =>
-                      outline
-                        ? {
-                            id: outline.id,
-                            versionNumber: outline.versionNumber,
-                            outlineDoc: outline.outlineDocJson,
-                          }
-                        : null)
-                  : null,
-              activeRefinement: {
-                id: activeRefinement.id,
-                structuredDoc: activeRefinement.structuredDocJson,
-              },
-            },
-            modelFamily: {
-              id: resolvedModel.family.id,
-              slug: resolvedModel.family.slug,
-              name: resolvedModel.family.name,
-            },
-            modelProvider: {
-              id: resolvedModel.provider.id,
-              code: resolvedModel.provider.code,
-              name: resolvedModel.provider.name,
-              providerType: resolvedModel.provider.providerType.toLowerCase(),
-            },
-            modelEndpoint: {
-              id: resolvedModel.endpoint.id,
-              slug: resolvedModel.endpoint.slug,
-              label: resolvedModel.endpoint.label,
-              remoteModelKey: resolvedModel.endpoint.remoteModelKey,
-            },
-          }),
-        },
-      });
-
-      return run;
-    });
-
     return reply.code(202).send({
       ok: true,
       data: {
-        plannerSession: {
-          id: plannerSession.id,
-          status: 'updating',
-        },
-        triggerType,
-        scope: triggerType,
-        run: mapRun(result),
+        plannerSession: result.plannerSession,
+        triggerType: result.triggerType,
+        scope: result.triggerType,
+        run: mapRun(result.run),
       },
     });
   });

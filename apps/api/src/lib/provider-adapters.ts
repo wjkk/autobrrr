@@ -641,3 +641,21 @@ export function resolveProviderAdapter(run: Run): ProviderAdapter {
 
   return getProviderType(run) === 'proxy' ? mockProxyAdapter : officialAdapter;
 }
+
+export const __testables = {
+  readObject,
+  readString,
+  getProviderType,
+  getProviderCode,
+  getEndpointModelKey,
+  getPrompt,
+  getModelKind,
+  normalizeProviderStatus,
+  findStringDeep,
+  inferPlatouVideoState,
+  inferPlatouVideoTaskId,
+  inferArkVideoState,
+  inferArkVideoTaskId,
+  officialAdapter,
+  mockProxyAdapter,
+};

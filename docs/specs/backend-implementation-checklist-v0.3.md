@@ -461,6 +461,7 @@ DoD：
 71. api mappers 已补 API 单测，当前覆盖 Asset/Run/Shot 的 enum lowercase、activeVersion 归一化和 timestamp 输出，避免公共 API 响应在 service seam 或 schema 扩展后静默改形
 72. catalog subject image 已补 API 单测，当前覆盖主体类型 prompt 文案、显式模型选择优先级、runtime config 缺失时的硬失败、以及 provider 输出 URL 解析，避免主体图库生图链路静默用错模型或返回空地址
 73. planner subject auto assets 已补 API 单测，当前覆盖 asset id 清洗、主体类型推断、已有草图 skip、自动生成失败汇总、事务内 asset 创建与 generatedAssetIds prepend，以及 projection 同步调用，避免自动主体图批量回写链路静默跳过或只写一半
+74. provider adapters 已补 API 单测，当前覆盖 provider code/type 解析、Ark/Platou/proxy/official adapter 选择、mock proxy 的 submit/poll/callback 状态机，以及 Ark/Platou task id 与状态字段提取，避免执行链路在 provider 扩容后静默落到错误 adapter 或错误状态
 
 DoD：
 

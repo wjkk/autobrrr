@@ -18,13 +18,58 @@ export interface ProviderRuntimeConfig {
   ownerUserId: string | null;
 }
 
-export async function resolveProviderRuntimeConfigForUser(args: {
+type RuntimeProviderRecord = {
+  id: string;
+  code: string;
+  baseUrl: string | null;
+  enabled: boolean;
+};
+
+type RuntimeUserProviderConfigRecord = {
+  apiKey: string | null;
+  baseUrlOverride: string | null;
+  enabled: boolean;
+};
+
+type RuntimeProjectOwnerRecord = {
+  createdById: string;
+};
+
+type ResolveProviderRuntimeConfigForUserArgs = {
   userId: string;
   providerId: string;
   fallbackCode?: string | null;
   fallbackBaseUrl?: string | null;
-}) {
-  const provider = await prisma.modelProvider.findUnique({
+};
+
+async function resolveProviderRuntimeConfigForUserWithDeps(
+  args: ResolveProviderRuntimeConfigForUserArgs,
+  deps: {
+    findProvider: (args: {
+      where: { id: string };
+      select: {
+        id: true;
+        code: true;
+        baseUrl: true;
+        enabled: true;
+      };
+    }) => Promise<RuntimeProviderRecord | null>;
+    findUserProviderConfig: (args: {
+      where: {
+        userId_providerId: {
+          userId: string;
+          providerId: string;
+        };
+      };
+      select: {
+        apiKey: true;
+        baseUrlOverride: true;
+        enabled: true;
+      };
+    }) => Promise<RuntimeUserProviderConfigRecord | null>;
+  },
+) {
+  const provider = await deps.findProvider({
     where: { id: args.providerId },
     select: {
       id: true,
@@ -44,7 +89,7 @@ export async function resolveProviderRuntimeConfigForUser(args: {
     } satisfies ProviderRuntimeConfig;
   }
 
-  const userConfig = await prisma.userProviderConfig.findUnique({
+  const userConfig = await deps.findUserProviderConfig({
     where: {
       userId_providerId: {
         userId: args.userId,
@@ -67,7 +112,32 @@ export async function resolveProviderRuntimeConfigForUser(args: {
   } satisfies ProviderRuntimeConfig;
 }
 
-export async function resolveRunProviderRuntimeConfig(run: Run): Promise<ProviderRuntimeConfig> {
+export async function resolveProviderRuntimeConfigForUser(args: ResolveProviderRuntimeConfigForUserArgs) {
+  return resolveProviderRuntimeConfigForUserWithDeps(args, {
+    findProvider: prisma.modelProvider.findUnique.bind(prisma.modelProvider),
+    findUserProviderConfig: prisma.userProviderConfig.findUnique.bind(prisma.userProviderConfig),
+  });
+}
+
+async function resolveRunProviderRuntimeConfigWithDeps(
+  run: Run,
+  deps: {
+    findProject: (args: {
+      where: { id: string };
+      select: { createdById: true };
+    }) => Promise<RuntimeProjectOwnerRecord | null>;
+    findProvider: (args: {
+      where: { id: string };
+      select: {
+        id: true;
+        code: true;
+        baseUrl: true;
+        enabled: true;
+      };
+    }) => Promise<RuntimeProviderRecord | null>;
+    resolveProviderRuntimeConfigForUser: typeof resolveProviderRuntimeConfigForUser;
+  },
+): Promise<ProviderRuntimeConfig> {
   const input = readObject(run.inputJson);
   const modelProvider = readObject(input.modelProvider);
   const inputProviderCode = readString(modelProvider.code);
@@ -84,11 +154,11 @@ export async function resolveRunProviderRuntimeConfig(run: Run): Promise<Provide
   }
 
   const [project, provider] = await Promise.all([
-    prisma.project.findUnique({
+    deps.findProject({
       where: { id: run.projectId },
       select: { createdById: true },
     }),
-    prisma.modelProvider.findUnique({
+    deps.findProvider({
       where: { id: run.modelProviderId },
       select: {
         id: true,
@@ -109,10 +179,23 @@ export async function resolveRunProviderRuntimeConfig(run: Run): Promise<Provide
     };
   }
 
-  return resolveProviderRuntimeConfigForUser({
+  return deps.resolveProviderRuntimeConfigForUser({
     userId: project.createdById,
     providerId: provider.id,
     fallbackCode: inputProviderCode,
     fallbackBaseUrl: inputBaseUrl,
   });
 }
+
+export async function resolveRunProviderRuntimeConfig(run: Run): Promise<ProviderRuntimeConfig> {
+  return resolveRunProviderRuntimeConfigWithDeps(run, {
+    findProject: prisma.project.findUnique.bind(prisma.project),
+    findProvider: prisma.modelProvider.findUnique.bind(prisma.modelProvider),
+    resolveProviderRuntimeConfigForUser,
+  });
+}
+
+export const __testables = {
+  resolveProviderRuntimeConfigForUserWithDeps,
+  resolveRunProviderRuntimeConfigWithDeps,
+};

@@ -428,6 +428,7 @@ DoD：
 38. settings/provider 页面 helper 已补 web 单测，当前覆盖 draft 初始化、text/image/video 测试优先级、audio 模型选择读写和自动静默 sync 判定，避免配置页 UI 规则静默漂移
 39. settings/provider 请求与错误解析 helper 已补 web 单测，当前覆盖保存 payload 组装、providerConfig 失败态透传和 auth user 解析，避免配置页 fetch 层静默漂移
 40. 浏览器主链路回归已覆盖 `/settings/providers`，当前断言 Ark 卡片与 text/image/video/audio 四个模型区块真实渲染，避免 provider settings 页在回归中长期失守
+41. provider runtime config 已补 API 单测，当前覆盖 provider 缺失 fallback、用户 override 的 baseUrl/apiKey/enabled，以及 run 按 project owner 解析 provider config，避免生成链路运行时悄悄用错凭据
 
 DoD：
 

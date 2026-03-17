@@ -104,3 +104,9 @@ export function createExternalApiCallLogHook(): TransportHook {
     await persistExternalApiCallLog(event);
   };
 }
+
+export const __testables = {
+  truncateString,
+  normalizeJsonValue,
+  readProviderRequestId,
+};

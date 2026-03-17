@@ -135,3 +135,10 @@ export async function registerGeneratedUploadRoutes(app: FastifyInstance) {
     }
   });
 }
+
+export const __testables = {
+  getExtensionForMimeType,
+  inferMimeTypeFromExtension,
+  buildPublicBaseUrl,
+  buildRelativeStorageKey,
+};

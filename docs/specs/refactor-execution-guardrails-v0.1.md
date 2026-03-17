@@ -257,6 +257,8 @@
 54. catalog subject image 这类“模型选择 + provider 配置 + URL 解析”三段式链路也必须有 API 单测，至少锁住显式模型优先级、runtime config 缺失硬失败和 provider 输出地址提取；否则图库生图最容易出现“成功调用但回不来图”或“悄悄用了错误默认模型”
 55. planner subject auto assets 这类“批量生成 + 事务回写 + projection 同步”的链路也必须有 API 单测，至少锁住 skip/fail/create 三种汇总结果、`generatedAssetIds` prepend 和 projection 同步触发；否则自动草图最容易出现批处理只执行一半、回写顺序错误或文档不同步
 56. provider adapters 这类“Run 执行入口最后一跳”的模块也必须有 API 单测，至少锁住 adapter 选择矩阵、mock proxy fallback 状态机和 Ark/Platou 任务状态提取；否则 provider 扩容或 run input schema 变化后最容易把执行 silently 路由到错误适配器
+57. asset storage 这类“provider 输出 -> 本地文件 -> 对外 URL”基础设施也必须有 API 单测，至少锁住扩展名推断、mime 反推和 dated storage key 规则；否则本地落盘一旦漂移，主链路会出现生成成功但资源路径不可访问
+58. external api call logs 这类“观测链最后落库前”的裁剪层也必须有 API 单测，至少锁住字符串/深度截断和 provider request id 提取；否则日志表要么被异常大 payload 污染，要么 silently 丢失关联 id
 50. project title / slug / label 这类入口级小 helper 也应补最小单测；它们看起来简单，但一旦截断或 fallback 规则漂移，会直接污染项目列表、回归截图和 debug 追踪定位
 51. planner refinement access / media generation 这类 guard-heavy service 不能只靠路由或 smoke 覆盖；至少要锁住资产归属校验、entity kind 到 resourceType 的映射、默认模型回退以及 refinement locked 时的硬失败
 52. creation run service 这类“真正把用户点击转成 queued run”的入口层，也必须有 API 单测，至少锁住 `NOT_FOUND / MODEL_NOT_FOUND`、显式模型覆盖、用户默认模型回退、prompt override 持久化和 run input 序列化；否则生成链路最容易出现“页面能点但后台排到了错模型”的静默回归

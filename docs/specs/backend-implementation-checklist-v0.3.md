@@ -462,6 +462,8 @@ DoD：
 72. catalog subject image 已补 API 单测，当前覆盖主体类型 prompt 文案、显式模型选择优先级、runtime config 缺失时的硬失败、以及 provider 输出 URL 解析，避免主体图库生图链路静默用错模型或返回空地址
 73. planner subject auto assets 已补 API 单测，当前覆盖 asset id 清洗、主体类型推断、已有草图 skip、自动生成失败汇总、事务内 asset 创建与 generatedAssetIds prepend，以及 projection 同步调用，避免自动主体图批量回写链路静默跳过或只写一半
 74. provider adapters 已补 API 单测，当前覆盖 provider code/type 解析、Ark/Platou/proxy/official adapter 选择、mock proxy 的 submit/poll/callback 状态机，以及 Ark/Platou task id 与状态字段提取，避免执行链路在 provider 扩容后静默落到错误 adapter 或错误状态
+75. asset storage 已补 API 单测，当前覆盖图片/视频扩展名推断、文件后缀 -> mime 反推，以及基于日期的本地 storage key 生成，避免本地落盘路径和公开 URL 推断在重构中静默漂移
+76. external api call logs 已补 API 单测，当前覆盖 request/response JSON 裁剪、深度截断、字符串截断和 provider request id 提取，避免审计落库在 payload 变大或 provider 返回结构变化后静默失真
 
 DoD：
 

@@ -440,6 +440,7 @@ DoD：
 50. Planner 视频模型选项已补 web 单测，当前覆盖 Seedance/Veo/Seko 基线选项与 `findPlannerVideoModelOption(...)` 查找规则，避免模型切换入口静默指向错误 slug
 51. Creation 本地 media fallback 纯函数已补 web 单测，当前覆盖缺失 shot 的空资源、summary strip、shot/version 索引归一化与循环 offset，避免预览图在本地 demo/回归环境中静默错位
 52. planner workspace service 已补 API 单测，当前覆盖 stage 推导、planner asset id 去重聚合、以及 latestPlannerRun 的 `generatedText / structuredDoc / timestamp` 映射，避免 Planner 工作区输出形状静默漂移
+53. planner refinement draft copy 的纯 remap 规则已补 API 单测，当前覆盖 confirmed 判定、subject binding remap、以及 structured doc 中 `subject/scene/shot entityKey` 的重写，避免确认版创建草稿后实体链路静默断裂
 
 DoD：
 

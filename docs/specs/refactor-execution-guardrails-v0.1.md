@@ -242,6 +242,7 @@
 39. 模型选项表与 `find*Option(...)` 这类小型查找层同样要锁住；它们直接影响用户选择写入的 slug，错了会把整条生成链路带偏
 40. 本地 media fallback / demo 资源索引这类“只在回归与演示环境里显性出现”的纯函数也要锁住；这类逻辑最容易被忽视，但一旦漂移会直接破坏浏览器回归信号
 41. workspace service 这类把 Prisma 记录整理成页面工作区 DTO 的映射层，也必须有 API 单测，至少锁住 stage 推导、资源 id 聚合和最新 run 输出结构，避免前端依赖字段在 service seam 中被静默改坏
+42. draft copy / version clone 这类“不是主流程但直接影响版本链正确性”的 remap 逻辑也必须有 API 单测，至少锁住 confirmed 判定、binding 重写和 structured doc entityKey remap，避免局部编辑链路在后续重构中静默损坏
 34. settings/provider 这类直接调用 fetch 的页面，还必须把请求 payload 和错误解析 helper 拆出来进 web 单测，避免 UI 层每次改交互都顺手打穿错误处理
 35. 浏览器主链路回归除 Planner / Creation / Publish 外，还应覆盖 `/settings/providers` 这类 AI 配置入口，至少锁住 provider 卡片和多模型区块真实渲染
 36. provider runtime config 这类“运行时到底读取哪个 provider 凭据和 baseUrl”的决策层，也必须有 API 单测，避免页面配置正确但执行链路落到错误 owner 或 fallback

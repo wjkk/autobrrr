@@ -301,3 +301,10 @@ export async function createPlannerRefinementDraftCopy(args: {
 
   return draftVersion;
 }
+
+export const __testables = {
+  toNullableJsonInput,
+  remapAssetIdBindings,
+  remapStructuredDocEntityKeys,
+  isPlannerRefinementConfirmed,
+};

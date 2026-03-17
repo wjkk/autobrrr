@@ -20,6 +20,35 @@ function buildProviderOutputJson(run: Run, update: ProviderAdapterUpdate) {
   } as Prisma.InputJsonValue;
 }
 
+async function processClaimedRunWithDeps(
+  run: Run,
+  deps: {
+    handleProviderSubmission: (run: Run) => Promise<WorkerAction>;
+    handleProviderPoll: (run: Run) => Promise<WorkerAction>;
+    failRun: typeof failRun;
+    inferMediaKindFromRunType: typeof inferMediaKindFromRunType;
+  },
+) {
+  if (run.runType === 'PLANNER_DOC_UPDATE') {
+    if (run.providerJobId) {
+      return deps.handleProviderPoll(run);
+    }
+
+    return deps.handleProviderSubmission(run);
+  }
+
+  const mediaKind = deps.inferMediaKindFromRunType(run.runType);
+  if (!mediaKind) {
+    return deps.failRun(run.id, 'RUN_TYPE_NOT_SUPPORTED', `Unsupported run type: ${run.runType}`);
+  }
+
+  if (run.providerJobId) {
+    return deps.handleProviderPoll(run);
+  }
+
+  return deps.handleProviderSubmission(run);
+}
+
 export type WorkerAction =
   | { runId: string; status: string; action: 'submitted'; providerJobId: string }
   | { runId: string; status: string; action: 'polled'; providerStatus: string }
@@ -193,22 +222,15 @@ export async function processNextQueuedRun(): Promise<WorkerAction | null> {
     return null;
   }
 
-  if (run.runType === 'PLANNER_DOC_UPDATE') {
-    if (run.providerJobId) {
-      return handleProviderPoll(run);
-    }
-
-    return handleProviderSubmission(run);
-  }
-
-  const mediaKind = inferMediaKindFromRunType(run.runType);
-  if (!mediaKind) {
-    return failRun(run.id, 'RUN_TYPE_NOT_SUPPORTED', `Unsupported run type: ${run.runType}`);
-  }
-
-  if (run.providerJobId) {
-    return handleProviderPoll(run);
-  }
-
-  return handleProviderSubmission(run);
+  return processClaimedRunWithDeps(run, {
+    handleProviderSubmission,
+    handleProviderPoll,
+    failRun,
+    inferMediaKindFromRunType,
+  });
 }
+
+export const __testables = {
+  buildProviderOutputJson,
+  processClaimedRunWithDeps,
+};

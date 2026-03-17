@@ -470,6 +470,7 @@ DoD：
 80. planner agent schemas 这类“AI 策划 agent 输出协议与 fallback 包装”的解析层也已补 API 单测，当前覆盖 outline/refinement assistant package 的默认包、stage mismatch 回退和非法 JSON fallback，避免 agent 输出轻微漂移时直接打穿主链路
 81. planner debug contract 这类“AI 调试入口直接暴露给 route 的 Zod schema”也已补 API 单测，当前锁住 debug run 默认值、compare 双边必填、priorMessages/plannerAssets 上限和 list query limit coercion，避免调试入口参数悄悄漂移后把 replay/compare 链路打穿
 82. planner debug shared 这类“debug 详情页 usage/prompt/diff 的 presenter/helper”也已补 API 单测，当前覆盖 provider usage 成本计算、prompt snapshot 归一化，以及 partial rerun diff summary 的 bridge 逻辑，避免 debug 页面解释层 silently 漂移或局部重跑 diff 恒为空
+83. run worker 这类“queued/running run 在 submit/poll/fail 之间分流的执行桥接层”也已补 API 单测，当前锁住 providerData 合并、claimed run 的 submit/poll 分流，以及 unsupported runType 的硬失败，避免后续扩 runType 或 adapter 时把执行 silently 路由错分支
 
 DoD：
 

@@ -167,6 +167,16 @@ def main():
             page.get_by_text('发布作品').first.wait_for(timeout=UI_TIMEOUT_MS)
             page.screenshot(path=str(OUT_DIR / 'publish.png'), full_page=True)
 
+            page.goto(f'{WEB_BASE}/settings/providers', wait_until='domcontentloaded')
+            page.get_by_role('heading', name='把模型权限交给用户自己配置').wait_for(timeout=UI_TIMEOUT_MS)
+            ark_card = page.locator('section').filter(has=page.get_by_role('heading', name='Volcengine Ark')).first
+            ark_card.wait_for(timeout=UI_TIMEOUT_MS)
+            ark_card.get_by_text('文本模型', exact=True).wait_for(timeout=UI_TIMEOUT_MS)
+            ark_card.get_by_text('图片模型', exact=True).wait_for(timeout=UI_TIMEOUT_MS)
+            ark_card.get_by_text('视频模型', exact=True).wait_for(timeout=UI_TIMEOUT_MS)
+            ark_card.get_by_text('音频模型', exact=True).wait_for(timeout=UI_TIMEOUT_MS)
+            page.screenshot(path=str(OUT_DIR / 'settings-providers.png'), full_page=True)
+
             browser.close()
 
         print(json.dumps({
@@ -175,6 +185,7 @@ def main():
                 'planner': str(OUT_DIR / 'planner.png'),
                 'creation': str(OUT_DIR / 'creation.png'),
                 'publish': str(OUT_DIR / 'publish.png'),
+                'settingsProviders': str(OUT_DIR / 'settings-providers.png'),
             },
         }, ensure_ascii=False, indent=2))
     finally:

@@ -235,6 +235,7 @@
 32. service seam 引入后，provider settings 这类 route 下沉出来的 query/catalog 决策层也必须有 API 单测，避免只是把厚 route 平移到新 service 而没有锁住行为
 33. settings/provider 这类带草稿态、自动 sync 和多模型选择的页面，也必须把页面 helper 拆出来进 web 单测，不能只靠浏览器 smoke 覆盖
 34. settings/provider 这类直接调用 fetch 的页面，还必须把请求 payload 和错误解析 helper 拆出来进 web 单测，避免 UI 层每次改交互都顺手打穿错误处理
+35. 浏览器主链路回归除 Planner / Creation / Publish 外，还应覆盖 `/settings/providers` 这类 AI 配置入口，至少锁住 provider 卡片和多模型区块真实渲染
 
 ## 8. 回滚与停手条件
 

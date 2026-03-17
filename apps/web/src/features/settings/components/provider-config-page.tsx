@@ -22,7 +22,7 @@ import {
   type ModelEndpointOption,
   type ModelKind,
   type SettingsProviderTestKind,
-} from './provider-config-page-helpers.js';
+} from './provider-config-page-helpers';
 import styles from './provider-config-page.module.css';
 
 interface ProviderConfigPageProps {

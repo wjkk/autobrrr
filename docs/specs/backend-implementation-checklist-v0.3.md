@@ -866,3 +866,4 @@ DoD：
 3. 下一阶段的重点已经从“从零搭建”切换成“重构与模块化升级”
 4. planner api 这类“前端真实页面直连 runtime api 的 envelope/path helper”也已补 web 单测，当前覆盖 JSON envelope 解包、错误回退、shot prompt preview query 拼装和素材上传 multipart 请求，避免页面请求层 silently 漂移
 5. planner 首屏 bootstrap 这类“server-only 请求编排 + 纯页面初始化决策”已开始拆成独立 bootstrap 模块并补 web 单测，当前已锁住 episode 选择、refinement/outline/latest-run structured doc 优先级，以及 fixture fallback，避免首屏加载静默漂移
+6. password/session/auth 这类“认证基础纯逻辑和会话校验”也已补 API 单测，当前覆盖密码哈希校验、session token 哈希、过期/撤销/禁用会话拒绝，以及 `requireUser` 的 401 回包，避免主链路因基础认证回归被静默打断

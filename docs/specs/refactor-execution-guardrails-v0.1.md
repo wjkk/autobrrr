@@ -229,8 +229,9 @@
 26. Publish 这类依赖弹窗完成历史来源绑定的页面，浏览器回归还应覆盖弹窗打开与基础交互，不能只验证页面静态文案存在
 27. provider catalog / model discovery 这类“配置页能不能正确列出模型”的分类逻辑，也必须有 API 单测，不能只靠真人点 `/settings/providers` 临时验证
 28. provider config options 这类“页面保存什么配置、默认值如何合并”的纯函数，也必须有 API 单测，避免用户配置被 merge 逻辑静默抹掉
-29. user default model selection 这类“运行时真正选中哪个 endpoint”的决策逻辑，也必须有 API 单测，避免配置页显示正确但生成链路落到错误模型
-30. 合并前默认执行 `pnpm test:quality`，除非明确知道本次变更只影响某个局部并已有更小验证集合
+29. provider settings presenter 这类“后端返回给配置页的展示态映射”也必须有 API 单测，避免 API key 脱敏、audio/default 状态和空态返回在 presenter 层静默漂移
+30. user default model selection 这类“运行时真正选中哪个 endpoint”的决策逻辑，也必须有 API 单测，避免配置页显示正确但生成链路落到错误模型
+31. 合并前默认执行 `pnpm test:quality`，除非明确知道本次变更只影响某个局部并已有更小验证集合
 
 ## 8. 回滚与停手条件
 

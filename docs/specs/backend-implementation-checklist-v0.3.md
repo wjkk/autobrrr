@@ -423,6 +423,7 @@ DoD：
 33. ARK 模型目录分类已补 API 单测，当前覆盖 text/image/video/audio 分类、metadata 优先级、重复模型去重、未知模型过滤，避免 provider settings 同步逻辑静默漂移
 34. provider config options 纯函数已补 API 单测，当前覆盖默认 endpoint、启用模型列表、catalog sync 状态解析与 merge，避免 settings/provider 页面配置写回时悄悄丢字段
 35. user model defaults 决策层已补 API 单测，当前覆盖默认 endpoint 命中、provider ownership、启用列表过滤，避免运行时实际选中的模型与用户配置悄悄偏离
+36. provider config presenter 已补 API 单测，当前覆盖 API key 脱敏、audio 默认值与启用模型映射、catalog sync / lastTest 展示态，以及未配置 provider 的空态返回，避免配置页展示层静默漂移
 
 DoD：
 

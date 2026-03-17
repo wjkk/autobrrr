@@ -233,6 +233,7 @@
 30. user default model selection 这类“运行时真正选中哪个 endpoint”的决策逻辑，也必须有 API 单测，避免配置页显示正确但生成链路落到错误模型
 31. 合并前默认执行 `pnpm test:quality`，除非明确知道本次变更只影响某个局部并已有更小验证集合
 32. service seam 引入后，provider settings 这类 route 下沉出来的 query/catalog 决策层也必须有 API 单测，避免只是把厚 route 平移到新 service 而没有锁住行为
+33. settings/provider 这类带草稿态、自动 sync 和多模型选择的页面，也必须把页面 helper 拆出来进 web 单测，不能只靠浏览器 smoke 覆盖
 
 ## 8. 回滚与停手条件
 

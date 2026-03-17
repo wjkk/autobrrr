@@ -4,130 +4,24 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ProviderConfigItem, SettingsAuthUser } from '../lib/provider-config-api';
+import {
+  CONFIGURABLE_PROVIDER_CODES,
+  getDefaultModelSlug,
+  getEnabledModelSlugs,
+  makeDraft,
+  modelKindLabel,
+  setEnabledModelSlugs,
+  shouldAutoSyncConfig,
+  type DraftState,
+  type ModelEndpointOption,
+  type ModelKind,
+  type SettingsProviderTestKind,
+} from './provider-config-page-helpers.js';
 import styles from './provider-config-page.module.css';
 
 interface ProviderConfigPageProps {
   initialConfigs: ProviderConfigItem[];
   currentUser: SettingsAuthUser | null;
-}
-
-const CONFIGURABLE_PROVIDER_CODES = new Set(['ark', 'platou']);
-
-interface DraftState {
-  apiKey: string;
-  baseUrlOverride: string;
-  enabled: boolean;
-  testKind: 'text' | 'image' | 'video';
-  enabledModels: {
-    textEndpointSlugs: string[];
-    imageEndpointSlugs: string[];
-    videoEndpointSlugs: string[];
-    audioEndpointSlugs: string[];
-  };
-  defaults: {
-    textEndpointSlug: string;
-    imageEndpointSlug: string;
-    videoEndpointSlug: string;
-    audioEndpointSlug: string;
-  };
-}
-
-type ModelKind = 'text' | 'image' | 'video' | 'audio';
-
-interface ModelEndpointOption {
-  id: string;
-  slug: string;
-  label: string;
-  modelKind: string;
-}
-
-function makeDraft(config: ProviderConfigItem): DraftState {
-  return {
-    apiKey: '',
-    baseUrlOverride: config.userConfig.baseUrlOverride ?? config.provider.baseUrl ?? '',
-    enabled: config.userConfig.enabled,
-    testKind: config.endpoints.some((endpoint) => endpoint.modelKind === 'text')
-      ? 'text'
-      : config.endpoints.some((endpoint) => endpoint.modelKind === 'image')
-        ? 'image'
-        : 'video',
-    enabledModels: {
-      textEndpointSlugs: config.userConfig.enabledModels.textEndpointSlugs,
-      imageEndpointSlugs: config.userConfig.enabledModels.imageEndpointSlugs,
-      videoEndpointSlugs: config.userConfig.enabledModels.videoEndpointSlugs,
-      audioEndpointSlugs: config.userConfig.enabledModels.audioEndpointSlugs,
-    },
-    defaults: {
-      textEndpointSlug: config.userConfig.defaults.textEndpointSlug ?? '',
-      imageEndpointSlug: config.userConfig.defaults.imageEndpointSlug ?? '',
-      videoEndpointSlug: config.userConfig.defaults.videoEndpointSlug ?? '',
-      audioEndpointSlug: config.userConfig.defaults.audioEndpointSlug ?? '',
-    },
-  };
-}
-
-function modelKindLabel(modelKind: ModelKind) {
-  if (modelKind === 'text') {
-    return '文本';
-  }
-  if (modelKind === 'image') {
-    return '图片';
-  }
-  if (modelKind === 'video') {
-    return '视频';
-  }
-  return '音频';
-}
-
-function getEnabledModelSlugs(draft: DraftState, modelKind: ModelKind) {
-  if (modelKind === 'text') {
-    return draft.enabledModels.textEndpointSlugs;
-  }
-  if (modelKind === 'image') {
-    return draft.enabledModels.imageEndpointSlugs;
-  }
-  if (modelKind === 'audio') {
-    return draft.enabledModels.audioEndpointSlugs;
-  }
-  return draft.enabledModels.videoEndpointSlugs;
-}
-
-function getDefaultModelSlug(draft: DraftState, modelKind: ModelKind) {
-  if (modelKind === 'text') {
-    return draft.defaults.textEndpointSlug;
-  }
-  if (modelKind === 'image') {
-    return draft.defaults.imageEndpointSlug;
-  }
-  if (modelKind === 'audio') {
-    return draft.defaults.audioEndpointSlug;
-  }
-  return draft.defaults.videoEndpointSlug;
-}
-
-function setEnabledModelSlugs(draft: DraftState, modelKind: ModelKind, nextSlugs: string[]): DraftState['enabledModels'] {
-  if (modelKind === 'text') {
-    return {
-      ...draft.enabledModels,
-      textEndpointSlugs: nextSlugs,
-    };
-  }
-  if (modelKind === 'image') {
-    return {
-      ...draft.enabledModels,
-      imageEndpointSlugs: nextSlugs,
-    };
-  }
-  if (modelKind === 'audio') {
-    return {
-      ...draft.enabledModels,
-      audioEndpointSlugs: nextSlugs,
-    };
-  }
-  return {
-    ...draft.enabledModels,
-    videoEndpointSlugs: nextSlugs,
-  };
 }
 
 function ModelSelectionSection(props: {
@@ -336,7 +230,7 @@ async function updateProviderConfig(providerCode: string, draft: DraftState): Pr
   return payload.data;
 }
 
-async function testProviderConfig(providerCode: string, testKind: 'text' | 'image' | 'video'): Promise<ProviderConfigItem> {
+async function testProviderConfig(providerCode: string, testKind: SettingsProviderTestKind): Promise<ProviderConfigItem> {
   const response = await fetch(`/api/provider-configs/${encodeURIComponent(providerCode)}/test`, {
     method: 'POST',
     headers: {
@@ -605,13 +499,7 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
 
   useEffect(() => {
     for (const config of configs) {
-      if (!CONFIGURABLE_PROVIDER_CODES.has(config.provider.code)) {
-        continue;
-      }
-      if (!config.userConfig.configured || !config.userConfig.enabled) {
-        continue;
-      }
-      if (config.userConfig.catalogSync.syncedAt || autoSyncedCodesRef.current.has(config.provider.code) || syncingCode === config.provider.code) {
+      if (!shouldAutoSyncConfig(config, syncingCode, autoSyncedCodesRef.current)) {
         continue;
       }
 

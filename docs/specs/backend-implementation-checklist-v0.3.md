@@ -415,6 +415,7 @@ DoD：
 25. Planner -> Creation 的 CTA 决策逻辑已抽成纯函数并补 web unit，当前覆盖“是否需要重新 finalize”“何时允许直接进入创作”“无分镜或积分不足时禁用 CTA”三类高风险规则
 26. Creation workspace 合并层已补 web unit，当前覆盖 finalize 后的 `preferredModel / materialBindings / duration / playback / lipSync baseShotId` 映射，避免页面运行时状态与后端 workspace 悄悄脱节
 27. Creation UI state 纯函数已补 web unit，当前覆盖 generation draft、canvas draft、story tool draft、model picker 分类、view mode fallback，避免前端局部编辑器默认值静默漂移
+28. Publish 页面 helper / presenter 已补 web unit，当前覆盖初始历史来源选择、分类过滤、指标摘要构造、以及历史作品回填到发布草稿的绑定逻辑
 
 DoD：
 

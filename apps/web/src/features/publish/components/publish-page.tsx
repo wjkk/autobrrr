@@ -10,6 +10,14 @@ import { StageLinks } from '@/features/shared/components/stage-links';
 import { publishCopy } from '@/lib/copy';
 
 import type { ApiPublishWorkspace, PublishRuntimeApiContext, PublishSubmitResult } from '../lib/publish-api';
+import {
+  applyPublishHistoryBinding,
+  buildPublishMetricSummary,
+  filterPublishHistoryWorks,
+  listPublishHistoryCategories,
+  resolveInitialPublishHistoryId,
+  type PublishHistoryCategory,
+} from '../lib/publish-page-helpers';
 import type { PublishPageData } from '../lib/publish-page-data';
 import styles from './publish-page.module.css';
 
@@ -19,66 +27,43 @@ interface PublishPageProps {
   initialPublishWorkspace?: ApiPublishWorkspace | null;
 }
 
-const HISTORY_CATEGORIES = ['全部', '短剧漫剧', '音乐MV', '知识分享'] as const;
-
-function resolveInitialHistoryId(studio: PublishPageData) {
-  return studio.historyWorks.find((item) => item.title === studio.publish.draft.title)?.id ?? studio.historyWorks[0]?.id ?? null;
-}
-
 export function PublishPage({ studio, runtimeApi, initialPublishWorkspace }: PublishPageProps) {
   const router = useRouter();
-  const initialHistoryId = resolveInitialHistoryId(studio);
+  const initialHistoryId = resolveInitialPublishHistoryId(studio);
   const [draft, setDraft] = useState<PublishDraft>(studio.publish.draft);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(initialHistoryId);
   const [historyPickerOpen, setHistoryPickerOpen] = useState(false);
   const [pickerSelectionId, setPickerSelectionId] = useState<string | null>(initialHistoryId);
-  const [activeCategory, setActiveCategory] = useState<(typeof HISTORY_CATEGORIES)[number]>('全部');
+  const [activeCategory, setActiveCategory] = useState<PublishHistoryCategory>('全部');
   const [notice, setNotice] = useState<string | null>(null);
   const [successOpen, setSuccessOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const filteredHistoryWorks = useMemo(() => {
-    if (activeCategory === '全部') {
-      return studio.historyWorks;
-    }
-
-    return studio.historyWorks.filter((item) => item.category === activeCategory);
-  }, [activeCategory, studio.historyWorks]);
+  const filteredHistoryWorks = useMemo(() => filterPublishHistoryWorks(studio, activeCategory), [activeCategory, studio]);
 
   const selectedHistory = studio.historyWorks.find((item) => item.id === selectedHistoryId) ?? null;
   const pickerSelection = studio.historyWorks.find((item) => item.id === pickerSelectionId) ?? null;
   const publishSummary = initialPublishWorkspace?.summary ?? null;
 
   const metricSummary = useMemo(
-    () => [
-      { label: '当前项目', value: studio.project.title, meta: `${studio.project.aspectRatio} · ${publishSummary?.readyToPublish ? '可发布' : '待发布'}` },
-      { label: '历史作品', value: String(studio.historyWorks.length), meta: selectedHistory?.category ?? '未绑定' },
-      { label: '当前来源', value: selectedHistory?.title ?? '未选择', meta: selectedHistory?.durationLabel ?? '--:--' },
-      {
-        label: '可发布分镜',
-        value: publishSummary ? `${publishSummary.publishableShotCount}/${publishSummary.totalShots}` : '--',
-        meta: draft.status === 'submitted' ? '提交后进入审核队列' : '提交前请确认素材完整',
-      },
-    ],
-    [draft.status, publishSummary, selectedHistory, studio.historyWorks.length, studio.project.aspectRatio, studio.project.title],
+    () => buildPublishMetricSummary({ studio, selectedHistory, publishSummary, draft }),
+    [draft, publishSummary, selectedHistory, studio],
   );
 
   const applyHistoryBinding = (historyId: string) => {
-    const target = studio.historyWorks.find((item) => item.id === historyId);
-
-    if (!target) {
+    const result = applyPublishHistoryBinding({
+      historyWorks: studio.historyWorks,
+      draft,
+      historyId,
+    });
+    if (!result) {
       return;
     }
 
-    setSelectedHistoryId(historyId);
-    setPickerSelectionId(historyId);
-    setDraft((current) => ({
-      ...current,
-      title: target.title,
-      intro: target.intro,
-      script: target.script,
-    }));
-    setNotice('已从历史作品回填标题、简介与剧本描述。');
+    setSelectedHistoryId(result.selectedHistoryId);
+    setPickerSelectionId(result.selectedHistoryId);
+    setDraft(result.draft);
+    setNotice(result.notice);
   };
 
   const openHistoryPicker = () => {
@@ -342,7 +327,7 @@ export function PublishPage({ studio, runtimeApi, initialPublishWorkspace }: Pub
       >
         <div className={styles.historyPickerBody}>
           <div className={styles.historyCategoryRow}>
-            {HISTORY_CATEGORIES.map((item) => (
+            {listPublishHistoryCategories().map((item) => (
               <button
                 key={item}
                 type="button"

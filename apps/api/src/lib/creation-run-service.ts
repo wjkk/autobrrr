@@ -38,17 +38,25 @@ export type QueueShotGenerationRunResult =
     }
   | { ok: false; error: 'NOT_FOUND' | 'MODEL_NOT_FOUND' };
 
-export async function queueShotGenerationRun(args: QueueShotGenerationRunArgs): Promise<QueueShotGenerationRunResult> {
-  const shot = await findOwnedShot(args.projectId, args.shotId, args.userId);
+async function queueShotGenerationRunWithDeps(
+  args: QueueShotGenerationRunArgs,
+  deps: {
+    findOwnedShot: typeof findOwnedShot;
+    resolveUserDefaultModelSelection: typeof resolveUserDefaultModelSelection;
+    resolveModelSelection: typeof resolveModelSelection;
+    prisma: Pick<typeof prisma, '$transaction'>;
+  },
+): Promise<QueueShotGenerationRunResult> {
+  const shot = await deps.findOwnedShot(args.projectId, args.shotId, args.userId);
   if (!shot) {
     return { ok: false, error: 'NOT_FOUND' };
   }
 
   const userDefaultModel = !args.modelFamily && !args.modelEndpoint
-    ? await resolveUserDefaultModelSelection(args.userId, args.modelKind)
+    ? await deps.resolveUserDefaultModelSelection(args.userId, args.modelKind)
     : null;
 
-  const resolvedModel = await resolveModelSelection({
+  const resolvedModel = await deps.resolveModelSelection({
     modelKind: args.modelKind,
     familySlug: args.modelFamily ?? shot.targetVideoModelFamilySlug ?? userDefaultModel?.familySlug,
     endpointSlug: args.modelEndpoint ?? userDefaultModel?.endpointSlug,
@@ -60,7 +68,7 @@ export async function queueShotGenerationRun(args: QueueShotGenerationRunArgs): 
 
   const effectivePrompt = args.promptOverride ?? shot[args.promptField];
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await deps.prisma.$transaction(async (tx) => {
     await tx.project.update({
       where: { id: shot.projectId },
       data: { status: 'CREATING' },
@@ -142,3 +150,16 @@ export async function queueShotGenerationRun(args: QueueShotGenerationRunArgs): 
     run: result.run,
   };
 }
+
+export async function queueShotGenerationRun(args: QueueShotGenerationRunArgs): Promise<QueueShotGenerationRunResult> {
+  return queueShotGenerationRunWithDeps(args, {
+    findOwnedShot,
+    resolveUserDefaultModelSelection,
+    resolveModelSelection,
+    prisma,
+  });
+}
+
+export const __testables = {
+  queueShotGenerationRunWithDeps,
+};

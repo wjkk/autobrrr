@@ -252,6 +252,7 @@
 49. planner agent registry 这类“内容类型 + subtype -> agent/sub-agent”的选择层也必须进 API 单测，至少锁住 subtype trim、按 subtype 命中和 latest active fallback；否则策划链路很容易在 agent 配置增长后静默选错模版
 50. project title / slug / label 这类入口级小 helper 也应补最小单测；它们看起来简单，但一旦截断或 fallback 规则漂移，会直接污染项目列表、回归截图和 debug 追踪定位
 51. planner refinement access / media generation 这类 guard-heavy service 不能只靠路由或 smoke 覆盖；至少要锁住资产归属校验、entity kind 到 resourceType 的映射、默认模型回退以及 refinement locked 时的硬失败
+52. creation run service 这类“真正把用户点击转成 queued run”的入口层，也必须有 API 单测，至少锁住 `NOT_FOUND / MODEL_NOT_FOUND`、显式模型覆盖、用户默认模型回退、prompt override 持久化和 run input 序列化；否则生成链路最容易出现“页面能点但后台排到了错模型”的静默回归
 34. settings/provider 这类直接调用 fetch 的页面，还必须把请求 payload 和错误解析 helper 拆出来进 web 单测，避免 UI 层每次改交互都顺手打穿错误处理
 35. 浏览器主链路回归除 Planner / Creation / Publish 外，还应覆盖 `/settings/providers` 这类 AI 配置入口，至少锁住 provider 卡片和多模型区块真实渲染
 36. provider runtime config 这类“运行时到底读取哪个 provider 凭据和 baseUrl”的决策层，也必须有 API 单测，避免页面配置正确但执行链路落到错误 owner 或 fallback

@@ -159,6 +159,11 @@ def main():
             if publish_stage_nav.get_by_role('link', name='发布').get_attribute('aria-current') != 'page':
                 raise RuntimeError('Publish page stage navigation did not mark 发布 as active.')
             page.get_by_role('button', name='发布作品').first.wait_for(timeout=UI_TIMEOUT_MS)
+            page.get_by_role('button', name='从历史创作中选择').wait_for(timeout=UI_TIMEOUT_MS)
+            page.get_by_role('button', name='从历史创作中选择').click()
+            page.get_by_role('dialog', name='从历史创作中选择').wait_for(timeout=UI_TIMEOUT_MS)
+            page.get_by_role('button', name='全部').wait_for(timeout=UI_TIMEOUT_MS)
+            page.get_by_role('button', name='取消').click()
             page.get_by_text('发布作品').first.wait_for(timeout=UI_TIMEOUT_MS)
             page.screenshot(path=str(OUT_DIR / 'publish.png'), full_page=True)
 

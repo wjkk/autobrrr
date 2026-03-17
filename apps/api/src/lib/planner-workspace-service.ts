@@ -2,6 +2,87 @@ import { mapAsset } from './api-mappers.js';
 import { prisma } from './prisma.js';
 import { requireOwnedEpisode } from './workspace-shared.js';
 
+function readStringIds(value: unknown) {
+  return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string' && id.length > 0) : [];
+}
+
+function resolvePlannerStage(args: { outlineConfirmedAt: Date | null } | null, activeOutline: { id: string } | null) {
+  return args?.outlineConfirmedAt ? 'refinement' : activeOutline ? 'outline' : 'idle';
+}
+
+function collectPlannerAssetIds(
+  subjects: Array<{ referenceAssetIdsJson: unknown; generatedAssetIdsJson: unknown }>,
+  scenes: Array<{ referenceAssetIdsJson: unknown; generatedAssetIdsJson: unknown }>,
+  shots: Array<{ referenceAssetIdsJson: unknown; generatedAssetIdsJson: unknown }>,
+) {
+  const assetIds = new Set<string>();
+
+  for (const subject of subjects) {
+    for (const assetId of readStringIds(subject.referenceAssetIdsJson)) {
+      assetIds.add(assetId);
+    }
+    for (const assetId of readStringIds(subject.generatedAssetIdsJson)) {
+      assetIds.add(assetId);
+    }
+  }
+
+  for (const scene of scenes) {
+    for (const assetId of readStringIds(scene.referenceAssetIdsJson)) {
+      assetIds.add(assetId);
+    }
+    for (const assetId of readStringIds(scene.generatedAssetIdsJson)) {
+      assetIds.add(assetId);
+    }
+  }
+
+  for (const shot of shots) {
+    for (const assetId of readStringIds(shot.referenceAssetIdsJson)) {
+      assetIds.add(assetId);
+    }
+    for (const assetId of readStringIds(shot.generatedAssetIdsJson)) {
+      assetIds.add(assetId);
+    }
+  }
+
+  return Array.from(assetIds);
+}
+
+function mapPlannerLatestRun(
+  latestPlannerRun:
+    | {
+        id: string;
+        status: string;
+        providerStatus: string | null;
+        outputJson: unknown;
+        errorCode: string | null;
+        errorMessage: string | null;
+        createdAt: Date;
+        finishedAt: Date | null;
+      }
+    | null,
+) {
+  if (!latestPlannerRun) {
+    return null;
+  }
+
+  const outputJson =
+    latestPlannerRun.outputJson && typeof latestPlannerRun.outputJson === 'object' && !Array.isArray(latestPlannerRun.outputJson)
+      ? (latestPlannerRun.outputJson as Record<string, unknown>)
+      : null;
+
+  return {
+    id: latestPlannerRun.id,
+    status: latestPlannerRun.status.toLowerCase(),
+    providerStatus: latestPlannerRun.providerStatus,
+    generatedText: (outputJson?.generatedText as string | undefined) ?? null,
+    structuredDoc: (outputJson?.structuredDoc as Record<string, unknown> | undefined) ?? null,
+    errorCode: latestPlannerRun.errorCode,
+    errorMessage: latestPlannerRun.errorMessage,
+    createdAt: latestPlannerRun.createdAt.toISOString(),
+    finishedAt: latestPlannerRun.finishedAt?.toISOString() ?? null,
+  };
+}
+
 export async function getPlannerWorkspace(args: {
   projectId: string;
   episodeId: string;
@@ -169,55 +250,16 @@ export async function getPlannerWorkspace(args: {
       ])
     : [[], null, [], null, []];
 
-  const plannerStage = plannerSession?.outlineConfirmedAt ? 'refinement' : activeOutline ? 'outline' : 'idle';
+  const plannerStage = resolvePlannerStage(plannerSession, activeOutline);
   const refinementSubjects = activeRefinement?.subjects ?? [];
   const refinementScenes = activeRefinement?.scenes ?? [];
   const refinementShotScripts = activeRefinement?.shotScripts ?? [];
-  const plannerAssetIds = new Set<string>();
+  const plannerAssetIds = collectPlannerAssetIds(refinementSubjects, refinementScenes, refinementShotScripts);
 
-  for (const subject of refinementSubjects) {
-    for (const assetId of Array.isArray(subject.referenceAssetIdsJson) ? subject.referenceAssetIdsJson : []) {
-      if (typeof assetId === 'string' && assetId) {
-        plannerAssetIds.add(assetId);
-      }
-    }
-    for (const assetId of Array.isArray(subject.generatedAssetIdsJson) ? subject.generatedAssetIdsJson : []) {
-      if (typeof assetId === 'string' && assetId) {
-        plannerAssetIds.add(assetId);
-      }
-    }
-  }
-
-  for (const scene of refinementScenes) {
-    for (const assetId of Array.isArray(scene.referenceAssetIdsJson) ? scene.referenceAssetIdsJson : []) {
-      if (typeof assetId === 'string' && assetId) {
-        plannerAssetIds.add(assetId);
-      }
-    }
-    for (const assetId of Array.isArray(scene.generatedAssetIdsJson) ? scene.generatedAssetIdsJson : []) {
-      if (typeof assetId === 'string' && assetId) {
-        plannerAssetIds.add(assetId);
-      }
-    }
-  }
-
-  for (const shot of refinementShotScripts) {
-    for (const assetId of Array.isArray(shot.referenceAssetIdsJson) ? shot.referenceAssetIdsJson : []) {
-      if (typeof assetId === 'string' && assetId) {
-        plannerAssetIds.add(assetId);
-      }
-    }
-    for (const assetId of Array.isArray(shot.generatedAssetIdsJson) ? shot.generatedAssetIdsJson : []) {
-      if (typeof assetId === 'string' && assetId) {
-        plannerAssetIds.add(assetId);
-      }
-    }
-  }
-
-  const plannerAssets = plannerAssetIds.size
+  const plannerAssets = plannerAssetIds.length
     ? await prisma.asset.findMany({
         where: {
-          id: { in: Array.from(plannerAssetIds) },
+          id: { in: plannerAssetIds },
         },
         orderBy: { createdAt: 'desc' },
       })
@@ -262,25 +304,7 @@ export async function getPlannerWorkspace(args: {
           updatedAt: plannerSession.updatedAt.toISOString(),
         }
       : null,
-    latestPlannerRun: latestPlannerRun
-      ? {
-          id: latestPlannerRun.id,
-          status: latestPlannerRun.status.toLowerCase(),
-          providerStatus: latestPlannerRun.providerStatus,
-          generatedText:
-            latestPlannerRun.outputJson && typeof latestPlannerRun.outputJson === 'object' && !Array.isArray(latestPlannerRun.outputJson)
-              ? (((latestPlannerRun.outputJson as Record<string, unknown>).generatedText as string | undefined) ?? null)
-              : null,
-          structuredDoc:
-            latestPlannerRun.outputJson && typeof latestPlannerRun.outputJson === 'object' && !Array.isArray(latestPlannerRun.outputJson)
-              ? (((latestPlannerRun.outputJson as Record<string, unknown>).structuredDoc as Record<string, unknown> | undefined) ?? null)
-              : null,
-          errorCode: latestPlannerRun.errorCode,
-          errorMessage: latestPlannerRun.errorMessage,
-          createdAt: latestPlannerRun.createdAt.toISOString(),
-          finishedAt: latestPlannerRun.finishedAt?.toISOString() ?? null,
-        }
-      : null,
+    latestPlannerRun: mapPlannerLatestRun(latestPlannerRun),
     messages: messages.map((message) => ({
       id: message.id,
       role: message.role.toLowerCase(),
@@ -466,3 +490,10 @@ export async function getPlannerWorkspace(args: {
     })),
   };
 }
+
+export const __testables = {
+  readStringIds,
+  resolvePlannerStage,
+  collectPlannerAssetIds,
+  mapPlannerLatestRun,
+};

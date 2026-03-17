@@ -30,9 +30,14 @@ function rankEndpoint(
   return 0;
 }
 
-export async function resolveModelSelection(input: ResolveModelSelectionInput): Promise<ResolvedModelSelection | null> {
+async function resolveModelSelectionWithDeps(
+  input: ResolveModelSelectionInput,
+  deps: {
+    prisma: Pick<typeof prisma, 'modelEndpoint'>;
+  },
+): Promise<ResolvedModelSelection | null> {
   if (input.endpointSlug) {
-    const endpoint = await prisma.modelEndpoint.findFirst({
+    const endpoint = await deps.prisma.modelEndpoint.findFirst({
       where: {
         slug: input.endpointSlug,
         status: 'ACTIVE',
@@ -65,7 +70,7 @@ export async function resolveModelSelection(input: ResolveModelSelectionInput): 
     };
   }
 
-  const endpoints = await prisma.modelEndpoint.findMany({
+  const endpoints = await deps.prisma.modelEndpoint.findMany({
     where: {
       status: 'ACTIVE',
       family: input.familySlug
@@ -114,3 +119,13 @@ export async function resolveModelSelection(input: ResolveModelSelectionInput): 
     endpoint,
   };
 }
+
+export async function resolveModelSelection(input: ResolveModelSelectionInput): Promise<ResolvedModelSelection | null> {
+  return resolveModelSelectionWithDeps(input, { prisma });
+}
+
+export const __testables = {
+  buildOrderBy,
+  rankEndpoint,
+  resolveModelSelectionWithDeps,
+};

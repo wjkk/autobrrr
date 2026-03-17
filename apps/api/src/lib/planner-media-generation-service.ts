@@ -66,17 +66,20 @@ function buildImageRunContext(entityKind: PlannerMediaEntityKind) {
   };
 }
 
-async function resolvePlannerImageModel(args: {
+async function resolvePlannerImageModelWithDeps(args: {
   userId: string;
   modelFamily?: string;
   modelEndpoint?: string;
   preferredEndpointSlug?: string | null;
+}, deps: {
+  resolveUserDefaultModelSelection: typeof resolveUserDefaultModelSelection;
+  resolveModelSelection: typeof resolveModelSelection;
 }) {
   const userDefaultModel = !args.modelFamily && !args.modelEndpoint
-    ? await resolveUserDefaultModelSelection(args.userId, 'IMAGE')
+    ? await deps.resolveUserDefaultModelSelection(args.userId, 'IMAGE')
     : null;
 
-  return resolveModelSelection({
+  return deps.resolveModelSelection({
     modelKind: 'IMAGE',
     familySlug: args.modelFamily ?? userDefaultModel?.familySlug,
     endpointSlug: args.modelEndpoint ?? args.preferredEndpointSlug ?? userDefaultModel?.endpointSlug,
@@ -84,13 +87,15 @@ async function resolvePlannerImageModel(args: {
   });
 }
 
-async function findPlannerMediaEntity(args: {
+async function findPlannerMediaEntityWithDeps(args: {
   entityKind: PlannerMediaEntityKind;
   entityId: string;
   refinementVersionId: string;
+}, deps: {
+  prisma: Pick<typeof prisma, 'plannerSubject' | 'plannerScene' | 'plannerShotScript'>;
 }) {
   if (args.entityKind === 'subject') {
-    const subject = await prisma.plannerSubject.findFirst({
+    const subject = await deps.prisma.plannerSubject.findFirst({
       where: {
         id: args.entityId,
         refinementVersionId: args.refinementVersionId,
@@ -116,7 +121,7 @@ async function findPlannerMediaEntity(args: {
   }
 
   if (args.entityKind === 'scene') {
-    const scene = await prisma.plannerScene.findFirst({
+    const scene = await deps.prisma.plannerScene.findFirst({
       where: {
         id: args.entityId,
         refinementVersionId: args.refinementVersionId,
@@ -139,10 +144,10 @@ async function findPlannerMediaEntity(args: {
             ? scene.referenceAssetIdsJson.filter((assetId): assetId is string => typeof assetId === 'string')
             : [],
         }
-      : null;
+    : null;
   }
 
-  const shot = await prisma.plannerShotScript.findFirst({
+  const shot = await deps.prisma.plannerShotScript.findFirst({
     where: {
       id: args.entityId,
       refinementVersionId: args.refinementVersionId,
@@ -169,10 +174,18 @@ async function findPlannerMediaEntity(args: {
     : null;
 }
 
-export async function queuePlannerImageGeneration(
+async function queuePlannerImageGenerationWithDeps(
   args: QueuePlannerImageGenerationArgs,
+  deps: {
+    findOwnedActivePlannerRefinement: typeof findOwnedActivePlannerRefinement;
+    verifyOwnedPlannerImageAssets: typeof verifyOwnedPlannerImageAssets;
+    resolvePlannerImageModel: typeof resolvePlannerImageModelWithDeps;
+    findPlannerMediaEntity: typeof findPlannerMediaEntityWithDeps;
+    plannerEntityPrisma: Pick<typeof prisma, 'plannerSubject' | 'plannerScene' | 'plannerShotScript'>;
+    prisma: Pick<typeof prisma, 'run'>;
+  },
 ): Promise<QueuePlannerImageGenerationResult> {
-  const activeRefinement = await findOwnedActivePlannerRefinement(args.projectId, args.episodeId, args.userId);
+  const activeRefinement = await deps.findOwnedActivePlannerRefinement(args.projectId, args.episodeId, args.userId);
   if (!activeRefinement) {
     return { ok: false, error: 'REFINEMENT_REQUIRED' };
   }
@@ -182,17 +195,17 @@ export async function queuePlannerImageGeneration(
   }
 
   const entityContext = buildImageRunContext(args.entityKind);
-  const entity = await findPlannerMediaEntity({
+  const entity = await deps.findPlannerMediaEntity({
     entityKind: args.entityKind,
     entityId: args.entityId,
     refinementVersionId: activeRefinement.id,
-  });
+  }, { prisma: deps.plannerEntityPrisma });
   if (!entity) {
     return { ok: false, error: entityContext.notFoundError };
   }
 
   const referenceAssetIds = args.referenceAssetIds.length > 0 ? args.referenceAssetIds : entity.referenceAssetIds;
-  const areAssetsOwned = await verifyOwnedPlannerImageAssets({
+  const areAssetsOwned = await deps.verifyOwnedPlannerImageAssets({
     assetIds: referenceAssetIds,
     projectId: args.projectId,
     userId: args.userId,
@@ -201,17 +214,20 @@ export async function queuePlannerImageGeneration(
     return { ok: false, error: 'ASSET_NOT_OWNED' };
   }
 
-  const resolvedModel = await resolvePlannerImageModel({
+  const resolvedModel = await deps.resolvePlannerImageModel({
     userId: args.userId,
     modelFamily: args.modelFamily,
     modelEndpoint: args.modelEndpoint,
     preferredEndpointSlug: activeRefinement.plannerSession.project.creationConfig?.imageModelEndpoint?.slug ?? null,
+  }, {
+    resolveUserDefaultModelSelection,
+    resolveModelSelection,
   });
   if (!resolvedModel) {
     return { ok: false, error: 'MODEL_NOT_FOUND' };
   }
 
-  const run = await prisma.run.create({
+  const run = await deps.prisma.run.create({
     data: {
       projectId: activeRefinement.plannerSession.project.id,
       episodeId: activeRefinement.plannerSession.episode.id,
@@ -257,5 +273,25 @@ export async function queuePlannerImageGeneration(
 
   return { ok: true, run };
 }
+
+export async function queuePlannerImageGeneration(
+  args: QueuePlannerImageGenerationArgs,
+): Promise<QueuePlannerImageGenerationResult> {
+  return queuePlannerImageGenerationWithDeps(args, {
+    findOwnedActivePlannerRefinement,
+    verifyOwnedPlannerImageAssets,
+    resolvePlannerImageModel: resolvePlannerImageModelWithDeps,
+    findPlannerMediaEntity: findPlannerMediaEntityWithDeps,
+    plannerEntityPrisma: prisma,
+    prisma,
+  });
+}
+
+export const __testables = {
+  buildImageRunContext,
+  resolvePlannerImageModelWithDeps,
+  findPlannerMediaEntityWithDeps,
+  queuePlannerImageGenerationWithDeps,
+};
 
 export { PLANNER_REFINEMENT_LOCKED_ERROR };

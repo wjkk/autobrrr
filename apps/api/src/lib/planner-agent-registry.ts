@@ -26,14 +26,19 @@ function normalizeSubtype(value: string | null | undefined) {
   return trimmed ? trimmed : null;
 }
 
-export async function resolvePlannerAgentSelection(args: {
-  contentType: string;
-  subtype?: string | null;
-}) {
+async function resolvePlannerAgentSelectionWithDeps(
+  args: {
+    contentType: string;
+    subtype?: string | null;
+  },
+  deps: {
+    prisma: Pick<typeof prisma, 'plannerAgentProfile' | 'plannerSubAgentProfile'>;
+  },
+) {
   const contentType = args.contentType.trim();
   const subtype = normalizeSubtype(args.subtype);
 
-  const agentProfile = await prisma.plannerAgentProfile.findFirst({
+  const agentProfile = await deps.prisma.plannerAgentProfile.findFirst({
     where: {
       contentType,
       enabled: true,
@@ -65,7 +70,7 @@ export async function resolvePlannerAgentSelection(args: {
 
   let subAgentProfile: (typeof agentProfile.subAgentProfiles)[number] | null = agentProfile.subAgentProfiles[0] ?? null;
   if (!subAgentProfile && subtype) {
-    subAgentProfile = await prisma.plannerSubAgentProfile.findFirst({
+    subAgentProfile = await deps.prisma.plannerSubAgentProfile.findFirst({
       where: {
         agentProfileId: agentProfile.id,
         subtype,
@@ -80,7 +85,7 @@ export async function resolvePlannerAgentSelection(args: {
   }
 
   if (!subAgentProfile) {
-    subAgentProfile = await prisma.plannerSubAgentProfile.findFirst({
+    subAgentProfile = await deps.prisma.plannerSubAgentProfile.findFirst({
       where: {
         agentProfileId: agentProfile.id,
         enabled: true,
@@ -118,3 +123,15 @@ export async function resolvePlannerAgentSelection(args: {
     },
   } satisfies ResolvedPlannerAgentSelection;
 }
+
+export async function resolvePlannerAgentSelection(args: {
+  contentType: string;
+  subtype?: string | null;
+}) {
+  return resolvePlannerAgentSelectionWithDeps(args, { prisma });
+}
+
+export const __testables = {
+  normalizeSubtype,
+  resolvePlannerAgentSelectionWithDeps,
+};

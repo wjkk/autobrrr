@@ -446,6 +446,11 @@ DoD：
 56. planner refinement partial 已补 API 单测，当前覆盖 subject/scene/shot 局部重跑时的 diff summary 和 structured doc merge 规则，避免局部重跑把无关内容误覆盖
 57. planner text extraction 已补 API 单测，当前覆盖 `output_text / responses output / chat choices / candidate parts` 的优先级以及 deterministic fallback 文本，避免 provider 输出形态变化后策划链路静默拿不到文本
 58. planner debug runtime 与 catalog management presenter 已补 web 单测，当前覆盖 debug preset 初始化、JSON 输入校验、以及 visibility/subjectType/gender 标签映射，避免调试表单与目录管理页静默漂移
+59. model registry 已补 API 单测，当前覆盖 `preferOfficial` 排序、显式 endpoint 命中、以及无可用 endpoint 时返回 `null`，避免默认模型选择在 provider 扩展后静默漂移
+60. planner agent registry 已补 API 单测，当前覆盖 subtype trim/空值归一化、按 subtype 命中子 agent、以及 subtype miss 时回退到最新 active sub-agent，避免策划 agent 选择静默失真
+61. project title helper 已补 API 单测，当前覆盖空 prompt fallback 与 18 字符截断规则，避免项目命名在入口层静默变化
+62. planner refinement access 已补 API 单测，当前覆盖空引用资产短路、资产归属校验与去重逻辑，避免 planner 图片生成链路把他人素材或缺失素材静默带入
+63. planner media generation service 已补 API 单测，当前覆盖 entity kind 到 resourceType 的稳定映射、图片模型默认选择、shot prompt 组装，以及 refinement 已确认/资产未归属时的硬失败，避免 planner 图片生成入口静默绕过 guard
 
 DoD：
 

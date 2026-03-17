@@ -454,6 +454,7 @@ DoD：
 64. creation run service 已补 API 单测，当前覆盖 `NOT_FOUND / MODEL_NOT_FOUND` 失败路径、显式模型覆盖优先级、用户默认模型回退，以及 prompt override 写回与 run input 序列化，避免真正生成链路静默用错模型或提示词
 65. planner rerun service 已补 API 单测，当前覆盖 scope-specific instruction 文案、subject/scene/shot/act 目标实体解析与 clone、以及 target miss 时返回 `null`，避免 partial rerun 在 scope 扩展后静默指向错误上下文
 66. planner refinement entity service 已补 API 单测，当前覆盖 editable refinement 缺失/已确认 guard、subject/scene 资产绑定的 missing/unowned 分支，以及更新后返回的 asset id 归一化，避免手工编辑与素材绑定链路静默绕过版本保护
+67. planner run service 已补 API 单测，当前覆盖 active session 复用/创建、`NOT_FOUND / MODEL_NOT_FOUND / PLANNER_AGENT_NOT_CONFIGURED` 早失败，以及 outline/refinement 两阶段的 `targetStage / triggerType` 决策，避免策划主入口静默排错 run 类型
 
 DoD：
 

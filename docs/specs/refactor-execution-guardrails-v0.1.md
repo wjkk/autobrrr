@@ -255,6 +255,7 @@
 52. creation run service 这类“真正把用户点击转成 queued run”的入口层，也必须有 API 单测，至少锁住 `NOT_FOUND / MODEL_NOT_FOUND`、显式模型覆盖、用户默认模型回退、prompt override 持久化和 run input 序列化；否则生成链路最容易出现“页面能点但后台排到了错模型”的静默回归
 53. planner rerun service 这类“局部重跑到底改谁、怎么描述给模型”的决策层，也必须有 API 单测，至少锁住 scope instruction、target entity 解析、act/shot 聚合和 missing target 返回；否则 partial rerun 最容易表现成“接口成功但改错对象”
 54. planner refinement entity service 这类“用户手工 patch 主体/场景/分镜与素材绑定”的写路径，也必须有 API 单测，至少锁住 editable refinement guard、missing entity、asset ownership 和更新后返回形状；否则最容易出现“页面能保存但把别的版本或别人的素材写进来”的静默回归
+55. planner run service 这类“策划主入口到底排 outline 还是 refinement、触发类型写什么”的 orchestrator 入口，也必须有 API 单测，至少锁住 active session 创建/复用、模型/agent 缺失时的早失败，以及 `generate_outline / update_outline / generate_doc / follow_up` 的判定；否则策划主链路最容易出现“能排队但排错阶段”的静默回归
 34. settings/provider 这类直接调用 fetch 的页面，还必须把请求 payload 和错误解析 helper 拆出来进 web 单测，避免 UI 层每次改交互都顺手打穿错误处理
 35. 浏览器主链路回归除 Planner / Creation / Publish 外，还应覆盖 `/settings/providers` 这类 AI 配置入口，至少锁住 provider 卡片和多模型区块真实渲染
 36. provider runtime config 这类“运行时到底读取哪个 provider 凭据和 baseUrl”的决策层，也必须有 API 单测，避免页面配置正确但执行链路落到错误 owner 或 fallback

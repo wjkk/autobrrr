@@ -42,8 +42,15 @@ export type QueuePlannerGenerateDocRunResult =
       error: QueuePlannerGenerateDocRunError;
     };
 
-async function findOrCreateActivePlannerSession(projectId: string, episodeId: string, userId: string) {
-  const existing = await prisma.plannerSession.findFirst({
+async function findOrCreateActivePlannerSessionWithDeps(
+  projectId: string,
+  episodeId: string,
+  userId: string,
+  deps: {
+    prisma: Pick<typeof prisma, 'plannerSession' | 'episode'>;
+  },
+) {
+  const existing = await deps.prisma.plannerSession.findFirst({
     where: {
       projectId,
       episodeId,
@@ -56,7 +63,7 @@ async function findOrCreateActivePlannerSession(projectId: string, episodeId: st
     return existing;
   }
 
-  const created = await prisma.plannerSession.create({
+  const created = await deps.prisma.plannerSession.create({
     data: {
       projectId,
       episodeId,
@@ -66,7 +73,7 @@ async function findOrCreateActivePlannerSession(projectId: string, episodeId: st
     },
   });
 
-  await prisma.episode.update({
+  await deps.prisma.episode.update({
     where: { id: episodeId },
     data: {
       activePlannerSessionId: created.id,
@@ -76,19 +83,34 @@ async function findOrCreateActivePlannerSession(projectId: string, episodeId: st
   return created;
 }
 
-export async function queuePlannerGenerateDocRun(
+async function findOrCreateActivePlannerSession(projectId: string, episodeId: string, userId: string) {
+  return findOrCreateActivePlannerSessionWithDeps(projectId, episodeId, userId, { prisma });
+}
+
+async function queuePlannerGenerateDocRunWithDeps(
   args: QueuePlannerGenerateDocRunArgs,
+  deps: {
+    findOwnedEpisode: typeof findOwnedEpisode;
+    resolveUserDefaultModelSelection: typeof resolveUserDefaultModelSelection;
+    resolveModelSelection: typeof resolveModelSelection;
+    findOrCreateActivePlannerSession: typeof findOrCreateActivePlannerSessionWithDeps;
+    resolvePlannerAgentSelection: typeof resolvePlannerAgentSelection;
+    resolvePlannerTargetVideoModel: typeof resolvePlannerTargetVideoModel;
+    buildPlannerGenerationPrompt: typeof buildPlannerGenerationPrompt;
+    createPlannerUserMessage: typeof createPlannerUserMessage;
+    prisma: Pick<typeof prisma, 'projectCreationConfig' | 'plannerMessage' | 'plannerOutlineVersion' | 'plannerRefinementVersion' | '$transaction' | 'plannerSession' | 'episode'>;
+  },
 ): Promise<QueuePlannerGenerateDocRunResult> {
-  const episode = await findOwnedEpisode(args.projectId, args.episodeId, args.userId);
+  const episode = await deps.findOwnedEpisode(args.projectId, args.episodeId, args.userId);
   if (!episode) {
     return { ok: false, error: 'NOT_FOUND' };
   }
 
   const userDefaultModel = !args.modelFamily && !args.modelEndpoint
-    ? await resolveUserDefaultModelSelection(args.userId, 'TEXT')
+    ? await deps.resolveUserDefaultModelSelection(args.userId, 'TEXT')
     : null;
 
-  const resolvedModel = await resolveModelSelection({
+  const resolvedModel = await deps.resolveModelSelection({
     modelKind: 'TEXT',
     familySlug: args.modelFamily ?? userDefaultModel?.familySlug,
     endpointSlug: args.modelEndpoint ?? userDefaultModel?.endpointSlug,
@@ -98,8 +120,8 @@ export async function queuePlannerGenerateDocRun(
     return { ok: false, error: 'MODEL_NOT_FOUND' };
   }
 
-  const plannerSession = await findOrCreateActivePlannerSession(episode.project.id, episode.id, args.userId);
-  const creationConfig = await prisma.projectCreationConfig.findUnique({
+  const plannerSession = await deps.findOrCreateActivePlannerSession(episode.project.id, episode.id, args.userId, { prisma: deps.prisma });
+  const creationConfig = await deps.prisma.projectCreationConfig.findUnique({
     where: {
       projectId: episode.project.id,
     },
@@ -129,7 +151,7 @@ export async function queuePlannerGenerateDocRun(
   });
   const rawPrompt = args.prompt ?? episode.summary ?? episode.project.title;
   const selectedContentType = creationConfig?.selectedTab ?? '短剧漫剧';
-  const selection = await resolvePlannerAgentSelection({
+  const selection = await deps.resolvePlannerAgentSelection({
     contentType: selectedContentType,
     subtype: args.subtype ?? creationConfig?.selectedSubtype,
   });
@@ -137,7 +159,7 @@ export async function queuePlannerGenerateDocRun(
     return { ok: false, error: 'PLANNER_AGENT_NOT_CONFIGURED' };
   }
 
-  const recentMessages = await prisma.plannerMessage.findMany({
+  const recentMessages = await deps.prisma.plannerMessage.findMany({
     where: {
       plannerSessionId: plannerSession.id,
     },
@@ -145,7 +167,7 @@ export async function queuePlannerGenerateDocRun(
     take: 8,
   });
 
-  const activeOutline = await prisma.plannerOutlineVersion.findFirst({
+  const activeOutline = await deps.prisma.plannerOutlineVersion.findFirst({
     where: {
       plannerSessionId: plannerSession.id,
       isActive: true,
@@ -158,7 +180,7 @@ export async function queuePlannerGenerateDocRun(
     },
   });
 
-  const activeRefinement = await prisma.plannerRefinementVersion.findFirst({
+  const activeRefinement = await deps.prisma.plannerRefinementVersion.findFirst({
     where: {
       plannerSessionId: plannerSession.id,
       isActive: true,
@@ -175,12 +197,12 @@ export async function queuePlannerGenerateDocRun(
   const triggerType = targetStage === 'outline'
     ? (activeOutline ? 'update_outline' : 'generate_outline')
     : (activeRefinement ? 'follow_up' : 'generate_doc');
-  const targetVideoModel = await resolvePlannerTargetVideoModel({
+  const targetVideoModel = await deps.resolvePlannerTargetVideoModel({
     requestedFamilySlug: args.targetVideoModelFamilySlug,
     settingsJson: creationConfig?.settingsJson,
   });
 
-  const promptPackage = buildPlannerGenerationPrompt({
+  const promptPackage = deps.buildPlannerGenerationPrompt({
     selection,
     targetStage,
     userPrompt: rawPrompt,
@@ -209,7 +231,7 @@ export async function queuePlannerGenerateDocRun(
     currentStructuredDoc: activeRefinement?.structuredDocJson,
   });
 
-  const run = await prisma.$transaction(async (tx) => {
+  const run = await deps.prisma.$transaction(async (tx) => {
     await tx.plannerSession.update({
       where: { id: plannerSession.id },
       data: {
@@ -217,7 +239,7 @@ export async function queuePlannerGenerateDocRun(
       },
     });
 
-    await createPlannerUserMessage({
+    await deps.createPlannerUserMessage({
       db: tx,
       plannerSessionId: plannerSession.id,
       userId: args.userId,
@@ -325,3 +347,24 @@ export async function queuePlannerGenerateDocRun(
     run,
   };
 }
+
+export async function queuePlannerGenerateDocRun(
+  args: QueuePlannerGenerateDocRunArgs,
+): Promise<QueuePlannerGenerateDocRunResult> {
+  return queuePlannerGenerateDocRunWithDeps(args, {
+    findOwnedEpisode,
+    resolveUserDefaultModelSelection,
+    resolveModelSelection,
+    findOrCreateActivePlannerSession: findOrCreateActivePlannerSessionWithDeps,
+    resolvePlannerAgentSelection,
+    resolvePlannerTargetVideoModel,
+    buildPlannerGenerationPrompt,
+    createPlannerUserMessage,
+    prisma,
+  });
+}
+
+export const __testables = {
+  findOrCreateActivePlannerSessionWithDeps,
+  queuePlannerGenerateDocRunWithDeps,
+};

@@ -405,6 +405,7 @@ DoD：
 15. 浏览器主链路回归已增强为“页面 + workspace 数据”双断言：Creation 必须读到 finalized `promptJson / targetVideoModelFamilySlug`，Publish 必须返回有效 summary 与 shots 列表
 16. `planner-debug` list/detail 查询输出形状已补单测，固定 `executionMode` 小写化、`replaySourceRunId` 暴露、`promptSnapshot` / `usage` / `diffSummary` 映射
 17. `planner-stream` 已补稳定断言，包括 stepDefinitions 归一化、synthetic step 状态推导、persisted-vs-synthetic 选择逻辑，以及 terminal run 自动结束条件
+18. web 侧 `Creation / Publish` presenter 已拆成纯函数 bootstrap，并补单测锁住 finalize 后页面实际消费的数据形状
 
 DoD：
 

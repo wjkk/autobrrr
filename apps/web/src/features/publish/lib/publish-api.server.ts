@@ -4,6 +4,7 @@ import { getMockStudioProject } from '@aiv/mock-data';
 import { requestAivApiFromServer } from '@/lib/aiv-api';
 
 import type { ApiPublishWorkspace, PublishPageBootstrap } from './publish-api';
+import { buildPublishStudio } from './publish-page-bootstrap';
 import { createPublishPageData, publishPageDataFromFixture } from './publish-page-data';
 
 interface ApiProjectDetail {
@@ -19,48 +20,6 @@ interface ApiProjectDetail {
     title: string;
     status: string;
   }>;
-}
-
-function toProjectStatus(status: string) {
-  const normalized = status.toLowerCase();
-  if (normalized === 'publishing') {
-    return 'export_ready' satisfies ProjectStatus;
-  }
-  if (normalized === 'ready') {
-    return 'ready_for_storyboard' satisfies ProjectStatus;
-  }
-  return normalized as ProjectStatus;
-}
-
-function buildPublishStudio(project: ApiProjectDetail, workspace: ApiPublishWorkspace) {
-  return createPublishPageData({
-    project: {
-      id: project.id,
-      title: project.title,
-      brief: project.brief ?? '',
-      contentMode: project.contentMode,
-      executionMode: 'auto',
-      aspectRatio: '9:16',
-      status: toProjectStatus(project.status),
-    },
-    episodes: project.episodes.map((episode) => ({
-      id: episode.id,
-      title: episode.title,
-      summary: project.brief ?? '',
-      sequence: episode.episodeNo,
-      status: toProjectStatus(episode.status),
-    })),
-    publish: {
-      draft: {
-        title: project.title,
-        intro: project.brief ?? '',
-        script: workspace.shots.map((shot) => shot.title).join(' / '),
-        tag: workspace.summary.readyToPublish ? 'Ready' : 'Draft',
-        status: 'draft' as const,
-      },
-      successMessage: '作品已提交发布队列，稍后可在广场查看。',
-    },
-  });
 }
 
 export async function fetchPublishStudioProject(projectId: string): Promise<PublishPageBootstrap> {

@@ -2,7 +2,7 @@
 
 版本：v0.1
 日期：2026-03-16
-状态：现行迁移说明（服务于 Phase 7，指导前端契约清理）
+状态：现行迁移说明（2026-03-17 已完成主工作区真实路径迁移）
 
 ## 1. 文档目的
 
@@ -16,9 +16,9 @@
 
 ## 2. 当前现状
 
-### 2.1 当前真实模式
+### 2.1 历史过渡模式
 
-当前 Planner / Creation / Publish 页面已经从后端读取真实数据，但仍通过“先造 fixture 再回填真实数据”的方式启动页面。
+在本轮迁移前，Planner / Creation / Publish 页面虽然已经从后端读取真实数据，但仍通过“先造 fixture 再回填真实数据”的方式启动页面。
 
 典型位置：
 
@@ -33,7 +33,7 @@
 3. 将真实数据回填到 `studio.project / studio.planner / studio.creation / studio.publish`
 4. 页面主体组件继续按 `StudioFixture` 渲染
 
-### 2.2 当前问题
+### 2.2 历史问题
 
 这种过渡态有 5 个问题：
 
@@ -55,6 +55,18 @@
 2. feature 内部可保留轻量 view model adapter
 3. 页面组件不再接收 `StudioFixture`
 4. mock-data 只用于 Explore 演示、视觉预览或测试，不进入主工作区运行时
+
+### 3.3 当前完成状态
+
+截至 2026-03-17：
+
+1. Planner / Creation / Publish 真实页面启动路径已不再调用 `createRuntimeStudioFixture()`
+2. 三个 feature 已新增 page-local data / workspace view model：
+   1. `planner-page-data.ts`
+   2. `creation-page-data.ts`
+   3. `publish-page-data.ts`
+3. `planner-api.server.ts`、`creation-api.server.ts`、`publish-api.server.ts` 已改为直接把真实 API DTO 适配为页面专用模型
+4. `getMockStudioProject()` 仅保留为 fallback 适配输入，不再是主路径运行时契约
 
 ### 3.2 各页目标输入
 
@@ -128,6 +140,12 @@ Publish：
 2. Creation 目前仍有较多默认值补位，需要在 Planner 稳定后再清理
 3. Publish 相对简单，适合作为最后收尾
 
+当前状态：
+
+1. Planner 已完成
+2. Creation 已完成
+3. Publish 已完成
+
 ### 5.4 Phase D：收缩 mock-data 运行时职责
 
 完成主路径迁移后：
@@ -135,6 +153,11 @@ Publish：
 1. `createRuntimeStudioFixture()` 不再服务 Planner / Creation / Publish 真实页面
 2. `getMockStudioProject()` 不再作为主路径失败时的隐式兜底逻辑
 3. mock-data 仅保留在演示、测试或 Explore 预览场景
+
+当前状态：
+
+1. `createRuntimeStudioFixture()` 已退出 Planner / Creation / Publish 真实页面启动路径
+2. `getMockStudioProject()` 仍保留为 fallback 数据源，但只会先映射到 feature-local page data，再进入页面
 
 ## 6. 页面级改动建议
 
@@ -200,6 +223,11 @@ Publish：
 3. 页面错误态不再依赖 fixture 默认值才能运行
 4. mock-data 退出主工作区运行时路径
 5. 文档中不再把 `StudioFixture` 写成主工作区的长期基线
+
+当前状态：
+
+1. 上述 1-5 已完成
+2. `Planner -> Creation -> Publish` 主链路真实浏览器回归已通过，当前文档口径与真实页面路径一致
 
 ## 9. 相关文档
 

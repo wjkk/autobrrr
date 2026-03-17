@@ -102,7 +102,7 @@
 6. `docs/specs/planner-workflow-and-document-spec-v0.1.md`
    说明：较早的 Planner 两阶段工作流与文档结构草案。关于当前 Planner AI 的执行口径，以 `planner-ai-capabilities-spec-v0.1.md` 为准；本文保留为工作流补充参考。
 7. `docs/specs/frontend-workspace-contract-migration-v0.1.md`
-   说明：前端主工作区从 `StudioFixture` 过渡到正式 workspace DTO / view model 的迁移说明。做 Phase 7 时的直接参考。
+   说明：前端主工作区从 `StudioFixture` 过渡到正式 workspace DTO / view model 的迁移说明。Phase 7 主路径迁移已完成，当前作为后续契约收口与 mock 退出主路径的参考。
 
 ---
 

@@ -25,7 +25,7 @@
 
 1. `Commit 1` 已完成：`run-input.ts` 已落地，主路径 Run 创建已切到 `serializeRunInput`，`provider-adapters.ts` 已切到统一解析入口
 2. `Commit 2` 已完成：`provider-gateway.ts` 已落地，`provider-adapters.ts`、`catalog-subject-image.ts`、`planner-debug.ts`、`provider-configs.ts` 主测试路径已改走 gateway
-3. ARK 多能力预留与注册表修正：`R-05A` 已完成，`seed-model-registry.ts` 已加入 ARK 的 IMAGE / VIDEO / AUDIO family 预留，`provider-configs.ts` 已改成 capability-aware 测试分发；`R-05B` 已完成，ARK 图片已接入统一 gateway 并通过真实 provider test；剩余真实 VIDEO / AUDIO 接入拆分为 `R-05C / R-05D`
+3. ARK 多能力预留与注册表修正：`R-05A` 已完成，`seed-model-registry.ts` 已加入 ARK 的 IMAGE / VIDEO / AUDIO family 预留，`provider-configs.ts` 已改成 capability-aware 测试分发；`R-05B` 已完成，ARK 图片已接入统一 gateway 并通过真实 provider test；`R-05C` 已完成，ARK 视频已接入 `provider-gateway.ts`、`provider-adapters.ts`、`run-lifecycle.ts` 与 provider test，真实 submit / poll 与 `/api/provider-configs/ark/test { video }` 均已通过；剩余真实 AUDIO 接入保留为 `R-05D`
 4. 本地文件存储替代临时 URL：已完成，`asset-storage.ts`、本地上传访问路由、`run-lifecycle.ts` 的下载落盘链路都已接通，`generated.local` 已从 API 代码路径移除
 5. `Transport Hooks`：已完成当前阶段，`transport-hooks.ts` 已落地，`ark-client.ts` / `platou-client.ts` 已接入统一 hook 触发点；Phase 3 已将其接到 `external_api_call_logs`，server / worker 双端自动安装 hook
 6. `Planner 基础修复`：进行中，Prisma schema 已补 `sourceOutlineVersionId`，`planner-orchestrator.ts` 已开始写入 lineage，`planner-rerun-scope.ts` 已落地，`planner-partial-reruns.ts` 已开始兼容 typed `rerunScope`，前端 `planner-page.tsx` 已改发 typed `rerunScope`，`planner-doc.ts` / `planner-refinement-projection.ts` / `planner-refinement-sync.ts` 已开始接入 `entityKey` 以提升 asset 继承稳定性，Web `planner-structured-doc.ts` 已开始保留 `entityKey` round-trip
@@ -36,7 +36,7 @@
 1. 可视为已完成：`R-06`、`R-08`、`R-09`
 2. `R-07` 已完成；focused API smoke 已补齐 planner media generation 路径，事务边界验证闭环成立
 3. `R-04` 已完成，Phase 3 的 `external_api_call_logs` 账本已接通并通过 focused smoke
-4. 已拆成按 provider readiness 推进的持续项：`R-05C`、`R-05D`
+4. 已拆成按 provider readiness 推进的持续项：`R-05D`
 
 每个提交批次要求：
 
@@ -523,7 +523,7 @@
 1. 工作流 B 与工作流 C 的最终收口提交  
    原因：gateway 调整和 lifecycle 存储调整会同时影响生成主路径，容易互相遮蔽问题
 2. Schema 迁移与前端契约迁移  
-   原因：Phase 7 尚未开始，不应提前扩大联动面
+   原因：当时 Phase 7 尚未开始，不应提前扩大联动面；当前该限制已解除，主工作区真实路径迁移已完成
 
 ## 12. 完成定义
 

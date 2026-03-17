@@ -336,6 +336,11 @@ platou-client.ts / ark-client.ts
 1. Phase 6：route / service / orchestrator 边界明确化
 2. Phase 7：前端移除 `StudioFixture` 主工作区运行时依赖
 
+当前状态：
+
+1. Phase 6 已完成当前阶段主 route 收口
+2. Phase 7 主工作区真实路径迁移已完成；当前剩余的是文档和 mock 角色继续收口
+
 ## 9. 本文明确反对的错误表述
 
 以下说法在本轮重构中不再使用：

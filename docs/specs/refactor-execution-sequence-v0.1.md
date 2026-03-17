@@ -187,9 +187,10 @@
 
 1. `R-04` 已完成：transport hook 已在 server / worker 双端安装
 2. `R-10` 已完成：`external_api_call_logs` 已落地并通过 focused smoke
-3. `R-05A`、`R-05B` 已完成
-4. `R-05C / R-05D` 不应再与本提交绑定成一个“大进行中”状态
-3. 这三个子项应按 ARK 的真实 endpoint readiness 单独推进
+3. `R-05A`、`R-05B`、`R-05C` 已完成
+4. `R-05D` 当前代码路径已接通到 `provider-gateway.ts` / `ark-client.ts` / `provider-config-test-service.ts`，但需等待 Ark 官方确认可用音频接口与可同步音频 endpoint 后再恢复推进
+5. `R-05D` 不应再与本提交绑定成一个“大进行中”状态
+6. 这些子项应按 ARK 的真实 endpoint readiness 单独推进
 
 ### 最小验证
 
@@ -427,6 +428,8 @@
 
 ## Commit 11：API 分层重构
 
+当前状态：已完成（2026-03-17）
+
 ### 目标
 
 把重构后仍然过重的 route 继续下沉到更清晰的 service / orchestrator seam。
@@ -440,7 +443,33 @@
 1. route 文件明显变薄
 2. 业务编排不再堆在 route
 
+当前进展：
+
+1. 已新增 `apps/api/src/lib/planner-run-service.ts`
+2. 已新增 `apps/api/src/lib/creation-run-service.ts`
+3. `apps/api/src/routes/planner-commands.ts` 已从约 351 行收敛到约 94 行
+4. `apps/api/src/routes/creation-commands.ts` 已从约 288 行收敛到约 171 行
+5. 已新增 `apps/api/src/lib/provider-config-query-service.ts`、`apps/api/src/lib/provider-config-catalog-service.ts`、`apps/api/src/lib/provider-config-test-service.ts`
+6. `apps/api/src/routes/provider-configs.ts` 已从约 1014 行收敛到约 191 行
+7. 已新增 `apps/api/src/lib/planner-debug-query-service.ts`、`apps/api/src/lib/planner-debug-execution-service.ts`、`apps/api/src/lib/planner-debug-shared.ts`
+8. `apps/api/src/routes/planner-debug.ts` 已从约 1273 行收敛到约 423 行
+9. 已新增 `apps/api/src/lib/planner-workspace-service.ts`、`apps/api/src/lib/creation-workspace-service.ts`、`apps/api/src/lib/publish-workspace-service.ts`
+10. `apps/api/src/routes/workspaces.ts` 已从约 792 行收敛到约 135 行
+11. 已新增 `apps/api/src/lib/planner-rerun-service.ts`
+12. `apps/api/src/routes/planner-partial-reruns.ts` 已从约 468 行收敛到约 135 行
+13. 已新增 `apps/api/src/lib/planner-media-generation-service.ts`
+14. `apps/api/src/routes/planner-media-generation.ts` 已从约 503 行收敛到约 258 行
+15. 已新增 `apps/api/src/lib/planner-refinement-entity-service.ts`
+16. `apps/api/src/routes/planner-refinement-entities.ts` 已从约 613 行收敛到约 388 行
+17. `pnpm typecheck:api`、`pnpm --filter @aiv/api smoke:planner-refactor`、`pnpm --filter @aiv/api smoke:planner-api-refactor`、以及进程内 `save -> sync-models -> test(video)` route 验证已通过
+
+### 切换条件
+
+当前该切换条件已满足。核心 Planner / Creation / Provider / Workspace 路由已经具备稳定的 service seam，可以进入 `R-22`。
+
 ## Commit 12：前后端 DTO 冻结与 `StudioFixture` 清理
+
+当前状态：已完成（2026-03-17）
 
 ### 目标
 
@@ -454,6 +483,20 @@
 
 1. Planner / Creation / Publish 真页面不再依赖 `createRuntimeStudioFixture()`
 2. workspace DTO 成为稳定契约
+
+当前进展：
+
+1. 已新增 `apps/web/src/features/planner/lib/planner-page-data.ts`
+2. 已新增 `apps/web/src/features/creation/lib/creation-page-data.ts`
+3. 已新增 `apps/web/src/features/publish/lib/publish-page-data.ts`
+4. `planner-api.server.ts`、`creation-api.server.ts`、`publish-api.server.ts` 已改为直接构造 feature-local page data / workspace view model
+5. Planner / Creation / Publish 页面组件已去掉对 `StudioFixture` 的直接主路径依赖
+6. `createRuntimeStudioFixture()` 已退出三大主工作区的真实启动路径，仅保留 mock fixture fallback 适配
+7. `pnpm --filter @aiv/web typecheck` 已通过
+
+### 切换条件
+
+当前该切换条件已满足。真实页面路径的 DTO / view model 已冻结；`R-23` 的文档收口与主链路浏览器回归也已完成，剩余只保留按 provider readiness 继续推进的 `R-05D`。
 
 ## 4. 当前建议的开工线
 

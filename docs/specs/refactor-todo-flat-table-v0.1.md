@@ -17,8 +17,8 @@
 
 说明：
 
-1. 本表只列“待做事项”，不重复列已完成事项。
-2. `状态` 当前默认以 `待开始` 为主；真正开工后可以按 `进行中 / 已完成 / 阻塞` 维护。
+1. 本表覆盖当前执行事项，包含 `待开始 / 进行中 / 已完成 / 搁置` 四类状态。
+2. `状态` 应以当前实际落地情况维护，不再默认视为 `待开始`。
 3. `文件范围` 只列主触点，不是完整清单。
 
 ## 2. 单表总览
@@ -31,8 +31,8 @@
 | R-04 | P0 | 已完成 | 2 | transport hooks 预埋，为 Phase 3 审计铺路 | R-02 | `apps/api/src/lib/transport-hooks.ts`, `apps/api/src/lib/ark-client.ts`, `apps/api/src/lib/platou-client.ts`, `apps/api/src/worker.ts`, `apps/api/src/server.ts` | 所有外部调用都能经过统一 hook，server / worker 均已自动安装 hook |
 | R-05A | P0 | 已完成 | 2 | ARK 多能力架构预留，移除 `ark = text-only` 假设 | R-02 | `apps/api/scripts/seed-model-registry.ts`, `apps/api/src/routes/model-registry.ts`, `apps/api/src/routes/provider-configs.ts` | 注册表、gateway、provider test 都允许 ARK 后续接入 IMAGE / VIDEO / AUDIO |
 | R-05B | P1 | 已完成 | 2/持续 | ARK IMAGE 真接入 | R-05A | `apps/api/src/lib/provider-gateway.ts`, `apps/api/src/lib/ark-client.ts`, `apps/api/src/routes/provider-configs.ts`, `apps/api/src/lib/catalog-subject-image.ts` | ARK 图片端点已接入 `POST /images/generations`；provider test 已用真实 Ark 配置通过，目录主体图与统一 gateway 均可走 Ark 图片链路 |
-| R-05C | P1 | 待开始 | 2/持续 | ARK VIDEO 真接入 | R-05A | `apps/api/src/lib/provider-gateway.ts`, `apps/api/src/lib/ark-client.ts`, `apps/api/src/lib/provider-adapters.ts` | ARK 视频端点能进入 submit / poll 或 callback 主链路 |
-| R-05D | P1 | 待开始 | 2/持续 | ARK AUDIO 真接入 | R-05A | `apps/api/src/lib/provider-gateway.ts`, `apps/api/src/lib/ark-client.ts`, `apps/api/src/routes/provider-configs.ts` | ARK 音频端点可被统一 gateway 调用并测试 |
+| R-05C | P1 | 已完成 | 2/持续 | ARK VIDEO 真接入 | R-05A | `apps/api/src/lib/provider-gateway.ts`, `apps/api/src/lib/ark-client.ts`, `apps/api/src/lib/provider-adapters.ts`, `apps/api/src/routes/provider-configs.ts`, `apps/api/src/lib/run-lifecycle.ts` | ARK 视频端点已接入 `POST /contents/generations/tasks` + poll 主链路；真实 submit/poll 与 `/api/provider-configs/ark/test { video }` 均已通过 |
+| R-05D | P1 | 搁置 | 2/持续 | ARK AUDIO 真接入 | R-05A | `apps/api/src/lib/provider-gateway.ts`, `apps/api/src/lib/ark-client.ts`, `apps/api/src/lib/provider-config-test-service.ts`, `apps/api/src/routes/provider-configs.ts` | ARK 音频端点可被统一 gateway 调用并测试；当前代码路径已接通，但需等待 Ark 官方确认可用音频接口与可同步音频 endpoint 后再恢复推进 |
 | R-06 | P0 | 已完成 | 2 | Planner 版本链完整性修复，补 `sourceOutlineVersionId` | R-01 | `apps/api/prisma/schema.prisma`, `apps/api/src/lib/planner-orchestrator.ts`, `apps/api/src/routes/planner-refinement-versions.ts`, `apps/api/src/routes/workspaces.ts` | 任意 refinement 都能追到来源 outline |
 | R-07 | P0 | 已完成 | 2 | Planner 衍生数据同步事务化，避免脏版本 | R-06 | `apps/api/src/lib/planner-orchestrator.ts`, `apps/api/src/lib/planner-refinement-projection.ts`, `apps/api/src/routes/planner-document.ts`, `apps/api/src/routes/planner-refinement-entities.ts`, `apps/api/src/routes/planner-media-generation.ts`, `apps/api/scripts/smoke-planner-api-refactor.ts` | 不再出现“有 RefinementVersion 但无 Subject/Scene/Shot”的脏记录；document save、asset 回写、entity patch、version activate、planner media generation 回写均已通过 focused smoke |
 | R-08 | P0 | 已完成 | 2 | `PlannerRerunScope` 类型化，统一为 `type + shotIds` | R-01 | `apps/api/src/lib/planner-rerun-scope.ts`, `apps/api/src/routes/planner-partial-reruns.ts`, `apps/api/src/lib/planner-orchestrator.ts`, `apps/web/src/features/planner/components/planner-page.tsx` | rerun scope 具备编译期保护，支持单镜头与小批量镜头重跑 |
@@ -48,9 +48,9 @@
 | R-18 | P1 | 已完成 | 5 | shot 级精细化重跑 | R-08, R-13 | `apps/api/src/routes/planner-partial-reruns.ts`, `apps/web/src/features/planner/lib/planner-api.ts`, `apps/web/src/features/planner/components/planner-page.tsx` | 前后端统一走 typed `rerunScope`；任意 shot 可单独重跑，act 级也可触发局部重排，其他 shot 不被污染 |
 | R-19 | P1 | 已完成 | 5 | Planner 前端整合与组件拆分，避免继续膨胀 `planner-page.tsx` | R-14, R-15, R-16, R-17, R-18 | `apps/web/src/features/planner/components/planner-page.tsx`, `planner-page-header.tsx`, `planner-episode-rail.tsx`, `planner-script-acts.tsx`, `planner-thread-panel.tsx`, `planner-asset-dialog.tsx`, `planner-document-panel.tsx`, `planner-result-header.tsx`, `planner-delete-shot-dialog.tsx`, `planner-creation-boot-dialog.tsx`, `hooks/use-planner-runtime-workspace.ts`, `hooks/use-planner-run-submission.ts`, `hooks/use-planner-asset-drafts.ts`, `hooks/use-planner-asset-actions.ts`, `hooks/use-planner-document-persistence.ts`, `hooks/use-planner-composer-actions.ts`, `hooks/use-planner-shot-editor.ts`, `hooks/use-planner-shot-actions.ts`, `hooks/use-planner-shot-prompt-preview.ts`, `hooks/use-planner-creation-flow.ts`, `hooks/use-planner-display-state.ts`, `hooks/use-planner-dialog-display-state.ts`, `lib/planner-shot-editor.ts`, `lib/planner-api.ts`, `lib/planner-page-helpers.ts`, `components/planner-page-dialogs.tsx` | Planner 可完整走通：生成 -> 预览 -> 重跑 -> finalize；同模型可直接进入创作，切模型会重新 finalize 后进入创作；`planner-page.tsx` 已收敛到约 658 行 |
 | R-20 | P1 | 已完成 | 5 | Creation 侧消费 finalize 交接结果，去掉用户手工搬运 | R-16 | `apps/web/src/features/creation/lib/creation-api.server.ts`, `apps/web/src/features/creation/lib/creation-api.ts`, Creation workspace presenter | Creation 首屏和运行时刷新统一消费 finalize 写入的 shot / prompt / target model / materialBindings，不再依赖用户手工搬运 |
-| R-21 | P1 | 待开始 | 6 | API 分层重构，route 只保留协议转换 | R-02, R-16 | `apps/api/src/routes/*.ts`, 对应 service / orchestrator seam | route 文件明显变薄，业务编排下沉 |
-| R-22 | P1 | 待开始 | 7 | 前后端工作区 DTO 冻结，清理 `StudioFixture` 真实路径依赖 | R-21 | `apps/web/src/features/planner/lib/planner-api.server.ts`, `apps/web/src/features/creation/lib/creation-api.server.ts`, `packages/domain` | Planner / Creation / Publish 真页面不再依赖 `createRuntimeStudioFixture()` |
-| R-23 | P2 | 待开始 | 1/持续 | 文档交叉引用与专项文档层级持续收口 | 无 | `docs/index/master-index-v0.4.md`, `docs/specs/*.md`, `docs/reviews/*.md` | 入口清晰，无旧口径冲突，无失效引用 |
+| R-21 | P1 | 已完成 | 6 | API 分层重构，route 只保留协议转换 | R-02, R-16 | `apps/api/src/routes/*.ts`, `apps/api/src/lib/planner-run-service.ts`, `apps/api/src/lib/creation-run-service.ts`, `apps/api/src/lib/provider-config-query-service.ts`, `apps/api/src/lib/provider-config-catalog-service.ts`, `apps/api/src/lib/provider-config-test-service.ts`, `apps/api/src/lib/planner-debug-query-service.ts`, `apps/api/src/lib/planner-debug-execution-service.ts`, `apps/api/src/lib/planner-debug-shared.ts`, `apps/api/src/lib/planner-workspace-service.ts`, `apps/api/src/lib/creation-workspace-service.ts`, `apps/api/src/lib/publish-workspace-service.ts`, `apps/api/src/lib/planner-rerun-service.ts`, `apps/api/src/lib/planner-media-generation-service.ts`, `apps/api/src/lib/planner-refinement-entity-service.ts` | 核心 Planner / Creation / Provider / Workspace route 已显著变薄，业务编排下沉到 service seam；`pnpm typecheck:api`、`smoke:planner-refactor`、`smoke:planner-api-refactor` 均已通过 |
+| R-22 | P1 | 已完成 | 7 | 前后端工作区 DTO 冻结，清理 `StudioFixture` 真实路径依赖 | R-21 | `apps/web/src/features/planner/lib/planner-api.server.ts`, `apps/web/src/features/creation/lib/creation-api.server.ts`, `apps/web/src/features/publish/lib/publish-api.server.ts`, `apps/web/src/features/planner/lib/planner-page-data.ts`, `apps/web/src/features/creation/lib/creation-page-data.ts`, `apps/web/src/features/publish/lib/publish-page-data.ts` | Planner / Creation / Publish 真页面已改为 feature-local page data / workspace view model；真实启动路径已不再依赖 `createRuntimeStudioFixture()` |
+| R-23 | P2 | 已完成 | 1/持续 | 文档交叉引用与专项文档层级持续收口 | 无 | `docs/index/master-index-v0.4.md`, `docs/specs/*.md`, `docs/reviews/*.md` | 入口清晰，无旧口径冲突，无失效引用；主链路真实浏览器回归结果已回写文档 |
 
 ## 3. 使用方式
 
@@ -71,7 +71,7 @@
    暂无 P0 主项
 
 3. 已拆成按 provider readiness 逐步推进的持续项：
-   `R-05B`、`R-05C`、`R-05D`
+   `R-05B`、`R-05D`
 
 当前收口重点：
 
@@ -79,12 +79,17 @@
 2. `R-07` 已完成：focused smoke 现已覆盖 document save、subject asset 回写后二次保存、shot entity patch、refinement activation、typed `rerunScope`、`shot-prompts`、以及 `planner-media-generation` 的 run 创建与回写投影同步
 3. `R-04`、`R-10` 已完成：`external_api_call_logs` 已落地，transport hook 在 server / worker 双端自动安装，catalog / provider test / run submit / run poll / planner debug 都会进入统一审计账本，`smoke-external-api-call-logs.ts` 已验证 `emit hook -> 落库`
 4. `R-05B` 已完成：ARK 图片能力已接入统一 gateway，并通过真实 `/api/provider-configs/ark/test { image }` 验证
+5. `R-05C` 已完成：ARK 视频已接入统一 gateway、Run submit/poll 主链路与 `run-lifecycle` 输出 URL 提取，并通过真实 submit/poll 及 `/api/provider-configs/ark/test { video }` 验证
+6. `R-21` 已完成：核心 AI/Planner route 已完成服务层下沉，`planner-commands.ts` 已从约 351 行收敛到约 94 行，`creation-commands.ts` 已从约 288 行收敛到约 171 行，`provider-configs.ts` 已从约 1014 行收敛到约 191 行，`planner-debug.ts` 已从约 1273 行收敛到约 423 行，`workspaces.ts` 已从约 792 行收敛到约 135 行，`planner-partial-reruns.ts` 已从约 468 行收敛到约 135 行，`planner-media-generation.ts` 已从约 503 行收敛到约 258 行，`planner-refinement-entities.ts` 已从约 613 行收敛到约 388 行；focused smoke 已覆盖新的 service seam，无回归
+7. `R-22` 已完成：Planner / Creation / Publish 真实页面已改为 feature-local page data / workspace view model，`planner-api.server.ts`、`creation-api.server.ts`、`publish-api.server.ts` 不再通过 `createRuntimeStudioFixture()` 构造主工作区；`pnpm --filter @aiv/web typecheck` 已通过
+8. `R-23` 已完成：主索引、执行序列、总表、Phase 7 迁移说明和 checklist 已同步当前实现状态；零散旧口径已收口，且 `Planner -> Creation -> Publish` 主链路真实浏览器回归已通过
 
 关于 ARK：
 
 1. `R-05A` 已完成，表示架构不再写死 `ark = text-only`
-2. `R-05B`、`R-05C`、`R-05D` 不阻塞当前 Planner 主链路
-3. 它们应按 provider endpoint readiness 逐项推进，而不是继续挂一个笼统的“R-05 进行中”
+2. `R-05D` 当前为搁置态：gateway、client、provider test 已补上音频代码路径，但需等待 Ark 官方确认可用音频接口与可同步音频 endpoint
+3. `R-05D` 不阻塞当前 Planner 主链路
+4. 它们应按 provider endpoint readiness 逐项推进，而不是继续挂一个笼统的“R-05 进行中”
 ## 5. 说明
 
 如果后面要再压得更像项目管理工具，可以继续从这张表派生出：

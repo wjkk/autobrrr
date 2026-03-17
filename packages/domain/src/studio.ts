@@ -5,6 +5,12 @@ import type { PublishWorkspace } from './publish';
 
 export type MockStudioScenarioId = 'empty' | 'awaiting_review' | 'partial_failed' | 'publish_ready' | 'published';
 
+/**
+ * Mock-only aggregate fixture.
+ *
+ * This type is kept for Explore/demo/test fallback paths and should not be used
+ * as the runtime contract for Planner / Creation / Publish real page bootstraps.
+ */
 export interface StudioFixture {
   brandName: string;
   assistantName: string;

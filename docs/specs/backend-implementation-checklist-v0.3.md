@@ -747,6 +747,16 @@ DoD：
 4. 按 `docs/specs/frontend-workspace-contract-migration-v0.1.md` 执行 Planner -> Creation -> Publish 的迁移顺序
 5. 主工作区页面逐步移除 `StudioFixture` 运行时依赖
 
+当前状态（2026-03-17）：
+
+1. 已完成当前阶段主路径迁移
+2. Planner / Creation / Publish 真实页面启动路径已不再调用 `createRuntimeStudioFixture()`
+3. 三个 feature 已新增 page-local data / workspace view model：
+   1. `planner-page-data.ts`
+   2. `creation-page-data.ts`
+   3. `publish-page-data.ts`
+4. mock fixture 仅保留为 fallback 适配输入，不再作为主路径运行时契约
+
 DoD：
 
 1. web 不再依赖隐式字段猜测

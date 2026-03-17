@@ -1,5 +1,12 @@
 import type { ContinueProjectCard, ProjectContentMode, StudioFixture } from '@aiv/domain';
 
+/**
+ * Legacy aggregate studio service.
+ *
+ * This module is retained for Explore / continuation-list style flows that
+ * still speak the old StudioFixture contract. Planner / Creation / Publish
+ * runtime pages now bootstrap from feature-local page data and workspace DTOs.
+ */
 interface ApiErrorPayload {
   code?: string;
   message?: string;

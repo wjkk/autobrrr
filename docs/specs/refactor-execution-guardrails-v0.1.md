@@ -281,6 +281,7 @@
 40. planner api 这类“前端工作区请求 helper 与 envelope 解析层”也必须有 web 单测，至少锁住路径拼装、错误消息优先级和 multipart 上传；否则页面最容易表现成“交互正常、请求悄悄打错路径”的伪回归
 41. server bootstrap 这类“请求真实 API 后再决定首屏 studio/runtimeApi/initialWorkspace 的页面入口”，也应拆成无 `server-only` 依赖的纯 bootstrap 模块并补 web 单测；否则首屏最容易出现 episode 选错、structured doc 优先级错位、fixture fallback 漂移
 42. password/session/auth 这类“基础认证逻辑”也必须有 API 单测，至少锁住密码哈希校验、session token 哈希、过期/撤销/禁用会话分支，以及 `requireUser` 的统一 401 回包；否则很多主链路故障会被误判成业务问题
+43. ownership 这类“用户是否拥有某个 project / episode / shot / run”的权限查询层，也必须有 API 单测，至少锁住 where 条件和 include/select 形状；否则很容易出现权限放松、上下文丢失或页面取数不完整
 
 ## 8. 回滚与停手条件
 

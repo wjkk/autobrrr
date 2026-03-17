@@ -438,6 +438,7 @@ DoD：
 48. Creation playback / timeline 纯函数已补 web 单测，当前覆盖 shot playback window、字幕时间轴、stage motion CSS 变量和 playhead ratio，避免时间轴与预览联动静默漂移
 49. Creation utils 纯函数已补 web 单测，当前覆盖 shot clone、版本状态同步、timeline offset、状态文案和视觉 accent 映射，避免局部编辑器与时间轴辅助逻辑静默漂移
 50. Planner 视频模型选项已补 web 单测，当前覆盖 Seedance/Veo/Seko 基线选项与 `findPlannerVideoModelOption(...)` 查找规则，避免模型切换入口静默指向错误 slug
+51. Creation 本地 media fallback 纯函数已补 web 单测，当前覆盖缺失 shot 的空资源、summary strip、shot/version 索引归一化与循环 offset，避免预览图在本地 demo/回归环境中静默错位
 
 DoD：
 

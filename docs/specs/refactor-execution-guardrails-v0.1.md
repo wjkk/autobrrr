@@ -247,6 +247,7 @@
 44. 项目阶段映射、debug presenter 和 prompt 摘要这类“UI 很依赖，但经常被当成小工具函数”的模块同样要进 web unit；错了会直接污染调试台判断与页面导航
 45. partial rerun 的 diff summary / merge 逻辑必须有 API 单测；这类代码看起来是辅助层，但实际决定了局部重跑会不会误覆盖整份 structured doc
 46. provider 文本抽取层必须锁住多种响应形态的优先级和 deterministic fallback；否则上游 provider 稍改 payload，策划链路可能直接退化为“成功但无文本”
+47. debug preset 初始化、JSON 输入校验和目录管理标签映射这类后台/运营页面规则也必须进入 web unit；这些页面虽然不是创作主链路，但一旦静默漂移，会直接影响排障和运营配置准确性
 34. settings/provider 这类直接调用 fetch 的页面，还必须把请求 payload 和错误解析 helper 拆出来进 web 单测，避免 UI 层每次改交互都顺手打穿错误处理
 35. 浏览器主链路回归除 Planner / Creation / Publish 外，还应覆盖 `/settings/providers` 这类 AI 配置入口，至少锁住 provider 卡片和多模型区块真实渲染
 36. provider runtime config 这类“运行时到底读取哪个 provider 凭据和 baseUrl”的决策层，也必须有 API 单测，避免页面配置正确但执行链路落到错误 owner 或 fallback

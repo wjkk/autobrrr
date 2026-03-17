@@ -29,8 +29,13 @@ interface ScopedEntityArgs {
   userId: string;
 }
 
-async function requireEditableRefinement(args: ScopedEntityArgs) {
-  const activeRefinement = await findOwnedActivePlannerRefinement(args.projectId, args.episodeId, args.userId);
+async function requireEditableRefinementWithDeps(
+  args: ScopedEntityArgs,
+  deps: {
+    findOwnedActivePlannerRefinement: typeof findOwnedActivePlannerRefinement;
+  },
+) {
+  const activeRefinement = await deps.findOwnedActivePlannerRefinement(args.projectId, args.episodeId, args.userId);
   if (!activeRefinement) {
     return { ok: false as const, error: 'REFINEMENT_REQUIRED' as const };
   }
@@ -40,6 +45,10 @@ async function requireEditableRefinement(args: ScopedEntityArgs) {
   }
 
   return { ok: true as const, activeRefinement };
+}
+
+async function requireEditableRefinement(args: ScopedEntityArgs) {
+  return requireEditableRefinementWithDeps(args, { findOwnedActivePlannerRefinement });
 }
 
 export async function updatePlannerSubject(args: ScopedEntityArgs & {
@@ -248,26 +257,33 @@ export async function updatePlannerShot(args: ScopedEntityArgs & {
   };
 }
 
-async function updatePlannerEntityAssets(args: ScopedEntityArgs & {
+async function updatePlannerEntityAssetsWithDeps(args: ScopedEntityArgs & {
   entityKind: 'subject' | 'scene';
   entityId: string;
   referenceAssetIds?: string[];
   generatedAssetIds?: string[];
+}, deps: {
+  requireEditableRefinement: typeof requireEditableRefinementWithDeps;
+  verifyOwnedPlannerImageAssets: typeof verifyOwnedPlannerImageAssets;
+  prisma: Pick<typeof prisma, 'plannerSubject' | 'plannerScene' | '$transaction'>;
+  syncPlannerRefinementProjection: typeof syncPlannerRefinementProjection;
 }) {
-  const access = await requireEditableRefinement(args);
+  const access = await deps.requireEditableRefinement(args, {
+    findOwnedActivePlannerRefinement,
+  });
   if (!access.ok) {
     return access;
   }
 
   const entity = args.entityKind === 'subject'
-    ? await prisma.plannerSubject.findFirst({
+    ? await deps.prisma.plannerSubject.findFirst({
         where: {
           id: args.entityId,
           refinementVersionId: access.activeRefinement.id,
         },
         select: { id: true },
       })
-    : await prisma.plannerScene.findFirst({
+    : await deps.prisma.plannerScene.findFirst({
         where: {
           id: args.entityId,
           refinementVersionId: access.activeRefinement.id,
@@ -283,7 +299,7 @@ async function updatePlannerEntityAssets(args: ScopedEntityArgs & {
   }
 
   const allAssetIds = [...(args.referenceAssetIds ?? []), ...(args.generatedAssetIds ?? [])];
-  const areAssetsOwned = await verifyOwnedPlannerImageAssets({
+  const areAssetsOwned = await deps.verifyOwnedPlannerImageAssets({
     assetIds: allAssetIds,
     projectId: args.projectId,
     userId: args.userId,
@@ -292,7 +308,7 @@ async function updatePlannerEntityAssets(args: ScopedEntityArgs & {
     return { ok: false as const, error: 'ASSET_NOT_OWNED' as const };
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const updated = await deps.prisma.$transaction(async (tx) => {
     const nextEntity = args.entityKind === 'subject'
       ? await tx.plannerSubject.update({
           where: { id: entity.id },
@@ -309,7 +325,7 @@ async function updatePlannerEntityAssets(args: ScopedEntityArgs & {
           },
         });
 
-    await syncPlannerRefinementProjection({
+    await deps.syncPlannerRefinementProjection({
       db: tx,
       refinementVersionId: access.activeRefinement.id,
     });
@@ -325,6 +341,20 @@ async function updatePlannerEntityAssets(args: ScopedEntityArgs & {
       generatedAssetIds: Array.isArray(updated.generatedAssetIdsJson) ? updated.generatedAssetIdsJson : [],
     },
   };
+}
+
+async function updatePlannerEntityAssets(args: ScopedEntityArgs & {
+  entityKind: 'subject' | 'scene';
+  entityId: string;
+  referenceAssetIds?: string[];
+  generatedAssetIds?: string[];
+}) {
+  return updatePlannerEntityAssetsWithDeps(args, {
+    requireEditableRefinement: requireEditableRefinementWithDeps,
+    verifyOwnedPlannerImageAssets,
+    prisma,
+    syncPlannerRefinementProjection,
+  });
 }
 
 export async function updatePlannerSubjectAssets(args: ScopedEntityArgs & {
@@ -394,3 +424,8 @@ export async function deletePlannerShot(args: ScopedEntityArgs & {
 }
 
 export { PLANNER_REFINEMENT_LOCKED_ERROR };
+
+export const __testables = {
+  requireEditableRefinementWithDeps,
+  updatePlannerEntityAssetsWithDeps,
+};

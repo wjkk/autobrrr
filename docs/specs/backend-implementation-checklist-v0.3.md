@@ -453,6 +453,7 @@ DoD：
 63. planner media generation service 已补 API 单测，当前覆盖 entity kind 到 resourceType 的稳定映射、图片模型默认选择、shot prompt 组装，以及 refinement 已确认/资产未归属时的硬失败，避免 planner 图片生成入口静默绕过 guard
 64. creation run service 已补 API 单测，当前覆盖 `NOT_FOUND / MODEL_NOT_FOUND` 失败路径、显式模型覆盖优先级、用户默认模型回退，以及 prompt override 写回与 run input 序列化，避免真正生成链路静默用错模型或提示词
 65. planner rerun service 已补 API 单测，当前覆盖 scope-specific instruction 文案、subject/scene/shot/act 目标实体解析与 clone、以及 target miss 时返回 `null`，避免 partial rerun 在 scope 扩展后静默指向错误上下文
+66. planner refinement entity service 已补 API 单测，当前覆盖 editable refinement 缺失/已确认 guard、subject/scene 资产绑定的 missing/unowned 分支，以及更新后返回的 asset id 归一化，避免手工编辑与素材绑定链路静默绕过版本保护
 
 DoD：
 

@@ -217,7 +217,8 @@
 14. 纯函数 presenter 的单测必须有正式脚本入口，避免“测试文件存在但没人执行”
 15. Planner 页面 helper / presenter 这类不直接发请求、但决定 UI/runtime 映射的纯函数，也必须进入 web unit 覆盖，避免消息流、版本视图、资源缩略图排序等展示逻辑静默漂移
 16. 页面 bootstrap 若消费 runtime message，必须在进入页面模型前做最小清洗（例如 trim 与过滤纯空白文本），不能把脏消息直接带入首屏状态
-17. 合并前默认执行 `pnpm test:quality`，除非明确知道本次变更只影响某个局部并已有更小验证集合
+17. structured doc 转换与 outline preview 这类“页面拿到什么文档结构”的纯函数，也必须进入 web unit 覆盖，避免 entityKey 继承、目标模型继承、资源优先级选择在重构中静默漂移
+18. 合并前默认执行 `pnpm test:quality`，除非明确知道本次变更只影响某个局部并已有更小验证集合
 
 ## 8. 回滚与停手条件
 

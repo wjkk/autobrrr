@@ -408,8 +408,9 @@ DoD：
 18. web 侧 `Planner / Creation / Publish` bootstrap 已拆成纯函数，并补单测锁住真实 workspace DTO 到页面模型的转换形状
 19. Planner 页面 helper / presenter 映射已补 web unit，当前覆盖 thread message 映射、asset thumb 排序去重、episode draft 构造、history 版本视图归一化、preferred model 解析
 20. Planner bootstrap 现在也会 trim 并过滤纯空白 runtime message，避免首屏页面模型混入无意义消息
-21. web 侧已新增正式执行入口 `pnpm test:web:unit`，不再依赖临时借用 API 包的 test runner
-22. 根目录已新增聚合质量入口 `pnpm test:quality`，用于合并前一次性执行 API unit / web unit / AI regression / web regression
+21. Planner structured doc 纯函数已补 web unit，当前覆盖 outline 预览文档构造、asset URL 选择优先级、以及历史 `entityKey / targetModelFamilySlug` 继承
+22. web 侧已新增正式执行入口 `pnpm test:web:unit`，不再依赖临时借用 API 包的 test runner
+23. 根目录已新增聚合质量入口 `pnpm test:quality`，用于合并前一次性执行 API unit / web unit / AI regression / web regression
 
 DoD：
 

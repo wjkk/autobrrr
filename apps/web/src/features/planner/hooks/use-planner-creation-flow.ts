@@ -4,10 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 
 import { finalizePlannerRefinement, type ApiPlannerWorkspace, type PlannerRuntimeApiContext } from '../lib/planner-api';
+import { resolvePlannerCreationActionState } from '../lib/planner-creation-flow-logic';
 import type { SekoActDraft } from '../lib/seko-plan-data';
 
 const BOOT_PROGRESS_STEPS = [28, 49, 67, 85, 100];
-const READY_CREATION_STATUSES = new Set(['ready_for_storyboard', 'export_ready']);
 
 interface UsePlannerCreationFlowOptions {
   router: AppRouterInstance;
@@ -22,26 +22,6 @@ interface UsePlannerCreationFlowOptions {
   studioProjectId: string;
   refreshPlannerWorkspace: () => Promise<ApiPlannerWorkspace | null>;
   setNotice: (message: string | null) => void;
-}
-
-function hasShotDrafts(displayScriptActs: SekoActDraft[]) {
-  return displayScriptActs.some((act) => act.shots.length > 0);
-}
-
-function hasCreationReadyStatus(workspace: ApiPlannerWorkspace | null) {
-  return READY_CREATION_STATUSES.has(workspace?.project.status ?? '') || READY_CREATION_STATUSES.has(workspace?.episode.status ?? '');
-}
-
-function isModelSelectionAligned(args: {
-  runtimeActiveRefinement: ApiPlannerWorkspace['activeRefinement'];
-  storyboardModelId: string;
-}) {
-  const shots = args.runtimeActiveRefinement?.shotScripts ?? [];
-  if (shots.length === 0) {
-    return false;
-  }
-
-  return shots.every((shot) => !shot.targetModelFamilySlug || shot.targetModelFamilySlug === args.storyboardModelId);
 }
 
 export function usePlannerCreationFlow(options: UsePlannerCreationFlowOptions) {
@@ -60,40 +40,24 @@ export function usePlannerCreationFlow(options: UsePlannerCreationFlowOptions) {
     };
   }, [clearPendingTimers]);
 
-  const hasRuntimeRefinement = Boolean(options.runtimeActiveRefinement);
-  const hasReadyShots = hasShotDrafts(options.displayScriptActs);
-  const hasSufficientPoints = options.remainingPoints >= options.pointCost;
-  const creationReady =
-    hasRuntimeRefinement
-    && (
-      options.displayVersionStatus === 'ready'
-      || Boolean(options.runtimeActiveRefinement?.isConfirmed)
-      || hasCreationReadyStatus(options.runtimeWorkspace)
-    );
-
-  const shouldFinalizeBeforeNavigate =
-    Boolean(options.runtimeApi && options.runtimeActiveRefinement)
-    && (
-      !options.runtimeActiveRefinement?.isConfirmed
-      || !hasCreationReadyStatus(options.runtimeWorkspace)
-      || !isModelSelectionAligned({
-        runtimeActiveRefinement: options.runtimeActiveRefinement,
-        storyboardModelId: options.storyboardModelId,
-      })
-    );
-
-  const creationActionLabel = !hasRuntimeRefinement
-    ? '确认大纲后可进入创作'
-    : shouldFinalizeBeforeNavigate
-      ? '确认策划，进入创作'
-      : '进入创作';
-
-  const creationActionDisabled =
-    booting
-    || !hasRuntimeRefinement
-    || !creationReady
-    || !hasReadyShots
-    || !hasSufficientPoints;
+  const {
+    creationReady,
+    hasReadyShots,
+    hasSufficientPoints,
+    shouldFinalizeBeforeNavigate,
+    creationActionLabel,
+    creationActionDisabled,
+  } = resolvePlannerCreationActionState({
+    runtimeApi: options.runtimeApi,
+    runtimeWorkspace: options.runtimeWorkspace,
+    runtimeActiveRefinement: options.runtimeActiveRefinement,
+    displayVersionStatus: options.displayVersionStatus,
+    displayScriptActs: options.displayScriptActs,
+    remainingPoints: options.remainingPoints,
+    pointCost: options.pointCost,
+    storyboardModelId: options.storyboardModelId,
+    booting,
+  });
 
   const startCreation = useCallback(async () => {
     if (!creationReady) {

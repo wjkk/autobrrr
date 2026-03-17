@@ -717,3 +717,7 @@ export async function deletePlannerEntity<T>(path: string) {
     method: 'DELETE',
   });
 }
+
+export const __testables = {
+  plannerJsonRequest,
+};

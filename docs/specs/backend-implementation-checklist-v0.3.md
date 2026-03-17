@@ -864,3 +864,4 @@ DoD：
 1. 主业务链路已可运行
 2. 架构需要第二阶段系统性重构
 3. 下一阶段的重点已经从“从零搭建”切换成“重构与模块化升级”
+4. planner api 这类“前端真实页面直连 runtime api 的 envelope/path helper”也已补 web 单测，当前覆盖 JSON envelope 解包、错误回退、shot prompt preview query 拼装和素材上传 multipart 请求，避免页面请求层 silently 漂移

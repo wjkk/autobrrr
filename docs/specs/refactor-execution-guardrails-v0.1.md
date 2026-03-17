@@ -278,6 +278,7 @@
 37. workspace service / presenter 这类“真实页面最终消费什么 DTO”的映射层，也必须有 API 或 web 单测，避免前后端契约冻结后又被静默打散
 38. Creation 这类以本地状态机承载大量交互的页面，核心状态迁移函数必须有 web 单测，不能只靠页面 smoke 间接覆盖
 39. 前端 workspace adapter 这类带启发式推断的转换层，也必须补分支单测，不能只测 happy path merge
+40. planner api 这类“前端工作区请求 helper 与 envelope 解析层”也必须有 web 单测，至少锁住路径拼装、错误消息优先级和 multipart 上传；否则页面最容易表现成“交互正常、请求悄悄打错路径”的伪回归
 
 ## 8. 回滚与停手条件
 

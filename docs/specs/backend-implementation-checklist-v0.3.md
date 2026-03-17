@@ -435,6 +435,9 @@ DoD：
 45. creation-state 已补 web 单测，当前覆盖首屏 clone、关键帧派生新分镜、批量生成状态迁移和版本应用，避免 Creation 运行时状态机静默漂移
 46. creation-api 已补 web 单测，当前覆盖 duration/resolution/status 启发式、preferred model 推断和素材 source kind 映射，避免首屏 workspace 转换静默漂移
 47. Planner / Creation / Publish `page-data` 纯函数已补 web 单测，当前覆盖默认值、fixture fallback 映射和 mock-only 页面数据桥接，避免 demo/fallback 路径在重构中静默失真
+48. Creation playback / timeline 纯函数已补 web 单测，当前覆盖 shot playback window、字幕时间轴、stage motion CSS 变量和 playhead ratio，避免时间轴与预览联动静默漂移
+49. Creation utils 纯函数已补 web 单测，当前覆盖 shot clone、版本状态同步、timeline offset、状态文案和视觉 accent 映射，避免局部编辑器与时间轴辅助逻辑静默漂移
+50. Planner 视频模型选项已补 web 单测，当前覆盖 Seedance/Veo/Seko 基线选项与 `findPlannerVideoModelOption(...)` 查找规则，避免模型切换入口静默指向错误 slug
 
 DoD：
 

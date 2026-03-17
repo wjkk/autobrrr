@@ -237,6 +237,9 @@
 34. service seam 引入后，provider settings 这类 route 下沉出来的 query/catalog 决策层也必须有 API 单测，避免只是把厚 route 平移到新 service 而没有锁住行为
 35. settings/provider 这类带草稿态、自动 sync 和多模型选择的页面，也必须把页面 helper 拆出来进 web 单测，不能只靠浏览器 smoke 覆盖
 36. `page-data` 这类连接真实 workspace DTO 与 mock-only fallback 的纯函数，也必须有 web 单测，避免 fallback 仍可打开页面但字段形状已悄悄偏离真实页面预期
+37. Creation 时间轴、字幕与 stage motion 这类“页面可交互但 smoke 很难精确断言”的纯函数，也必须有 web 单测，避免播放/字幕/进度条在重构中静默失真
+38. 版本状态同步、时间轴 offset、视觉 accent 这类 Creation editor 辅助逻辑也应进入 web unit，不能只在运行时靠组件组合间接覆盖
+39. 模型选项表与 `find*Option(...)` 这类小型查找层同样要锁住；它们直接影响用户选择写入的 slug，错了会把整条生成链路带偏
 34. settings/provider 这类直接调用 fetch 的页面，还必须把请求 payload 和错误解析 helper 拆出来进 web 单测，避免 UI 层每次改交互都顺手打穿错误处理
 35. 浏览器主链路回归除 Planner / Creation / Publish 外，还应覆盖 `/settings/providers` 这类 AI 配置入口，至少锁住 provider 卡片和多模型区块真实渲染
 36. provider runtime config 这类“运行时到底读取哪个 provider 凭据和 baseUrl”的决策层，也必须有 API 单测，避免页面配置正确但执行链路落到错误 owner 或 fallback

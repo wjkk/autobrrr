@@ -442,6 +442,9 @@ DoD：
 52. planner workspace service 已补 API 单测，当前覆盖 stage 推导、planner asset id 去重聚合、以及 latestPlannerRun 的 `generatedText / structuredDoc / timestamp` 映射，避免 Planner 工作区输出形状静默漂移
 53. planner refinement draft copy 的纯 remap 规则已补 API 单测，当前覆盖 confirmed 判定、subject binding remap、以及 structured doc 中 `subject/scene/shot entityKey` 的重写，避免确认版创建草稿后实体链路静默断裂
 54. planner doc 解析层已补 API 单测，当前覆盖 generation prompt 组装、fenced JSON 解析、以及 JSON 缺失/非法时的 fallback structured doc 生成，避免策划文档入口静默退化
+55. project stage / planner debug presenter 已补 web 单测，当前覆盖项目状态到阶段标签的稳定映射、debug 预览图选择、completeness 计算、缺字段追踪与 prompt 摘要，避免调试台与阶段导航静默漂移
+56. planner refinement partial 已补 API 单测，当前覆盖 subject/scene/shot 局部重跑时的 diff summary 和 structured doc merge 规则，避免局部重跑把无关内容误覆盖
+57. planner text extraction 已补 API 单测，当前覆盖 `output_text / responses output / chat choices / candidate parts` 的优先级以及 deterministic fallback 文本，避免 provider 输出形态变化后策划链路静默拿不到文本
 
 DoD：
 

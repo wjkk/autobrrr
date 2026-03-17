@@ -13,13 +13,7 @@ function stripWrappingQuotes(value: string) {
   return value;
 }
 
-function loadLocalEnvFile() {
-  const envFilePath = path.resolve(process.cwd(), '.env');
-  if (!fs.existsSync(envFilePath)) {
-    return;
-  }
-
-  const content = fs.readFileSync(envFilePath, 'utf8');
+function applyEnvFileContent(content: string, target: NodeJS.ProcessEnv) {
   for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || line.startsWith('#')) {
@@ -32,13 +26,22 @@ function loadLocalEnvFile() {
     }
 
     const key = line.slice(0, separatorIndex).trim();
-    if (!key || process.env[key] !== undefined) {
+    if (!key || target[key] !== undefined) {
       continue;
     }
 
     const rawValue = line.slice(separatorIndex + 1).trim();
-    process.env[key] = stripWrappingQuotes(rawValue);
+    target[key] = stripWrappingQuotes(rawValue);
   }
+}
+
+function loadLocalEnvFile() {
+  const envFilePath = path.resolve(process.cwd(), '.env');
+  if (!fs.existsSync(envFilePath)) {
+    return;
+  }
+
+  applyEnvFileContent(fs.readFileSync(envFilePath, 'utf8'), process.env);
 }
 
 loadLocalEnvFile();
@@ -51,10 +54,20 @@ const envSchema = z.object({
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(14),
 });
 
-export const env = envSchema.parse({
-  DATABASE_URL: process.env.DATABASE_URL,
-  API_PORT: process.env.API_PORT,
-  API_PUBLIC_BASE_URL: process.env.API_PUBLIC_BASE_URL,
-  SESSION_COOKIE_NAME: process.env.SESSION_COOKIE_NAME,
-  SESSION_TTL_DAYS: process.env.SESSION_TTL_DAYS,
-});
+function parseEnv(source: NodeJS.ProcessEnv) {
+  return envSchema.parse({
+    DATABASE_URL: source.DATABASE_URL,
+    API_PORT: source.API_PORT,
+    API_PUBLIC_BASE_URL: source.API_PUBLIC_BASE_URL,
+    SESSION_COOKIE_NAME: source.SESSION_COOKIE_NAME,
+    SESSION_TTL_DAYS: source.SESSION_TTL_DAYS,
+  });
+}
+
+export const env = parseEnv(process.env);
+
+export const __testables = {
+  stripWrappingQuotes,
+  applyEnvFileContent,
+  parseEnv,
+};

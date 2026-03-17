@@ -869,3 +869,4 @@ DoD：
 6. password/session/auth 这类“认证基础纯逻辑和会话校验”也已补 API 单测，当前覆盖密码哈希校验、session token 哈希、过期/撤销/禁用会话拒绝，以及 `requireUser` 的 401 回包，避免主链路因基础认证回归被静默打断
 7. ownership 这类“project / episode / shot / run 的所有权查询”也已补 API 单测，当前锁住 where 条件和 include/select 形状，避免权限查询被静默改松或丢上下文
 8. env 这类“启动期环境变量加载与解析”也已补 API 单测，当前锁住 `.env` 行解析、已有环境变量优先、默认值注入和非法 URL/缺少数据库连接串的早失败，避免运行时把启动问题误诊为业务问题
+9. planner debug 配置编辑器与分镜指针查找这类“薄但关键的前端纯逻辑”也已补 web 单测，当前锁住 schema 默认值、序列化规则、换行列表处理和 act/shot 指针命中，避免 debug 配置页与分镜编辑出现静默漂移

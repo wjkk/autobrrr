@@ -3,6 +3,77 @@ import { mapProviderConfig, mapProviderEndpoints } from './provider-config-prese
 import { mergeProviderConfigOptions, parseProviderConfigOptions } from './provider-config-options.js';
 import type { ProviderConfigServiceResult } from './provider-config-service-types.js';
 
+type ProviderConfigUpdatePayload = {
+  apiKey?: string | null;
+  baseUrlOverride?: string | null;
+  enabled?: boolean;
+  defaults?: {
+    textEndpointSlug?: string | null;
+    imageEndpointSlug?: string | null;
+    videoEndpointSlug?: string | null;
+    audioEndpointSlug?: string | null;
+  };
+  enabledModels?: {
+    textEndpointSlugs: string[];
+    imageEndpointSlugs: string[];
+    videoEndpointSlugs: string[];
+    audioEndpointSlugs: string[];
+  };
+};
+
+function collectRequestedEndpointSlugs(payload: ProviderConfigUpdatePayload) {
+  return [
+    ...Object.values(payload.defaults ?? {}).filter((value): value is string => !!value),
+    ...(payload.enabledModels?.textEndpointSlugs ?? []),
+    ...(payload.enabledModels?.imageEndpointSlugs ?? []),
+    ...(payload.enabledModels?.videoEndpointSlugs ?? []),
+    ...(payload.enabledModels?.audioEndpointSlugs ?? []),
+  ];
+}
+
+function hasMismatchedDefaultSelection(payload: ProviderConfigUpdatePayload) {
+  if (!payload.defaults || !payload.enabledModels) {
+    return false;
+  }
+
+  return Boolean(
+    (payload.defaults.textEndpointSlug
+      && payload.enabledModels.textEndpointSlugs.length > 0
+      && !payload.enabledModels.textEndpointSlugs.includes(payload.defaults.textEndpointSlug))
+    || (payload.defaults.imageEndpointSlug
+      && payload.enabledModels.imageEndpointSlugs.length > 0
+      && !payload.enabledModels.imageEndpointSlugs.includes(payload.defaults.imageEndpointSlug))
+    || (payload.defaults.videoEndpointSlug
+      && payload.enabledModels.videoEndpointSlugs.length > 0
+      && !payload.enabledModels.videoEndpointSlugs.includes(payload.defaults.videoEndpointSlug))
+    || (payload.defaults.audioEndpointSlug
+      && payload.enabledModels.audioEndpointSlugs.length > 0
+      && !payload.enabledModels.audioEndpointSlugs.includes(payload.defaults.audioEndpointSlug)),
+  );
+}
+
+function resolveNextProviderConfigOptions(currentOptionsJson: unknown, payload: ProviderConfigUpdatePayload) {
+  const currentOptions = parseProviderConfigOptions(currentOptionsJson);
+  if (payload.defaults === undefined && payload.enabledModels === undefined) {
+    return undefined;
+  }
+
+  return mergeProviderConfigOptions(currentOptions.raw, {
+    defaults: {
+      textEndpointSlug: payload.defaults?.textEndpointSlug || null,
+      imageEndpointSlug: payload.defaults?.imageEndpointSlug || null,
+      videoEndpointSlug: payload.defaults?.videoEndpointSlug || null,
+      audioEndpointSlug: payload.defaults?.audioEndpointSlug || null,
+    },
+    enabledModels: {
+      textEndpointSlugs: payload.enabledModels?.textEndpointSlugs ?? currentOptions.enabledModels.textEndpointSlugs,
+      imageEndpointSlugs: payload.enabledModels?.imageEndpointSlugs ?? currentOptions.enabledModels.imageEndpointSlugs,
+      videoEndpointSlugs: payload.enabledModels?.videoEndpointSlugs ?? currentOptions.enabledModels.videoEndpointSlugs,
+      audioEndpointSlugs: payload.enabledModels?.audioEndpointSlugs ?? currentOptions.enabledModels.audioEndpointSlugs,
+    },
+  });
+}
+
 export async function fetchProviderConfigItem(providerCode: string, userId: string) {
   const provider = await prisma.modelProvider.findUnique({
     where: { code: providerCode },
@@ -96,23 +167,7 @@ export async function listProviderConfigItems(userId: string) {
 export async function updateProviderConfigForUser(args: {
   providerCode: string;
   userId: string;
-  payload: {
-    apiKey?: string | null;
-    baseUrlOverride?: string | null;
-    enabled?: boolean;
-    defaults?: {
-      textEndpointSlug?: string | null;
-      imageEndpointSlug?: string | null;
-      videoEndpointSlug?: string | null;
-      audioEndpointSlug?: string | null;
-    };
-    enabledModels?: {
-      textEndpointSlugs: string[];
-      imageEndpointSlugs: string[];
-      videoEndpointSlugs: string[];
-      audioEndpointSlugs: string[];
-    };
-  };
+  payload: ProviderConfigUpdatePayload;
 }): Promise<ProviderConfigServiceResult<Awaited<ReturnType<typeof fetchProviderConfigItem>>>> {
   const provider = await prisma.modelProvider.findUnique({
     where: { code: args.providerCode },
@@ -137,13 +192,7 @@ export async function updateProviderConfigForUser(args: {
     };
   }
 
-  const requestedSlugs = [
-    ...Object.values(args.payload.defaults ?? {}).filter((value): value is string => !!value),
-    ...(args.payload.enabledModels?.textEndpointSlugs ?? []),
-    ...(args.payload.enabledModels?.imageEndpointSlugs ?? []),
-    ...(args.payload.enabledModels?.videoEndpointSlugs ?? []),
-    ...(args.payload.enabledModels?.audioEndpointSlugs ?? []),
-  ];
+  const requestedSlugs = collectRequestedEndpointSlugs(args.payload);
   if (requestedSlugs.length > 0) {
     const uniqueRequestedSlugs = [...new Set(requestedSlugs)];
     const endpoints = await prisma.modelEndpoint.findMany({
@@ -165,41 +214,17 @@ export async function updateProviderConfigForUser(args: {
     }
   }
 
-  if (args.payload.defaults && args.payload.enabledModels) {
-    const mismatchedDefault =
-      (args.payload.defaults.textEndpointSlug && args.payload.enabledModels.textEndpointSlugs.length > 0 && !args.payload.enabledModels.textEndpointSlugs.includes(args.payload.defaults.textEndpointSlug))
-      || (args.payload.defaults.imageEndpointSlug && args.payload.enabledModels.imageEndpointSlugs.length > 0 && !args.payload.enabledModels.imageEndpointSlugs.includes(args.payload.defaults.imageEndpointSlug))
-      || (args.payload.defaults.videoEndpointSlug && args.payload.enabledModels.videoEndpointSlugs.length > 0 && !args.payload.enabledModels.videoEndpointSlugs.includes(args.payload.defaults.videoEndpointSlug))
-      || (args.payload.defaults.audioEndpointSlug && args.payload.enabledModels.audioEndpointSlugs.length > 0 && !args.payload.enabledModels.audioEndpointSlugs.includes(args.payload.defaults.audioEndpointSlug));
-    if (mismatchedDefault) {
-      return {
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Default endpoint must be included in enabled model selections.',
-        },
-      };
-    }
+  if (hasMismatchedDefaultSelection(args.payload)) {
+    return {
+      ok: false,
+      error: {
+        code: 'INVALID_ARGUMENT',
+        message: 'Default endpoint must be included in enabled model selections.',
+      },
+    };
   }
 
-  const currentOptions = parseProviderConfigOptions(provider.userConfigs[0]?.optionsJson);
-  const nextOptions =
-    args.payload.defaults !== undefined || args.payload.enabledModels !== undefined
-      ? mergeProviderConfigOptions(currentOptions.raw, {
-          defaults: {
-            textEndpointSlug: args.payload.defaults?.textEndpointSlug || null,
-            imageEndpointSlug: args.payload.defaults?.imageEndpointSlug || null,
-            videoEndpointSlug: args.payload.defaults?.videoEndpointSlug || null,
-            audioEndpointSlug: args.payload.defaults?.audioEndpointSlug || null,
-          },
-          enabledModels: {
-            textEndpointSlugs: args.payload.enabledModels?.textEndpointSlugs ?? currentOptions.enabledModels.textEndpointSlugs,
-            imageEndpointSlugs: args.payload.enabledModels?.imageEndpointSlugs ?? currentOptions.enabledModels.imageEndpointSlugs,
-            videoEndpointSlugs: args.payload.enabledModels?.videoEndpointSlugs ?? currentOptions.enabledModels.videoEndpointSlugs,
-            audioEndpointSlugs: args.payload.enabledModels?.audioEndpointSlugs ?? currentOptions.enabledModels.audioEndpointSlugs,
-          },
-        })
-      : undefined;
+  const nextOptions = resolveNextProviderConfigOptions(provider.userConfigs[0]?.optionsJson, args.payload);
 
   await prisma.userProviderConfig.upsert({
     where: {
@@ -229,3 +254,9 @@ export async function updateProviderConfigForUser(args: {
     data: await fetchProviderConfigItem(provider.code, args.userId),
   };
 }
+
+export const __testables = {
+  collectRequestedEndpointSlugs,
+  hasMismatchedDefaultSelection,
+  resolveNextProviderConfigOptions,
+};

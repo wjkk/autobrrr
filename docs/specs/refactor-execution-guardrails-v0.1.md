@@ -232,6 +232,7 @@
 29. provider settings presenter 这类“后端返回给配置页的展示态映射”也必须有 API 单测，避免 API key 脱敏、audio/default 状态和空态返回在 presenter 层静默漂移
 30. user default model selection 这类“运行时真正选中哪个 endpoint”的决策逻辑，也必须有 API 单测，避免配置页显示正确但生成链路落到错误模型
 31. 合并前默认执行 `pnpm test:quality`，除非明确知道本次变更只影响某个局部并已有更小验证集合
+32. service seam 引入后，provider settings 这类 route 下沉出来的 query/catalog 决策层也必须有 API 单测，避免只是把厚 route 平移到新 service 而没有锁住行为
 
 ## 8. 回滚与停手条件
 

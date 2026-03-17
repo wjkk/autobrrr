@@ -380,3 +380,9 @@ export async function testProviderConfigForUser(args: {
     data: await fetchProviderConfigItem(provider.code, args.userId),
   };
 }
+
+export const __testables = {
+  needsVideoReferenceImage,
+  pickTestEndpoint,
+  getProviderTestError,
+};

@@ -53,13 +53,17 @@ export interface PlannerAutoSubjectImageSummary {
   items: PlannerAutoSubjectImageSummaryItem[];
 }
 
-export async function autoGeneratePlannerSubjectAssetsForRefinement(args: {
+async function autoGeneratePlannerSubjectAssetsForRefinementWithDeps(args: {
   userId: string;
   projectId: string;
   episodeId: string;
   refinementVersionId: string;
+}, deps: {
+  prisma: typeof prisma;
+  generatePlannerSubjectAutoImageForUser: typeof generatePlannerSubjectAutoImageForUser;
+  syncPlannerRefinementProjection: typeof syncPlannerRefinementProjection;
 }) {
-  const creationConfig = await prisma.projectCreationConfig.findUnique({
+  const creationConfig = await deps.prisma.projectCreationConfig.findUnique({
     where: { projectId: args.projectId },
     select: {
       imageModelEndpoint: {
@@ -70,7 +74,7 @@ export async function autoGeneratePlannerSubjectAssetsForRefinement(args: {
     },
   });
 
-  const subjects = await prisma.plannerSubject.findMany({
+  const subjects = await deps.prisma.plannerSubject.findMany({
     where: {
       refinementVersionId: args.refinementVersionId,
       editable: true,
@@ -122,7 +126,7 @@ export async function autoGeneratePlannerSubjectAssetsForRefinement(args: {
 
     try {
       const description = subject.prompt.trim() || subject.name.trim();
-      const result = await generatePlannerSubjectAutoImageForUser({
+      const result = await deps.generatePlannerSubjectAutoImageForUser({
         userId: args.userId,
         input: {
           name: subject.name,
@@ -150,7 +154,7 @@ export async function autoGeneratePlannerSubjectAssetsForRefinement(args: {
   }
 
   if (generatedResults.length > 0) {
-    const createdItems = await prisma.$transaction(async (tx) => {
+    const createdItems = await deps.prisma.$transaction(async (tx) => {
       const nextItems: PlannerAutoSubjectImageSummaryItem[] = [];
 
       for (const generated of generatedResults) {
@@ -213,7 +217,7 @@ export async function autoGeneratePlannerSubjectAssetsForRefinement(args: {
         });
       }
 
-      await syncPlannerRefinementProjection({
+      await deps.syncPlannerRefinementProjection({
         db: tx,
         refinementVersionId: args.refinementVersionId,
       });
@@ -237,3 +241,23 @@ export async function autoGeneratePlannerSubjectAssetsForRefinement(args: {
     items,
   } satisfies PlannerAutoSubjectImageSummary;
 }
+
+export async function autoGeneratePlannerSubjectAssetsForRefinement(args: {
+  userId: string;
+  projectId: string;
+  episodeId: string;
+  refinementVersionId: string;
+}) {
+  return autoGeneratePlannerSubjectAssetsForRefinementWithDeps(args, {
+    prisma,
+    generatePlannerSubjectAutoImageForUser,
+    syncPlannerRefinementProjection,
+  });
+}
+
+export const __testables = {
+  readAssetIds,
+  inferPlannerSubjectType,
+  buildAssetFileName,
+  autoGeneratePlannerSubjectAssetsForRefinementWithDeps,
+};

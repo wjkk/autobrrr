@@ -201,3 +201,13 @@ export function mergeCreationWorkspaceFromApi(current: CreationWorkspace, worksp
     },
   };
 }
+
+export const __testables = {
+  toShotStatus,
+  inferDurationSeconds,
+  inferResolution,
+  inferPreferredModel,
+  inferPreferredModelLabel,
+  mapVersionStatus,
+  mapWorkspaceShotToCreationShot,
+};

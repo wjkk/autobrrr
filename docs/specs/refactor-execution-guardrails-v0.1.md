@@ -239,6 +239,7 @@
 36. provider runtime config 这类“运行时到底读取哪个 provider 凭据和 baseUrl”的决策层，也必须有 API 单测，避免页面配置正确但执行链路落到错误 owner 或 fallback
 37. workspace service / presenter 这类“真实页面最终消费什么 DTO”的映射层，也必须有 API 或 web 单测，避免前后端契约冻结后又被静默打散
 38. Creation 这类以本地状态机承载大量交互的页面，核心状态迁移函数必须有 web 单测，不能只靠页面 smoke 间接覆盖
+39. 前端 workspace adapter 这类带启发式推断的转换层，也必须补分支单测，不能只测 happy path merge
 
 ## 8. 回滚与停手条件
 

@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import type { CreationWorkspace } from '@aiv/domain';
 
-import { mergeCreationWorkspaceFromApi } from './creation-api';
+import { __testables, mergeCreationWorkspaceFromApi } from './creation-api';
 
 function buildBaseWorkspace(): CreationWorkspace {
   return {
@@ -204,4 +204,118 @@ test('mergeCreationWorkspaceFromApi preserves current selection and lipsync base
   assert.equal(result.selectedShotId, 'shot-2');
   assert.equal(result.lipSync.baseShotId, 'shot-2');
   assert.equal(result.playback.currentSecond, 3);
+});
+
+test('creation api heuristics normalize duration, resolution and shot status branches', () => {
+  assert.equal(__testables.toShotStatus('running'), 'generating');
+  assert.equal(__testables.toShotStatus('queued'), 'queued');
+  assert.equal(__testables.toShotStatus('other'), 'pending');
+
+  assert.equal(
+    __testables.inferDurationSeconds({
+      id: 'shot-1',
+      sequenceNo: 1,
+      title: '镜头一',
+      subtitleText: '文案 6秒',
+      narrationText: '',
+      imagePrompt: '',
+      motionPrompt: '镜头 6s 推进',
+      promptJson: null,
+      targetVideoModelFamilySlug: null,
+      materialBindings: [],
+      finalizedAt: null,
+      status: 'success',
+      latestGenerationRun: null,
+      activeVersionId: null,
+      activeVersion: null,
+    }),
+    6,
+  );
+
+  assert.equal(
+    __testables.inferResolution({
+      id: 'shot-1',
+      sequenceNo: 1,
+      title: '镜头一',
+      subtitleText: '',
+      narrationText: '',
+      imagePrompt: '',
+      motionPrompt: '',
+      promptJson: null,
+      targetVideoModelFamilySlug: null,
+      materialBindings: [],
+      finalizedAt: null,
+      status: 'success',
+      latestGenerationRun: null,
+      activeVersionId: 'version-1',
+      activeVersion: {
+        id: 'version-1',
+        label: 'V1',
+        mediaKind: 'video',
+        status: 'active',
+      },
+    }),
+    '1080P',
+  );
+});
+
+test('mapWorkspaceShotToCreationShot prefers endpoint slug and normalizes material source kinds', () => {
+  const shot = __testables.mapWorkspaceShotToCreationShot({
+    id: 'shot-1',
+    sequenceNo: 1,
+    title: '镜头一',
+    subtitleText: '',
+    narrationText: '',
+    imagePrompt: '图像提示词',
+    motionPrompt: '运动提示词',
+    promptJson: null,
+    targetVideoModelFamilySlug: 'seedance-family',
+    materialBindings: [
+      {
+        id: 'asset-1',
+        sourceUrl: 'https://example.com/generated.png',
+        fileName: 'generated.png',
+        mediaKind: 'image',
+        sourceKind: 'generated',
+        createdAt: '2026-03-17T10:00:00.000Z',
+      },
+      {
+        id: 'asset-2',
+        sourceUrl: 'https://example.com/reference.mp4',
+        fileName: 'reference.mp4',
+        mediaKind: 'video',
+        sourceKind: 'imported',
+        createdAt: '2026-03-17T10:00:00.000Z',
+      },
+    ],
+    finalizedAt: '2026-03-17T10:00:00.000Z',
+    status: 'failed',
+    latestGenerationRun: {
+      id: 'run-1',
+      runType: 'VIDEO_GENERATION',
+      status: 'completed',
+      modelEndpoint: {
+        id: 'endpoint-1',
+        slug: 'ark-seedance-2-video',
+        label: 'Seedance 2.0',
+      },
+    },
+    activeVersionId: 'version-1',
+    activeVersion: {
+      id: 'version-1',
+      label: 'V1',
+      mediaKind: 'video',
+      status: 'active',
+    },
+  });
+
+  assert.equal(shot.preferredModel, 'ark-seedance-2-video');
+  assert.equal(shot.lastError, '本次生成失败，请重试。');
+  assert.deepEqual(
+    shot.materials.map((asset) => [asset.id, asset.source, asset.kind]),
+    [
+      ['asset-1', 'generated', 'image'],
+      ['asset-2', 'history', 'video'],
+    ],
+  );
 });

@@ -431,6 +431,7 @@ DoD：
 41. provider runtime config 已补 API 单测，当前覆盖 provider 缺失 fallback、用户 override 的 baseUrl/apiKey/enabled，以及 run 按 project owner 解析 provider config，避免生成链路运行时悄悄用错凭据
 42. creation / publish workspace service 已补 API 单测，当前覆盖素材绑定映射、latest run 归并、activeVersion 展示态和 readyToPublish summary，避免页面真实工作区 DTO 静默漂移
 43. creation-state 已补 web 单测，当前覆盖首屏 clone、关键帧派生新分镜、批量生成状态迁移和版本应用，避免 Creation 运行时状态机静默漂移
+44. creation-api 已补 web 单测，当前覆盖 duration/resolution/status 启发式、preferred model 推断和素材 source kind 映射，避免首屏 workspace 转换静默漂移
 
 DoD：
 

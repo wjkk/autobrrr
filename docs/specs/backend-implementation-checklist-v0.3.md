@@ -871,3 +871,4 @@ DoD：
 8. env 这类“启动期环境变量加载与解析”也已补 API 单测，当前锁住 `.env` 行解析、已有环境变量优先、默认值注入和非法 URL/缺少数据库连接串的早失败，避免运行时把启动问题误诊为业务问题
 9. planner debug 配置编辑器与分镜指针查找这类“薄但关键的前端纯逻辑”也已补 web 单测，当前锁住 schema 默认值、序列化规则、换行列表处理和 act/shot 指针命中，避免 debug 配置页与分镜编辑出现静默漂移
 10. 多个 server wrapper 已开始收口到统一的 server fallback helper，当前锁住“成功值/空值/异常”的 fallback 语义，并已应用到 admin models、settings auth/provider、catalog settings、my-space 等入口，避免每个页面各写一份 try/catch 造成漂移
+11. Creation runtime hook 中的请求封装、模型目录展示和视频 payload 拼装也已开始下沉到独立 helper 并补 web 单测，当前锁住 JSON envelope 解包、错误消息优先级、运行时模型显示名和生成 payload 规则，避免 hook 持续膨胀

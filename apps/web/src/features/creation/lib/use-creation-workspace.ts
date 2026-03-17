@@ -7,6 +7,15 @@ import { creationCopy } from '@/lib/copy';
 
 import { mergeCreationWorkspaceFromApi, type ApiCreationWorkspace, type ApiRun, type CreationRuntimeApiContext } from './creation-api';
 import type { CreationPageData } from './creation-page-data';
+import {
+  buildRuntimeModelOptions,
+  buildVideoRunPayload,
+  requestCreationApi,
+  resolveRuntimeModelDisplayName,
+  type ApiModelEndpoint,
+  type RuntimeModelOption,
+  type VideoFrameOptions,
+} from './creation-runtime-api';
 
 import {
   addLipsyncDialogueState,
@@ -44,72 +53,6 @@ import {
 import { formatClock, formatShotDuration, shotAccent, statusLabel } from './creation-utils';
 import type { CanvasDraft, CreationDialogState, GenerationDraft, MaterialTab, ModelPickerDraft, StoryToolDraft, StoryToolMode } from './ui-state';
 import { makeCanvasDraft, makeGenerationDraft, makeModelPickerDraft, makeStoryToolDraft } from './ui-state';
-
-interface ApiEnvelopeSuccess<T> {
-  ok: true;
-  data: T;
-}
-
-interface ApiEnvelopeFailure {
-  ok: false;
-  error: {
-    code: string;
-    message: string;
-    details?: unknown;
-  };
-}
-
-type ApiEnvelope<T> = ApiEnvelopeSuccess<T> | ApiEnvelopeFailure;
-
-async function requestCreationApi<T>(path: string, init?: RequestInit) {
-  const response = await fetch(path, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
-
-  const payload = (await response.json()) as ApiEnvelope<T>;
-  if (!response.ok || !payload.ok) {
-    const errorPayload = payload as ApiEnvelopeFailure;
-    throw new Error(errorPayload.error?.message ?? `Request failed: ${path}`);
-  }
-
-  return payload.data;
-}
-
-interface VideoFrameOptions {
-  firstFrameUrl?: string;
-  lastFrameUrl?: string;
-}
-
-interface ApiModelEndpoint {
-  id: string;
-  slug: string;
-  label: string;
-  family: {
-    id: string;
-    slug: string;
-    name: string;
-    modelKind: 'image' | 'video' | 'text' | 'audio' | 'lipsync';
-  };
-  provider: {
-    id: string;
-    code: string;
-    name: string;
-    providerType: string;
-    enabled: boolean;
-  };
-}
-
-interface RuntimeModelOption {
-  id: string;
-  title: string;
-  description: string;
-  modelKind: 'image' | 'video';
-}
 
 interface UseCreationWorkspaceOptions {
   studio: CreationPageData;
@@ -261,15 +204,6 @@ export function useCreationWorkspace({ studio, runtimeApi, initialShotId, initia
     generationTimersRef.current.delete(targetShotId);
   };
 
-  const toApiVideoPayload = (frameOptions?: VideoFrameOptions) => ({
-    durationSeconds: generateDraft.durationMode === '6s' ? 6 : 4,
-    aspectRatio: activeShot?.canvasTransform.ratio ?? '9:16',
-    resolution: generateDraft.resolution === '1080P' ? '1080p' : '720p',
-    ...(runtimeModelCatalog.video.some((item) => item.slug === generateDraft.model) ? { modelEndpoint: generateDraft.model } : {}),
-    ...(frameOptions?.firstFrameUrl ? { firstFrameUrl: frameOptions.firstFrameUrl } : {}),
-    ...(frameOptions?.lastFrameUrl ? { lastFrameUrl: frameOptions.lastFrameUrl } : {}),
-  });
-
   const submitRunViaApi = async (targetShotId: string, mediaKind: 'image' | 'video', frameOptions?: VideoFrameOptions) => {
     if (!runtimeApi) {
       return false;
@@ -284,7 +218,12 @@ export function useCreationWorkspace({ studio, runtimeApi, initialShotId, initia
           ...(runtimeModelCatalog.image.some((item) => item.slug === generateDraft.model) ? { modelEndpoint: generateDraft.model } : {}),
           options: { aspectRatio: activeShot?.canvasTransform.ratio ?? '9:16' },
         }
-      : toApiVideoPayload(frameOptions);
+      : buildVideoRunPayload({
+          draft: generateDraft,
+          shot: activeShot,
+          runtimeModelCatalog,
+          frameOptions,
+        });
 
     const result = await requestCreationApi<{ run: { id: string } }>(path, {
       method: 'POST',
@@ -617,17 +556,11 @@ export function useCreationWorkspace({ studio, runtimeApi, initialShotId, initia
     setModelPickerDraft((current) => ({ ...current, [field]: value }));
   };
 
-  const availableModelOptions: RuntimeModelOption[] = (modelPickerKind === 'video' ? runtimeModelCatalog.video : runtimeModelCatalog.image).map((item) => ({
-    id: item.slug,
-    title: item.label,
-    description: `${item.provider.name} · ${item.family.name}`,
-    modelKind: modelPickerKind,
-  }));
-
-  const resolveModelDisplayName = (modelId: string) => {
-    const found = [...runtimeModelCatalog.image, ...runtimeModelCatalog.video].find((item) => item.slug === modelId);
-    return found?.label ?? modelId;
-  };
+  const availableModelOptions: RuntimeModelOption[] = buildRuntimeModelOptions(
+    modelPickerKind === 'video' ? runtimeModelCatalog.video : runtimeModelCatalog.image,
+    modelPickerKind,
+  );
+  const resolveModelDisplayName = (modelId: string) => resolveRuntimeModelDisplayName(runtimeModelCatalog, modelId);
 
   const applyModelPicker = () => {
     if (!activeShot) {

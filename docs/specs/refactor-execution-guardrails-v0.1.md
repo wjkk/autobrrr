@@ -205,6 +205,7 @@
    `AIV_PROVIDER_REPLAY_DIR=/abs/path`
 3. 浏览器主链路回归脚本已入仓：`scripts/smoke-browser-main-flow.py`
 4. 失败分支测试应优先覆盖“不支持能力直接失败”和“为保护已有生成历史而拒绝 destructive finalize”两类高风险行为
+5. 当前失败分支覆盖已扩展到 `run-lifecycle` 与 provider replay 错误响应，不再只验证成功路径
 
 ## 8. 回滚与停手条件
 

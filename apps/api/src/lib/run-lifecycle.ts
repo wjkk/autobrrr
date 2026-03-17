@@ -7,6 +7,20 @@ import { extractPlannerText, findStringDeep } from './planner-text-extraction.js
 import { syncPlannerRefinementProjection } from './planner-refinement-projection.js';
 import { prisma } from './prisma.js';
 
+interface RunLifecycleDeps {
+  prisma: typeof prisma;
+  downloadGeneratedAssetToLocal: typeof downloadGeneratedAssetToLocal;
+  finalizePlannerConversation: typeof finalizePlannerConversation;
+  syncPlannerRefinementProjection: typeof syncPlannerRefinementProjection;
+}
+
+const defaultRunLifecycleDeps: RunLifecycleDeps = {
+  prisma,
+  downloadGeneratedAssetToLocal,
+  finalizePlannerConversation,
+  syncPlannerRefinementProjection,
+};
+
 export type SupportedMediaKind = 'IMAGE' | 'VIDEO';
 
 export type RunLifecycleAction =
@@ -87,24 +101,24 @@ function resolveDimensions(mediaKind: SupportedMediaKind, run: Run) {
   };
 }
 
-export async function finalizePlannerRun(run: Run): Promise<RunLifecycleAction> {
+async function finalizePlannerRunWithDeps(run: Run, deps: RunLifecycleDeps): Promise<RunLifecycleAction> {
   if (run.resourceType !== 'planner_session' || !run.resourceId || !run.projectId || !run.episodeId) {
-    return failRun(run.id, 'RUN_RESOURCE_INVALID', 'Run is missing planner session/project/episode linkage.');
+    return failRunWithDeps(run.id, 'RUN_RESOURCE_INVALID', 'Run is missing planner session/project/episode linkage.', deps);
   }
 
-  const plannerSession = await prisma.plannerSession.findUnique({
+  const plannerSession = await deps.prisma.plannerSession.findUnique({
     where: { id: run.resourceId },
   });
 
   if (!plannerSession) {
-    return failRun(run.id, 'PLANNER_SESSION_NOT_FOUND', 'Planner session not found for run resource.');
+    return failRunWithDeps(run.id, 'PLANNER_SESSION_NOT_FOUND', 'Planner session not found for run resource.', deps);
   }
 
   const input = readObject(run.inputJson);
   const output = readObject(run.outputJson);
   const rawPrompt = typeof input.rawPrompt === 'string' ? input.rawPrompt : '未命名策划';
   const generatedText = extractPlannerText(output.providerData, rawPrompt);
-  await finalizePlannerConversation({
+  await deps.finalizePlannerConversation({
     run,
     plannerSession,
     generatedText,
@@ -118,8 +132,8 @@ export async function finalizePlannerRun(run: Run): Promise<RunLifecycleAction> 
   };
 }
 
-export async function failRun(runId: string, errorCode: string, errorMessage: string): Promise<RunLifecycleAction> {
-  const failedRun = await prisma.run.update({
+async function failRunWithDeps(runId: string, errorCode: string, errorMessage: string, deps: Pick<RunLifecycleDeps, 'prisma'>): Promise<RunLifecycleAction> {
+  const failedRun = await deps.prisma.run.update({
     where: { id: runId },
     data: {
       status: 'FAILED',
@@ -137,9 +151,13 @@ export async function failRun(runId: string, errorCode: string, errorMessage: st
   };
 }
 
-export async function finalizeGeneratedRun(run: Run, mediaKind: SupportedMediaKind): Promise<RunLifecycleAction> {
+export async function failRun(runId: string, errorCode: string, errorMessage: string): Promise<RunLifecycleAction> {
+  return failRunWithDeps(runId, errorCode, errorMessage, defaultRunLifecycleDeps);
+}
+
+async function finalizeGeneratedRunWithDeps(run: Run, mediaKind: SupportedMediaKind, deps: RunLifecycleDeps): Promise<RunLifecycleAction> {
   if (!run.resourceType || !run.resourceId || !run.projectId || !run.episodeId) {
-    return failRun(run.id, 'RUN_RESOURCE_INVALID', 'Run is missing resource/project/episode linkage.');
+    return failRunWithDeps(run.id, 'RUN_RESOURCE_INVALID', 'Run is missing resource/project/episode linkage.', deps);
   }
 
   const projectId = run.projectId;
@@ -147,7 +165,7 @@ export async function finalizeGeneratedRun(run: Run, mediaKind: SupportedMediaKi
   const resourceId = run.resourceId;
 
   if (run.resourceType !== 'shot' && mediaKind !== 'IMAGE') {
-    return failRun(run.id, 'RUN_RESOURCE_INVALID', 'Planner entities currently only support image generation.');
+    return failRunWithDeps(run.id, 'RUN_RESOURCE_INVALID', 'Planner entities currently only support image generation.', deps);
   }
 
   if (run.resourceType === 'planner_subject' || run.resourceType === 'planner_scene' || run.resourceType === 'planner_shot_script') {
@@ -156,16 +174,16 @@ export async function finalizeGeneratedRun(run: Run, mediaKind: SupportedMediaKi
     const dimensions = resolveDimensions('IMAGE', run);
     const providerSourceUrl = resolveProviderSourceUrl(run);
     if (!providerSourceUrl) {
-      return failRun(run.id, 'PROVIDER_OUTPUT_URL_MISSING', 'Provider output did not include a downloadable image URL.');
+      return failRunWithDeps(run.id, 'PROVIDER_OUTPUT_URL_MISSING', 'Provider output did not include a downloadable image URL.', deps);
     }
 
     try {
-      const storedAsset = await downloadGeneratedAssetToLocal({
+      const storedAsset = await deps.downloadGeneratedAssetToLocal({
         runId: run.id,
         mediaKind: 'IMAGE',
         providerSourceUrl,
       });
-      const result = await prisma.$transaction(async (tx) => {
+      const result = await deps.prisma.$transaction(async (tx) => {
         const project = await tx.project.findUniqueOrThrow({
           where: { id: projectId },
           select: { createdById: true },
@@ -278,7 +296,7 @@ export async function finalizeGeneratedRun(run: Run, mediaKind: SupportedMediaKi
       }
 
       if (refinementVersionId) {
-        await syncPlannerRefinementProjection({
+        await deps.syncPlannerRefinementProjection({
           db: tx,
           refinementVersionId,
         });
@@ -312,20 +330,20 @@ export async function finalizeGeneratedRun(run: Run, mediaKind: SupportedMediaKi
       };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Planner entity image finalization failed.';
-      return failRun(run.id, 'PLANNER_ENTITY_IMAGE_FINALIZE_FAILED', message);
+      return failRunWithDeps(run.id, 'PLANNER_ENTITY_IMAGE_FINALIZE_FAILED', message, deps);
     }
   }
 
   if (run.resourceType !== 'shot') {
-    return failRun(run.id, 'RUN_RESOURCE_INVALID', 'Unsupported generated run resource type.');
+    return failRunWithDeps(run.id, 'RUN_RESOURCE_INVALID', 'Unsupported generated run resource type.', deps);
   }
 
-  const shot = await prisma.shot.findUnique({
+  const shot = await deps.prisma.shot.findUnique({
     where: { id: run.resourceId },
   });
 
   if (!shot) {
-    return failRun(run.id, 'SHOT_NOT_FOUND', 'Shot not found for run resource.');
+    return failRunWithDeps(run.id, 'SHOT_NOT_FOUND', 'Shot not found for run resource.', deps);
   }
 
   const input = readObject(run.inputJson);
@@ -338,16 +356,16 @@ export async function finalizeGeneratedRun(run: Run, mediaKind: SupportedMediaKi
   const dimensions = resolveDimensions(mediaKind, run);
   const providerSourceUrl = resolveProviderSourceUrl(run);
   if (!providerSourceUrl) {
-    return failRun(run.id, 'PROVIDER_OUTPUT_URL_MISSING', `Provider output did not include a downloadable ${mediaKind.toLowerCase()} URL.`);
+    return failRunWithDeps(run.id, 'PROVIDER_OUTPUT_URL_MISSING', `Provider output did not include a downloadable ${mediaKind.toLowerCase()} URL.`, deps);
   }
 
-  const storedAsset = await downloadGeneratedAssetToLocal({
+  const storedAsset = await deps.downloadGeneratedAssetToLocal({
     runId: run.id,
     mediaKind,
     providerSourceUrl,
   });
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await deps.prisma.$transaction(async (tx) => {
     const project = await tx.project.findUniqueOrThrow({
       where: { id: shot.projectId },
       select: { createdById: true },
@@ -448,3 +466,17 @@ export async function finalizeGeneratedRun(run: Run, mediaKind: SupportedMediaKi
     shotVersionId: result.shotVersionId,
   };
 }
+
+export async function finalizePlannerRun(run: Run): Promise<RunLifecycleAction> {
+  return finalizePlannerRunWithDeps(run, defaultRunLifecycleDeps);
+}
+
+export async function finalizeGeneratedRun(run: Run, mediaKind: SupportedMediaKind): Promise<RunLifecycleAction> {
+  return finalizeGeneratedRunWithDeps(run, mediaKind, defaultRunLifecycleDeps);
+}
+
+export const __testables = {
+  finalizePlannerRunWithDeps,
+  finalizeGeneratedRunWithDeps,
+  failRunWithDeps,
+};

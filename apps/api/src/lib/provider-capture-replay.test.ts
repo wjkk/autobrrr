@@ -116,3 +116,54 @@ test('provider capture/replay preserves binary payloads', async () => {
     assert.equal(replayed?.buffer.toString(), 'fake-audio');
   });
 });
+
+test('provider capture/replay preserves recorded error responses', async () => {
+  await withTempDir(async (dir) => {
+    const request = {
+      providerCode: 'platou',
+      capability: 'text' as const,
+      operation: '/v1/chat/completions',
+      request: {
+        url: 'https://platou.example.com/v1/chat/completions',
+        method: 'POST' as const,
+        body: {
+          model: 'platou-model',
+          prompt: 'hello',
+        },
+      },
+    };
+
+    await captureJsonResponse({
+      captureDir: dir,
+      request,
+      ok: false,
+      status: 429,
+      response: {
+        error: {
+          message: 'Rate limit',
+        },
+      },
+    });
+
+    const replayed = await tryReplayJsonResponse<{ error: { message: string } }>({
+      replayDir: dir,
+      request: {
+        ...request,
+        request: {
+          ...request.request,
+          url: 'http://127.0.0.1:8787/v1/chat/completions',
+        },
+      },
+    });
+
+    assert.deepEqual(replayed, {
+      ok: false,
+      status: 429,
+      payload: {
+        error: {
+          message: 'Rate limit',
+        },
+      },
+    });
+  });
+});

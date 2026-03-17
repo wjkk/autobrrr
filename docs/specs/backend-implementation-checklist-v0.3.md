@@ -397,6 +397,7 @@ DoD：
 7. Planner 最终 prompt 已作为 artifact 固化到版本快照；provider client 支持通过 `AIV_PROVIDER_CAPTURE_DIR` / `AIV_PROVIDER_REPLAY_DIR` 做 file-based capture / replay
 8. 浏览器主链路回归已入仓，当前执行入口为 `pnpm test:web:regression`
 9. 关键失败分支已补单测，包括 unsupported provider capability，以及 finalize 试图删除已有生成历史的 Creation shot 时必须硬失败
+10. `run-lifecycle` 关键失败分支已补单测，包括 planner session linkage 无效、provider output URL 缺失、shot 资源不存在；provider replay 也已覆盖错误响应回放
 
 DoD：
 

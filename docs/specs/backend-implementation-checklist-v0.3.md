@@ -422,6 +422,7 @@ DoD：
 32. 浏览器主链路回归现已覆盖 Publish 页“从历史创作中选择”弹窗，确保历史来源绑定这条核心交互不是静态按钮壳
 33. ARK 模型目录分类已补 API 单测，当前覆盖 text/image/video/audio 分类、metadata 优先级、重复模型去重、未知模型过滤，避免 provider settings 同步逻辑静默漂移
 34. provider config options 纯函数已补 API 单测，当前覆盖默认 endpoint、启用模型列表、catalog sync 状态解析与 merge，避免 settings/provider 页面配置写回时悄悄丢字段
+35. user model defaults 决策层已补 API 单测，当前覆盖默认 endpoint 命中、provider ownership、启用列表过滤，避免运行时实际选中的模型与用户配置悄悄偏离
 
 DoD：
 

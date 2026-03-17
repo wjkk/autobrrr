@@ -42,6 +42,11 @@ interface ParsedProviderModelSelection {
   enabledSlugs: string[];
 }
 
+interface ModelEndpointCandidate {
+  slug: string;
+  providerId: string;
+}
+
 async function listUserProviderSelections(userId: string, modelKind: 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO') {
   const configs = await prisma.userProviderConfig.findMany({
     where: {
@@ -75,44 +80,88 @@ async function listUserProviderSelections(userId: string, modelKind: 'IMAGE' | '
   });
 }
 
-export async function resolveUserDefaultModelSelection(userId: string, modelKind: 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO') {
-  const selections = await listUserProviderSelections(userId, modelKind);
-
-  for (const config of selections) {
-    const endpointSlug = config.defaultEndpointSlug;
-    const enabledSlugs = config.enabledSlugs;
+export function resolveDefaultEndpointSlugFromSelections(
+  selections: ParsedProviderModelSelection[],
+  endpoints: Array<ModelEndpointCandidate>,
+) {
+  for (const selection of selections) {
+    const endpointSlug = selection.defaultEndpointSlug;
     if (!endpointSlug) {
       continue;
     }
-    if (enabledSlugs.length > 0 && !enabledSlugs.includes(endpointSlug)) {
+    if (selection.enabledSlugs.length > 0 && !selection.enabledSlugs.includes(endpointSlug)) {
       continue;
     }
 
-    const endpoint = await prisma.modelEndpoint.findFirst({
-      where: {
-        slug: endpointSlug,
-        providerId: config.providerId,
-        status: 'ACTIVE',
-        family: {
-          modelKind: modelKind as ModelKind,
-        },
-      },
-      include: {
-        family: true,
-      },
-    });
-
-    if (!endpoint) {
+    const matched = endpoints.find((endpoint) => endpoint.slug === endpointSlug && endpoint.providerId === selection.providerId);
+    if (!matched) {
       continue;
     }
 
-    return {
-      familySlug: endpoint.family.slug,
-      endpointSlug: endpoint.slug,
-    };
+    return matched.slug;
   }
 
   return null;
+}
+
+export function filterUserEnabledEndpoints<T extends ModelEndpointCandidate>(
+  endpoints: T[],
+  selections: ParsedProviderModelSelection[],
+) {
+  const selectionByProviderId = new Map(selections.map((selection) => [selection.providerId, selection]));
+  return endpoints.filter((endpoint) => {
+    const selection = selectionByProviderId.get(endpoint.providerId);
+    if (!selection) {
+      return false;
+    }
+
+    return selection.enabledSlugs.length === 0 || selection.enabledSlugs.includes(endpoint.slug);
+  });
+}
+
+export async function resolveUserDefaultModelSelection(userId: string, modelKind: 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO') {
+  const selections = await listUserProviderSelections(userId, modelKind);
+
+  const requestedEndpointSlugs = selections
+    .map((selection) => selection.defaultEndpointSlug)
+    .filter((value): value is string => typeof value === 'string' && value.length > 0);
+  const candidateEndpoints = requestedEndpointSlugs.length
+    ? await prisma.modelEndpoint.findMany({
+        where: {
+          slug: {
+            in: requestedEndpointSlugs,
+          },
+          status: 'ACTIVE',
+          family: {
+            modelKind: modelKind as ModelKind,
+          },
+        },
+        include: {
+          family: true,
+        },
+      })
+    : [];
+
+  const resolvedSlug = resolveDefaultEndpointSlugFromSelections(
+    selections,
+    candidateEndpoints.map((endpoint) => ({
+      slug: endpoint.slug,
+      providerId: endpoint.providerId,
+    })),
+  );
+  if (!resolvedSlug) {
+    return null;
+  }
+
+  const endpoint = candidateEndpoints.find((candidate) => candidate.slug === resolvedSlug);
+  if (!endpoint) {
+    return null;
+  }
+
+  return {
+    familySlug: endpoint.family.slug,
+    endpointSlug: endpoint.slug,
+  };
 }
 
 export async function listUserEnabledModelEndpoints(userId: string, modelKind: 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO') {
@@ -145,19 +194,14 @@ export async function listUserEnabledModelEndpoints(userId: string, modelKind: '
     orderBy: [{ isDefault: 'desc' }, { priority: 'asc' }, { createdAt: 'asc' }],
   });
 
-  const filteredEndpoints = endpoints.filter((endpoint) => {
-    const selection = selectionByProviderId.get(endpoint.providerId);
-    if (!selection) {
-      return false;
-    }
-
-    return selection.enabledSlugs.length === 0 || selection.enabledSlugs.includes(endpoint.slug);
-  });
-
-  const defaultEndpointSlug = filteredEndpoints.find((endpoint) => {
-    const selection = selectionByProviderId.get(endpoint.providerId);
-    return !!selection?.defaultEndpointSlug && selection.defaultEndpointSlug === endpoint.slug;
-  })?.slug ?? null;
+  const filteredEndpoints = filterUserEnabledEndpoints(endpoints, selections);
+  const defaultEndpointSlug = resolveDefaultEndpointSlugFromSelections(
+    selections,
+    filteredEndpoints.map((endpoint) => ({
+      slug: endpoint.slug,
+      providerId: endpoint.providerId,
+    })),
+  );
 
   return {
     endpoints: filteredEndpoints,

@@ -406,6 +406,7 @@ DoD：
 16. `planner-debug` list/detail 查询输出形状已补单测，固定 `executionMode` 小写化、`replaySourceRunId` 暴露、`promptSnapshot` / `usage` / `diffSummary` 映射
 17. `planner-stream` 已补稳定断言，包括 stepDefinitions 归一化、synthetic step 状态推导、persisted-vs-synthetic 选择逻辑，以及 terminal run 自动结束条件
 18. web 侧 `Creation / Publish` presenter 已拆成纯函数 bootstrap，并补单测锁住 finalize 后页面实际消费的数据形状
+19. web 侧已新增正式执行入口 `pnpm test:web:unit`，不再依赖临时借用 API 包的 test runner
 
 DoD：
 

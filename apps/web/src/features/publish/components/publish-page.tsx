@@ -1,6 +1,6 @@
 'use client';
 
-import type { PublishDraft, StudioFixture } from '@aiv/domain';
+import type { PublishDraft } from '@aiv/domain';
 import { Badge, Button, Panel, StudioFrame, cx } from '@aiv/ui';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -10,17 +10,18 @@ import { StageLinks } from '@/features/shared/components/stage-links';
 import { publishCopy } from '@/lib/copy';
 
 import type { ApiPublishWorkspace, PublishRuntimeApiContext, PublishSubmitResult } from '../lib/publish-api';
+import type { PublishPageData } from '../lib/publish-page-data';
 import styles from './publish-page.module.css';
 
 interface PublishPageProps {
-  studio: StudioFixture;
+  studio: PublishPageData;
   runtimeApi?: PublishRuntimeApiContext;
   initialPublishWorkspace?: ApiPublishWorkspace | null;
 }
 
 const HISTORY_CATEGORIES = ['全部', '短剧漫剧', '音乐MV', '知识分享'] as const;
 
-function resolveInitialHistoryId(studio: StudioFixture) {
+function resolveInitialHistoryId(studio: PublishPageData) {
   return studio.historyWorks.find((item) => item.title === studio.publish.draft.title)?.id ?? studio.historyWorks[0]?.id ?? null;
 }
 

@@ -1,11 +1,12 @@
 'use client';
 
-import type { CreationViewMode, StudioFixture } from '@aiv/domain';
+import type { CreationViewMode } from '@aiv/domain';
 import Link from 'next/link';
 import { cx } from '@aiv/ui';
 import { useEffect, useRef, useState } from 'react';
 
 import type { CreationRuntimeApiContext } from '../lib/creation-api';
+import type { CreationPageData } from '../lib/creation-page-data';
 import { useCreationWorkspace } from '../lib/use-creation-workspace';
 import { CreationCanvasEditor } from './creation-canvas-editor';
 import { CreationDialogs } from './creation-dialogs';
@@ -18,7 +19,7 @@ import { CreationTimeline } from './creation-timeline';
 import styles from './creation-page.module.css';
 
 interface CreationPageProps {
-  studio: StudioFixture;
+  studio: CreationPageData;
   runtimeApi?: CreationRuntimeApiContext;
   initialShotId?: string;
   initialView?: CreationViewMode;

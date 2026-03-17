@@ -1,4 +1,4 @@
-import type { StudioFixture } from '@aiv/domain';
+import type { PublishPageData } from './publish-page-data';
 
 export interface PublishRuntimeApiContext {
   projectId: string;
@@ -38,7 +38,7 @@ export interface ApiPublishWorkspace {
 }
 
 export interface PublishPageBootstrap {
-  studio: StudioFixture | null;
+  studio: PublishPageData | null;
   runtimeApi?: PublishRuntimeApiContext;
   initialPublishWorkspace?: ApiPublishWorkspace | null;
 }

@@ -1,8 +1,10 @@
-import { createRuntimeStudioFixture, getMockStudioProject } from '@aiv/mock-data';
+import type { ProjectStatus } from '@aiv/domain';
+import { getMockStudioProject } from '@aiv/mock-data';
 
 import { requestAivApiFromServer } from '@/lib/aiv-api';
 
 import type { ApiPublishWorkspace, PublishPageBootstrap } from './publish-api';
+import { createPublishPageData, publishPageDataFromFixture } from './publish-page-data';
 
 interface ApiProjectDetail {
   id: string;
@@ -20,24 +22,25 @@ interface ApiProjectDetail {
 }
 
 function toProjectStatus(status: string) {
-  return status.toLowerCase() as ReturnType<typeof createRuntimeStudioFixture>['project']['status'];
+  const normalized = status.toLowerCase();
+  if (normalized === 'publishing') {
+    return 'export_ready' satisfies ProjectStatus;
+  }
+  if (normalized === 'ready') {
+    return 'ready_for_storyboard' satisfies ProjectStatus;
+  }
+  return normalized as ProjectStatus;
 }
 
 function buildPublishStudio(project: ApiProjectDetail, workspace: ApiPublishWorkspace) {
-  const baseStudio = createRuntimeStudioFixture({
-    prompt: project.brief?.trim() || project.title,
-    contentMode: project.contentMode,
-  });
-
-  return {
-    ...baseStudio,
-    scenarioLabel: 'API Project',
+  return createPublishPageData({
     project: {
-      ...baseStudio.project,
       id: project.id,
       title: project.title,
       brief: project.brief ?? '',
       contentMode: project.contentMode,
+      executionMode: 'auto',
+      aspectRatio: '9:16',
       status: toProjectStatus(project.status),
     },
     episodes: project.episodes.map((episode) => ({
@@ -55,9 +58,9 @@ function buildPublishStudio(project: ApiProjectDetail, workspace: ApiPublishWork
         tag: workspace.summary.readyToPublish ? 'Ready' : 'Draft',
         status: 'draft' as const,
       },
-      successMessage: baseStudio.publish.successMessage,
+      successMessage: '作品已提交发布队列，稍后可在广场查看。',
     },
-  };
+  });
 }
 
 export async function fetchPublishStudioProject(projectId: string): Promise<PublishPageBootstrap> {
@@ -89,8 +92,9 @@ export async function fetchPublishStudioProject(projectId: string): Promise<Publ
       initialPublishWorkspace: workspace,
     };
   } catch {
+    const fixture = getMockStudioProject(projectId);
     return {
-      studio: getMockStudioProject(projectId),
+      studio: fixture ? publishPageDataFromFixture(fixture) : null,
     };
   }
 }

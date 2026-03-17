@@ -1,31 +1,74 @@
-import type { StudioFixture } from '@aiv/domain';
-import { createRuntimeStudioFixture, getMockStudioProject } from '@aiv/mock-data';
+import type { CreationWorkspace, ProjectStatus } from '@aiv/domain';
+import { getMockStudioProject } from '@aiv/mock-data';
 
 import { AivApiError, requestAivApiFromServer } from '@/lib/aiv-api';
 
+import { createCreationPageData, creationPageDataFromFixture } from './creation-page-data';
 import { mergeCreationWorkspaceFromApi, type ApiCreationWorkspace, type ApiProjectDetail, type CreationRuntimeApiContext } from './creation-api';
 
 function toProjectStatus(status: string) {
-  return status.toLowerCase() as StudioFixture['project']['status'];
+  const normalized = status.toLowerCase();
+  if (normalized === 'publishing') {
+    return 'export_ready' satisfies ProjectStatus;
+  }
+  if (normalized === 'ready') {
+    return 'ready_for_storyboard' satisfies ProjectStatus;
+  }
+  return normalized as ProjectStatus;
 }
 
-function buildStudioFixtureFromApi(project: ApiProjectDetail, workspace: ApiCreationWorkspace): StudioFixture {
-  const prompt = project.brief?.trim() || project.title;
-  const baseStudio = createRuntimeStudioFixture({
-    prompt,
-    contentMode: project.contentMode,
-  });
-  const creationWorkspace = mergeCreationWorkspaceFromApi(baseStudio.creation, workspace);
+function buildCreationPageDataFromApi(project: ApiProjectDetail, workspace: ApiCreationWorkspace) {
+  const baseCreationWorkspace: CreationWorkspace = {
+    activeTrack: 'visual',
+    viewMode: 'default',
+    selectedShotId: workspace.shots[0]?.id ?? '',
+    shots: [],
+    playback: {
+      playing: false,
+      currentSecond: 0,
+      totalSecond: 0,
+      subtitleVisible: true,
+    },
+    voice: {
+      mode: 'text',
+      audioName: '',
+      voiceName: '默认音色',
+      emotion: '默认',
+      volume: 80,
+      speed: 1,
+    },
+    music: {
+      mode: 'ai',
+      prompt: '',
+      trackName: '',
+      progress: '',
+      volume: 72,
+      generating: false,
+      applied: false,
+    },
+    lipSync: {
+      mode: 'single',
+      inputMode: 'text',
+      baseShotId: workspace.shots[0]?.id ?? '',
+      audioName: '',
+      dialogues: [],
+      voiceModel: '默认口型',
+      emotion: '默认',
+      volume: 80,
+      speed: 1,
+    },
+    points: 120,
+  };
+  const creationWorkspace = mergeCreationWorkspaceFromApi(baseCreationWorkspace, workspace);
 
-  return {
-    ...baseStudio,
-    scenarioLabel: 'API Project',
+  return createCreationPageData({
     project: {
-      ...baseStudio.project,
       id: project.id,
       title: project.title,
       brief: project.brief ?? '',
       contentMode: project.contentMode,
+      executionMode: 'auto',
+      aspectRatio: '9:16',
       status: toProjectStatus(project.status),
     },
     episodes: project.episodes.map((episode) => ({
@@ -35,14 +78,11 @@ function buildStudioFixtureFromApi(project: ApiProjectDetail, workspace: ApiCrea
       sequence: episode.episodeNo,
       status: toProjectStatus(episode.status),
     })),
-    creation: {
-      ...creationWorkspace,
-      points: baseStudio.creation.points,
-    },
-  };
+    creation: creationWorkspace,
+  });
 }
 
-export async function fetchCreationStudioProject(projectId: string): Promise<{ studio: ReturnType<typeof buildStudioFixtureFromApi> | null; runtimeApi?: CreationRuntimeApiContext }> {
+export async function fetchCreationStudioProject(projectId: string): Promise<{ studio: ReturnType<typeof buildCreationPageDataFromApi> | null; runtimeApi?: CreationRuntimeApiContext }> {
   try {
     const project = await requestAivApiFromServer<ApiProjectDetail>(`/api/studio/projects/${encodeURIComponent(projectId)}`, { allowNotFound: true });
     if (!project) {
@@ -63,15 +103,16 @@ export async function fetchCreationStudioProject(projectId: string): Promise<{ s
     }
 
     return {
-      studio: buildStudioFixtureFromApi(project, workspace),
+      studio: buildCreationPageDataFromApi(project, workspace),
       runtimeApi: {
         projectId: project.id,
         episodeId: workspace.episode.id,
       },
     };
   } catch {
+    const fixture = getMockStudioProject(projectId);
     return {
-      studio: getMockStudioProject(projectId),
+      studio: fixture ? creationPageDataFromFixture(fixture) : null,
     };
   }
 }

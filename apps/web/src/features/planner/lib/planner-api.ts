@@ -1,6 +1,5 @@
-import type { StudioFixture } from '@aiv/domain';
-
 import type { PlannerOutlineDoc } from './planner-outline-doc';
+import type { PlannerPageData } from './planner-page-data';
 import type { PlannerStructuredDoc } from './planner-structured-doc';
 
 export interface PlannerRuntimeApiContext {
@@ -400,7 +399,7 @@ export type PlannerRerunScope =
     };
 
 export interface PlannerPageBootstrap {
-  studio: StudioFixture | null;
+  studio: PlannerPageData | null;
   runtimeApi?: PlannerRuntimeApiContext;
   initialGeneratedText?: string | null;
   initialStructuredDoc?: PlannerStructuredDoc | null;

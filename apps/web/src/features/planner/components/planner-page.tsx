@@ -1,6 +1,6 @@
 'use client';
 
-import type { PlannerStepStatus, StudioFixture } from '@aiv/domain';
+import type { PlannerStepStatus } from '@aiv/domain';
 import { cx } from '@aiv/ui';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
@@ -9,6 +9,7 @@ import {
   type ApiPlannerWorkspace,
   type PlannerRuntimeApiContext,
 } from '../lib/planner-api';
+import type { PlannerPageData } from '../lib/planner-page-data';
 import {
   ASPECT_RATIO_OPTIONS,
   DOC_TOC,
@@ -56,7 +57,7 @@ import { PlannerThreadPanel } from './planner-thread-panel';
 import styles from './planner-page.module.css';
 
 interface PlannerPageProps {
-  studio: StudioFixture;
+  studio: PlannerPageData;
   runtimeApi?: PlannerRuntimeApiContext;
   initialGeneratedText?: string | null;
   initialStructuredDoc?: PlannerStructuredDoc | null;

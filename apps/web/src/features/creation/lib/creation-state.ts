@@ -1,4 +1,6 @@
-import type { CreationTrack, CreationViewMode, CreationWorkspace, MaterialAsset, Shot, StudioFixture } from '@aiv/domain';
+import type { CreationTrack, CreationViewMode, CreationWorkspace, MaterialAsset, Shot } from '@aiv/domain';
+
+import type { CreationPageData } from './creation-page-data';
 
 import { buildVersion, cloneShot, getShotOffset, nextLocalId, syncVersionStatuses } from './creation-utils';
 import type { CanvasDraft, GenerationDraft, StoryToolDraft } from './ui-state';
@@ -41,7 +43,7 @@ function syncCreationWithShots(current: CreationWorkspace, shots: Shot[], select
   };
 }
 
-export function cloneCreationFixture(studio: StudioFixture, initialShotId?: string, initialView?: CreationViewMode): CreationWorkspace {
+export function cloneCreationFixture(studio: CreationPageData, initialShotId?: string, initialView?: CreationViewMode): CreationWorkspace {
   const selectedShotId = studio.creation.shots.some((shot) => shot.id === initialShotId)
     ? initialShotId ?? studio.creation.selectedShotId
     : studio.creation.selectedShotId;

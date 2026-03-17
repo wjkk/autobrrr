@@ -1,11 +1,12 @@
 'use client';
 
-import type { CreationTrack, CreationViewMode, StudioFixture } from '@aiv/domain';
+import type { CreationTrack, CreationViewMode } from '@aiv/domain';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { creationCopy } from '@/lib/copy';
 
 import { mergeCreationWorkspaceFromApi, type ApiCreationWorkspace, type ApiRun, type CreationRuntimeApiContext } from './creation-api';
+import type { CreationPageData } from './creation-page-data';
 
 import {
   addLipsyncDialogueState,
@@ -111,7 +112,7 @@ interface RuntimeModelOption {
 }
 
 interface UseCreationWorkspaceOptions {
-  studio: StudioFixture;
+  studio: CreationPageData;
   runtimeApi?: CreationRuntimeApiContext;
   initialShotId?: string;
   initialView?: CreationViewMode;

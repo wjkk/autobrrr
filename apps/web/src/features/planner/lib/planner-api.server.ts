@@ -1,8 +1,10 @@
-import { createRuntimeStudioFixture, getMockStudioProject } from '@aiv/mock-data';
+import type { ProjectStatus } from '@aiv/domain';
+import { getMockStudioProject } from '@aiv/mock-data';
 
 import { requestAivApiFromServer } from '@/lib/aiv-api';
 
 import type { PlannerPageBootstrap, ApiPlannerWorkspace } from './planner-api';
+import { createPlannerPageData, plannerPageDataFromFixture } from './planner-page-data';
 import { outlineToPreviewStructuredPlannerDoc } from './planner-structured-doc';
 
 interface ApiProjectDetail {
@@ -21,14 +23,17 @@ interface ApiProjectDetail {
 }
 
 function toProjectStatus(status: string) {
-  return status.toLowerCase() as ReturnType<typeof createRuntimeStudioFixture>['project']['status'];
+  const normalized = status.toLowerCase();
+  if (normalized === 'publishing') {
+    return 'export_ready' satisfies ProjectStatus;
+  }
+  if (normalized === 'ready') {
+    return 'ready_for_storyboard' satisfies ProjectStatus;
+  }
+  return normalized as ProjectStatus;
 }
 
 function buildPlannerStudio(project: ApiProjectDetail, workspace: ApiPlannerWorkspace) {
-  const baseStudio = createRuntimeStudioFixture({
-    prompt: project.brief?.trim() || project.title,
-    contentMode: project.contentMode,
-  });
   const runtimeMessages = (workspace.messages ?? [])
     .map((message) => {
       const content = message.content ?? {};
@@ -45,15 +50,14 @@ function buildPlannerStudio(project: ApiProjectDetail, workspace: ApiPlannerWork
     })
     .filter((message): message is { id: string; role: 'user' | 'assistant'; content: string } => message !== null);
 
-  return {
-    ...baseStudio,
-    scenarioLabel: 'API Project',
+  return createPlannerPageData({
     project: {
-      ...baseStudio.project,
       id: project.id,
       title: project.title,
       brief: project.brief ?? '',
       contentMode: project.contentMode,
+      executionMode: 'auto',
+      aspectRatio: '9:16',
       status: toProjectStatus(project.status),
     },
     episodes: project.episodes.map((episode) => ({
@@ -63,14 +67,11 @@ function buildPlannerStudio(project: ApiProjectDetail, workspace: ApiPlannerWork
       sequence: episode.episodeNo,
       status: toProjectStatus(episode.status),
     })),
-    planner: {
-      ...baseStudio.planner,
-      input: workspace.episode.summary ?? project.brief ?? '',
-      submittedRequirement: workspace.episode.summary ?? project.brief ?? '',
-      status: (workspace.plannerSession?.status === 'ready' ? 'ready' : workspace.plannerSession?.status === 'updating' ? 'updating' : 'idle') as 'idle' | 'updating' | 'ready',
-      messages: runtimeMessages.length > 0 ? runtimeMessages : baseStudio.planner.messages,
-    },
-  };
+    submittedRequirement: workspace.episode.summary ?? project.brief ?? '',
+    pointCost: 0,
+    messages: runtimeMessages,
+    creationPoints: 120,
+  });
 }
 
 export async function fetchPlannerStudioProject(projectId: string): Promise<PlannerPageBootstrap> {
@@ -109,8 +110,9 @@ export async function fetchPlannerStudioProject(projectId: string): Promise<Plan
       initialWorkspace: workspace,
     };
   } catch {
+    const fixture = getMockStudioProject(projectId);
     return {
-      studio: getMockStudioProject(projectId),
+      studio: fixture ? plannerPageDataFromFixture(fixture) : null,
     };
   }
 }

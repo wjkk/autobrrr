@@ -208,6 +208,7 @@
 5. 当前失败分支覆盖已扩展到 `run-lifecycle` 与 provider replay 错误响应，不再只验证成功路径
 6. provider client 与 planner prompt 组装也必须有稳定单测，避免错误解析、404 fallback 与 refinement 模型注入裁决在后续演进中静默漂移
 7. provider config test 这类“路由外但仍影响线上判定”的服务，也必须补决策单测，避免 endpoint 选择与错误码映射在重构中被悄悄改坏
+8. `planner-debug` 这类调试能力也必须补 replay 断言，避免“可重现”链路本身在重构后失真
 
 ## 8. 回滚与停手条件
 

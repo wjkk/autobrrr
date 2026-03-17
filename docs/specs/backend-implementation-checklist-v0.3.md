@@ -400,6 +400,7 @@ DoD：
 10. `run-lifecycle` 关键失败分支已补单测，包括 planner session linkage 无效、provider output URL 缺失、shot 资源不存在；provider replay 也已覆盖错误响应回放
 11. provider client 与 planner prompt 组装的高风险分支已补单测，包括 ARK 结构化错误解析、视频任务查询 404 fallback、音频 binary 错误解析，以及 refinement 阶段目标模型能力注入裁决
 12. Platou client 与 provider config test 决策逻辑已补单测，包括嵌套/顶层错误消息解析、i2v 参考图判定、测试 endpoint 选择顺序，以及 `ModelNotOpen` 到业务错误码的稳定映射
+13. `planner-debug` 已补失败路径与 replay 断言，包括存档 input 非法时拒绝 replay、已发布配置缺少 release snapshot 时硬失败，以及 replay 时必须透传 `replaySourceRunId`
 
 DoD：
 

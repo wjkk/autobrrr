@@ -55,6 +55,16 @@ function parseStoredDebugInput(value: unknown) {
   return parsed.data;
 }
 
+interface PlannerDebugDeps {
+  prisma: typeof prisma;
+  resolvePlannerAgentSelection: typeof resolvePlannerAgentSelection;
+}
+
+const defaultPlannerDebugDeps: PlannerDebugDeps = {
+  prisma,
+  resolvePlannerAgentSelection,
+};
+
 interface PlannerDebugSelection extends ResolvedPlannerAgentSelection {
   sourceMetadata: {
     configSource: 'draft' | 'published';
@@ -62,15 +72,15 @@ interface PlannerDebugSelection extends ResolvedPlannerAgentSelection {
   };
 }
 
-async function resolvePlannerDebugSelection(args: {
+async function resolvePlannerDebugSelectionWithDeps(args: {
   contentType: string;
   subtype: string;
   subAgentId?: string;
   configSource: 'draft' | 'published';
-}): Promise<PlannerDebugSelection | null> {
+}, deps: PlannerDebugDeps): Promise<PlannerDebugSelection | null> {
   if (args.configSource === 'draft') {
     if (!args.subAgentId) {
-      const selection = await resolvePlannerAgentSelection({
+      const selection = await deps.resolvePlannerAgentSelection({
         contentType: args.contentType,
         subtype: args.subtype,
       });
@@ -87,7 +97,7 @@ async function resolvePlannerDebugSelection(args: {
       };
     }
 
-    const subAgent = await prisma.plannerSubAgentProfile.findUnique({
+    const subAgent = await deps.prisma.plannerSubAgentProfile.findUnique({
       where: { id: args.subAgentId },
       include: {
         agentProfile: true,
@@ -124,13 +134,13 @@ async function resolvePlannerDebugSelection(args: {
   }
 
   const draftSelection: PlannerDebugSelection | ResolvedPlannerAgentSelection | null = args.subAgentId
-    ? await resolvePlannerDebugSelection({
+    ? await resolvePlannerDebugSelectionWithDeps({
         contentType: args.contentType,
         subtype: args.subtype,
         subAgentId: args.subAgentId,
         configSource: 'draft',
-      })
-    : await resolvePlannerAgentSelection({
+      }, deps)
+    : await deps.resolvePlannerAgentSelection({
         contentType: args.contentType,
         subtype: args.subtype,
       });
@@ -139,7 +149,7 @@ async function resolvePlannerDebugSelection(args: {
     return null;
   }
 
-  const latestRelease = await prisma.plannerSubAgentProfileRelease.findFirst({
+  const latestRelease = await deps.prisma.plannerSubAgentProfileRelease.findFirst({
     where: {
       subAgentProfileId: draftSelection.subAgentProfile.id,
     },
@@ -167,6 +177,15 @@ async function resolvePlannerDebugSelection(args: {
       releaseVersion: latestRelease.releaseVersion,
     },
   };
+}
+
+async function resolvePlannerDebugSelection(args: {
+  contentType: string;
+  subtype: string;
+  subAgentId?: string;
+  configSource: 'draft' | 'published';
+}): Promise<PlannerDebugSelection | null> {
+  return resolvePlannerDebugSelectionWithDeps(args, defaultPlannerDebugDeps);
 }
 
 export async function executePlannerDebugRun(args: PlannerDebugRunInput & {
@@ -416,8 +435,14 @@ export async function executePlannerDebugRun(args: PlannerDebugRunInput & {
   };
 }
 
-export async function replayPlannerDebugRun(userId: string, runId: string) {
-  const run = await prisma.plannerDebugRun.findFirst({
+async function replayPlannerDebugRunWithDeps(
+  userId: string,
+  runId: string,
+  deps: Pick<PlannerDebugDeps, 'prisma'> & {
+    executePlannerDebugRun: typeof executePlannerDebugRun;
+  },
+) {
+  const run = await deps.prisma.plannerDebugRun.findFirst({
     where: {
       id: runId,
       userId,
@@ -433,10 +458,17 @@ export async function replayPlannerDebugRun(userId: string, runId: string) {
   }
 
   const input = parseStoredDebugInput(run.inputJson);
-  return executePlannerDebugRun({
+  return deps.executePlannerDebugRun({
     userId,
     ...input,
     replaySourceRunId: run.id,
+  });
+}
+
+export async function replayPlannerDebugRun(userId: string, runId: string) {
+  return replayPlannerDebugRunWithDeps(userId, runId, {
+    prisma,
+    executePlannerDebugRun,
   });
 }
 
@@ -527,3 +559,9 @@ export function toPrismaJsonInput(value: Prisma.JsonValue | null | undefined) {
 
   return value as Prisma.InputJsonValue;
 }
+
+export const __testables = {
+  parseStoredDebugInput,
+  resolvePlannerDebugSelectionWithDeps,
+  replayPlannerDebugRunWithDeps,
+};

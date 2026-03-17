@@ -405,10 +405,11 @@ DoD：
 15. 浏览器主链路回归已增强为“页面 + workspace 数据”双断言：Creation 必须读到 finalized `promptJson / targetVideoModelFamilySlug`，Publish 必须返回有效 summary 与 shots 列表
 16. `planner-debug` list/detail 查询输出形状已补单测，固定 `executionMode` 小写化、`replaySourceRunId` 暴露、`promptSnapshot` / `usage` / `diffSummary` 映射
 17. `planner-stream` 已补稳定断言，包括 stepDefinitions 归一化、synthetic step 状态推导、persisted-vs-synthetic 选择逻辑，以及 terminal run 自动结束条件
-18. web 侧 `Creation / Publish` presenter 已拆成纯函数 bootstrap，并补单测锁住 finalize 后页面实际消费的数据形状
+18. web 侧 `Planner / Creation / Publish` bootstrap 已拆成纯函数，并补单测锁住真实 workspace DTO 到页面模型的转换形状
 19. Planner 页面 helper / presenter 映射已补 web unit，当前覆盖 thread message 映射、asset thumb 排序去重、episode draft 构造、history 版本视图归一化、preferred model 解析
-20. web 侧已新增正式执行入口 `pnpm test:web:unit`，不再依赖临时借用 API 包的 test runner
-21. 根目录已新增聚合质量入口 `pnpm test:quality`，用于合并前一次性执行 API unit / web unit / AI regression / web regression
+20. Planner bootstrap 现在也会 trim 并过滤纯空白 runtime message，避免首屏页面模型混入无意义消息
+21. web 侧已新增正式执行入口 `pnpm test:web:unit`，不再依赖临时借用 API 包的 test runner
+22. 根目录已新增聚合质量入口 `pnpm test:quality`，用于合并前一次性执行 API unit / web unit / AI regression / web regression
 
 DoD：
 

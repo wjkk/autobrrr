@@ -1,6 +1,37 @@
 import { prisma } from './prisma.js';
 import { requireOwnedEpisode } from './workspace-shared.js';
 
+function mapPublishSummary(shots: Array<{
+  activeVersion: {
+    status: string;
+  } | null;
+}>) {
+  const publishableShots = shots.filter((shot) => shot.activeVersion && shot.activeVersion.status === 'ACTIVE');
+  return {
+    totalShots: shots.length,
+    publishableShotCount: publishableShots.length,
+    readyToPublish: shots.length > 0 && publishableShots.length === shots.length,
+  };
+}
+
+function mapPublishActiveVersion(activeVersion: {
+  id: string;
+  label: string;
+  mediaKind: string;
+  status: string;
+} | null) {
+  if (!activeVersion) {
+    return null;
+  }
+
+  return {
+    id: activeVersion.id,
+    label: activeVersion.label,
+    mediaKind: activeVersion.mediaKind.toLowerCase(),
+    status: activeVersion.status.toLowerCase(),
+  };
+}
+
 export async function getPublishWorkspace(args: {
   projectId: string;
   episodeId: string;
@@ -26,10 +57,6 @@ export async function getPublishWorkspace(args: {
     },
   });
 
-  const publishableShots = shots.filter((shot) => {
-    return shot.activeVersion && shot.activeVersion.status === 'ACTIVE';
-  });
-
   return {
     project: {
       id: episode.project.id,
@@ -42,25 +69,19 @@ export async function getPublishWorkspace(args: {
       title: episode.title,
       status: episode.status.toLowerCase(),
     },
-    summary: {
-      totalShots: shots.length,
-      publishableShotCount: publishableShots.length,
-      readyToPublish: shots.length > 0 && publishableShots.length === shots.length,
-    },
+    summary: mapPublishSummary(shots),
     shots: shots.map((shot) => ({
       id: shot.id,
       sequenceNo: shot.sequenceNo,
       title: shot.title,
       status: shot.status.toLowerCase(),
       activeVersionId: shot.activeVersionId,
-      activeVersion: shot.activeVersion
-        ? {
-            id: shot.activeVersion.id,
-            label: shot.activeVersion.label,
-            mediaKind: shot.activeVersion.mediaKind.toLowerCase(),
-            status: shot.activeVersion.status.toLowerCase(),
-          }
-        : null,
+      activeVersion: mapPublishActiveVersion(shot.activeVersion),
     })),
   };
 }
+
+export const __testables = {
+  mapPublishSummary,
+  mapPublishActiveVersion,
+};

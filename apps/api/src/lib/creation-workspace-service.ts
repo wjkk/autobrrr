@@ -1,6 +1,113 @@
 import { prisma } from './prisma.js';
 import { requireOwnedEpisode } from './workspace-shared.js';
 
+function mapWorkspaceAsset(asset: {
+  id: string;
+  sourceUrl: string | null;
+  fileName: string | null;
+  mediaKind: string;
+  sourceKind: string;
+  createdAt: Date;
+}) {
+  return {
+    id: asset.id,
+    sourceUrl: asset.sourceUrl,
+    fileName: asset.fileName,
+    mediaKind: asset.mediaKind.toLowerCase(),
+    sourceKind: asset.sourceKind.toLowerCase(),
+    createdAt: asset.createdAt.toISOString(),
+  };
+}
+
+function buildMaterialBindings(
+  materialBindingsJson: unknown,
+  materialAssetMap: Map<string, {
+    id: string;
+    sourceUrl: string | null;
+    fileName: string | null;
+    mediaKind: string;
+    sourceKind: string;
+    createdAt: Date;
+  }>,
+) {
+  if (!Array.isArray(materialBindingsJson)) {
+    return [];
+  }
+
+  return materialBindingsJson
+    .filter((assetId): assetId is string => typeof assetId === 'string')
+    .map((assetId) => materialAssetMap.get(assetId))
+    .filter((asset): asset is NonNullable<typeof asset> => Boolean(asset))
+    .map(mapWorkspaceAsset);
+}
+
+function buildLatestRunByShotId(runs: Array<{
+  id: string;
+  resourceId: string | null;
+  runType: string;
+  status: string;
+  modelEndpoint: {
+    id: string;
+    slug: string;
+    label: string;
+  } | null;
+}>) {
+  const latestRunByShotId = new Map<string, (typeof runs)[number]>();
+  for (const run of runs) {
+    if (!run.resourceId || latestRunByShotId.has(run.resourceId)) {
+      continue;
+    }
+    latestRunByShotId.set(run.resourceId, run);
+  }
+  return latestRunByShotId;
+}
+
+function mapLatestGenerationRun(run: {
+  id: string;
+  runType: string;
+  status: string;
+  modelEndpoint: {
+    id: string;
+    slug: string;
+    label: string;
+  } | null;
+} | undefined) {
+  if (!run) {
+    return null;
+  }
+
+  return {
+    id: run.id,
+    runType: run.runType.toLowerCase(),
+    status: run.status.toLowerCase(),
+    modelEndpoint: run.modelEndpoint
+      ? {
+          id: run.modelEndpoint.id,
+          slug: run.modelEndpoint.slug,
+          label: run.modelEndpoint.label,
+        }
+      : null,
+  };
+}
+
+function mapActiveVersion(activeVersion: {
+  id: string;
+  label: string;
+  mediaKind: string;
+  status: string;
+} | null) {
+  if (!activeVersion) {
+    return null;
+  }
+
+  return {
+    id: activeVersion.id,
+    label: activeVersion.label,
+    mediaKind: activeVersion.mediaKind.toLowerCase(),
+    status: activeVersion.status.toLowerCase(),
+  };
+}
+
 export async function getCreationWorkspace(args: {
   projectId: string;
   episodeId: string;
@@ -77,13 +184,7 @@ export async function getCreationWorkspace(args: {
     orderBy: [{ createdAt: 'desc' }],
   });
 
-  const latestRunByShotId = new Map<string, (typeof runs)[number]>();
-  for (const run of runs) {
-    if (!run.resourceId || latestRunByShotId.has(run.resourceId)) {
-      continue;
-    }
-    latestRunByShotId.set(run.resourceId, run);
-  }
+  const latestRunByShotId = buildLatestRunByShotId(runs);
 
   return {
     project: {
@@ -110,45 +211,19 @@ export async function getCreationWorkspace(args: {
           ? shot.promptJson
           : null,
       targetVideoModelFamilySlug: shot.targetVideoModelFamilySlug,
-      materialBindings: Array.isArray(shot.materialBindingsJson)
-        ? shot.materialBindingsJson
-            .filter((assetId): assetId is string => typeof assetId === 'string')
-            .map((assetId) => materialAssetMap.get(assetId))
-            .filter((asset): asset is NonNullable<typeof asset> => Boolean(asset))
-            .map((asset) => ({
-              id: asset.id,
-              sourceUrl: asset.sourceUrl,
-              fileName: asset.fileName,
-              mediaKind: asset.mediaKind.toLowerCase(),
-              sourceKind: asset.sourceKind.toLowerCase(),
-              createdAt: asset.createdAt.toISOString(),
-            }))
-        : [],
+      materialBindings: buildMaterialBindings(shot.materialBindingsJson, materialAssetMap),
       finalizedAt: shot.finalizedAt?.toISOString() ?? null,
       status: shot.status.toLowerCase(),
-      latestGenerationRun: latestRunByShotId.get(shot.id)
-        ? {
-            id: latestRunByShotId.get(shot.id)?.id,
-            runType: latestRunByShotId.get(shot.id)?.runType.toLowerCase(),
-            status: latestRunByShotId.get(shot.id)?.status.toLowerCase(),
-            modelEndpoint: latestRunByShotId.get(shot.id)?.modelEndpoint
-              ? {
-                  id: latestRunByShotId.get(shot.id)?.modelEndpoint?.id,
-                  slug: latestRunByShotId.get(shot.id)?.modelEndpoint?.slug,
-                  label: latestRunByShotId.get(shot.id)?.modelEndpoint?.label,
-                }
-              : null,
-          }
-        : null,
+      latestGenerationRun: mapLatestGenerationRun(latestRunByShotId.get(shot.id)),
       activeVersionId: shot.activeVersionId,
-      activeVersion: shot.activeVersion
-        ? {
-            id: shot.activeVersion.id,
-            label: shot.activeVersion.label,
-            mediaKind: shot.activeVersion.mediaKind.toLowerCase(),
-            status: shot.activeVersion.status.toLowerCase(),
-          }
-        : null,
+      activeVersion: mapActiveVersion(shot.activeVersion),
     })),
   };
 }
+
+export const __testables = {
+  buildMaterialBindings,
+  buildLatestRunByShotId,
+  mapLatestGenerationRun,
+  mapActiveVersion,
+};

@@ -466,6 +466,9 @@ DoD：
 76. external api call logs 已补 API 单测，当前覆盖 request/response JSON 裁剪、深度截断、字符串截断和 provider request id 提取，避免审计落库在 payload 变大或 provider 返回结构变化后静默失真
 77. platou model catalog 已补 API 单测，当前覆盖 model id 归一化、人类可读 label、slug 化、metadata/model-id 双通道分类，以及目录去重与 unsupported 模型过滤，避免 Platou 模型同步把文本/图片/视频分错类
 78. planner subject auto image 已补 API 单测，当前覆盖 Planner 主体自动生图输入到 Catalog 生图输入的桥接，避免自动主体图链路在参数扩展后静默漏传 model family / endpoint / subjectType
+79. workspace shared 这类“路由共用的 ownership 查询 helper”也已补 API 单测，当前锁住 episode ownership 查询必须同时带 project、creator 和 creationConfig 上下文，避免工作区读写路径后续重构时把所有权校验静默放松
+80. planner agent schemas 这类“AI 策划 agent 输出协议与 fallback 包装”的解析层也已补 API 单测，当前覆盖 outline/refinement assistant package 的默认包、stage mismatch 回退和非法 JSON fallback，避免 agent 输出轻微漂移时直接打穿主链路
+81. planner debug contract 这类“AI 调试入口直接暴露给 route 的 Zod schema”也已补 API 单测，当前锁住 debug run 默认值、compare 双边必填、priorMessages/plannerAssets 上限和 list query limit coercion，避免调试入口参数悄悄漂移后把 replay/compare 链路打穿
 
 DoD：
 

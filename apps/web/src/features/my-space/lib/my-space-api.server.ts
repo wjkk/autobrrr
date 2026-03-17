@@ -1,4 +1,5 @@
 import { requestAivApiFromServer } from '@/lib/aiv-api';
+import { fetchServerValueOrHandledError } from '@/lib/server-fetch-fallback';
 
 export interface MySpaceProjectItem {
   id: string;
@@ -27,17 +28,21 @@ export interface MySpaceProjectItem {
   updatedAt: string;
 }
 
-export async function fetchMySpaceProjects() {
-  try {
-    const projects = await requestAivApiFromServer<MySpaceProjectItem[]>('/api/studio/projects');
-    return {
+export interface MySpaceProjectsResult {
+  projects: MySpaceProjectItem[];
+  error: string | null;
+}
+
+export async function fetchMySpaceProjects(): Promise<MySpaceProjectsResult> {
+  return fetchServerValueOrHandledError<MySpaceProjectItem[], MySpaceProjectsResult>(
+    () => requestAivApiFromServer<MySpaceProjectItem[]>('/api/studio/projects'),
+    (error) => ({
+      projects: [],
+      error: error instanceof Error ? error.message : '加载我的空间失败。',
+    }),
+    (projects) => ({
       projects: projects ?? [],
       error: null,
-    };
-  } catch (error) {
-    return {
-      projects: [] as MySpaceProjectItem[],
-      error: error instanceof Error ? error.message : '加载我的空间失败。',
-    };
-  }
+    }),
+  );
 }

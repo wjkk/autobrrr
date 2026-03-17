@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { requestAivApiFromServer } from '@/lib/aiv-api';
+import { fetchServerListOrEmpty } from '@/lib/server-fetch-fallback';
 
 export interface AdminModelEndpointItem {
   id: string;
@@ -27,9 +28,5 @@ export interface AdminModelEndpointItem {
 }
 
 export async function fetchAdminModelEndpoints() {
-  try {
-    return (await requestAivApiFromServer<AdminModelEndpointItem[]>('/api/model-endpoints?scope=all')) ?? [];
-  } catch {
-    return [];
-  }
+  return fetchServerListOrEmpty(() => requestAivApiFromServer<AdminModelEndpointItem[]>('/api/model-endpoints?scope=all'));
 }

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { requestAivApiFromServer } from '@/lib/aiv-api';
+import { fetchServerValueOrNull } from '@/lib/server-fetch-fallback';
 
 export interface SharedAuthUser {
   id: string;
@@ -9,9 +10,5 @@ export interface SharedAuthUser {
 }
 
 export async function fetchCurrentAuthUser(): Promise<SharedAuthUser | null> {
-  try {
-    return (await requestAivApiFromServer<SharedAuthUser>('/api/auth/me')) ?? null;
-  } catch {
-    return null;
-  }
+  return fetchServerValueOrNull(() => requestAivApiFromServer<SharedAuthUser>('/api/auth/me'));
 }

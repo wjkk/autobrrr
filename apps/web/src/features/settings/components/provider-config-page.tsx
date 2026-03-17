@@ -5,6 +5,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ProviderConfigItem, SettingsAuthUser } from '../lib/provider-config-api';
 import {
+  fetchSettingsAuthUserClient,
+  syncProviderModels,
+  testProviderConfig,
+  updateProviderConfig,
+} from '../lib/provider-config-client';
+import {
   CONFIGURABLE_PROVIDER_CODES,
   getDefaultModelSlug,
   getEnabledModelSlugs,
@@ -194,90 +200,6 @@ function ModelSelectionSection(props: {
       </div>
     </div>
   );
-}
-
-async function updateProviderConfig(providerCode: string, draft: DraftState): Promise<ProviderConfigItem> {
-  const response = await fetch(`/api/provider-configs/${encodeURIComponent(providerCode)}`, {
-    method: 'PUT',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      apiKey: draft.apiKey.trim() ? draft.apiKey.trim() : undefined,
-      baseUrlOverride: draft.baseUrlOverride.trim() ? draft.baseUrlOverride.trim() : null,
-      enabled: draft.enabled,
-      defaults: {
-        textEndpointSlug: draft.defaults.textEndpointSlug || null,
-        imageEndpointSlug: draft.defaults.imageEndpointSlug || null,
-        videoEndpointSlug: draft.defaults.videoEndpointSlug || null,
-        audioEndpointSlug: draft.defaults.audioEndpointSlug || null,
-      },
-      enabledModels: {
-        textEndpointSlugs: draft.enabledModels.textEndpointSlugs,
-        imageEndpointSlugs: draft.enabledModels.imageEndpointSlugs,
-        videoEndpointSlugs: draft.enabledModels.videoEndpointSlugs,
-        audioEndpointSlugs: draft.enabledModels.audioEndpointSlugs,
-      },
-    }),
-  });
-
-  const payload = (await response.json()) as { ok: boolean; data?: ProviderConfigItem; error?: { message?: string } };
-  if (!response.ok || !payload.ok || !payload.data) {
-    throw new Error(payload.error?.message ?? '保存配置失败。');
-  }
-
-  return payload.data;
-}
-
-async function testProviderConfig(providerCode: string, testKind: SettingsProviderTestKind): Promise<ProviderConfigItem> {
-  const response = await fetch(`/api/provider-configs/${encodeURIComponent(providerCode)}/test`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ testKind }),
-  });
-
-  const payload = (await response.json()) as { ok: boolean; data?: ProviderConfigItem; error?: { message?: string } };
-  if (!response.ok || !payload.ok) {
-    const error = new Error(payload.error?.message ?? '连通性测试失败。') as Error & { providerConfig?: ProviderConfigItem };
-    if (payload.data) {
-      error.providerConfig = payload.data;
-    }
-    throw error;
-  }
-
-  if (!payload.data) {
-    throw new Error('测试返回为空。');
-  }
-
-  return payload.data;
-}
-
-async function syncProviderModels(providerCode: string): Promise<ProviderConfigItem> {
-  const response = await fetch(`/api/provider-configs/${encodeURIComponent(providerCode)}/sync-models`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-    },
-  });
-
-  const payload = (await response.json()) as { ok: boolean; data?: ProviderConfigItem; error?: { message?: string } };
-  if (!response.ok || !payload.ok) {
-    const error = new Error(payload.error?.message ?? '模型目录同步失败。') as Error & { providerConfig?: ProviderConfigItem };
-    if (payload.data) {
-      error.providerConfig = payload.data;
-    }
-    throw error;
-  }
-
-  if (!payload.data) {
-    throw new Error('模型目录同步返回为空。');
-  }
-
-  return payload.data;
 }
 
 export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }: ProviderConfigPageProps) {
@@ -511,12 +433,8 @@ export function ProviderConfigPage({ initialConfigs, currentUser: initialUser }:
   const effectiveUser = currentUser;
 
   async function refreshCurrentUser() {
-    const response = await fetch('/api/auth/me', { headers: { Accept: 'application/json' } });
-    const payload = (await response.json()) as { ok: boolean; data?: SettingsAuthUser; error?: { message?: string } };
-    if (!response.ok || !payload.ok || !payload.data) {
-      throw new Error(payload.error?.message ?? '获取当前用户失败。');
-    }
-    setCurrentUser(payload.data);
+    const user = await fetchSettingsAuthUserClient();
+    setCurrentUser(user);
   }
 
   const submitAuth = async () => {

@@ -426,6 +426,7 @@ DoD：
 36. provider config presenter 已补 API 单测，当前覆盖 API key 脱敏、audio 默认值与启用模型映射、catalog sync / lastTest 展示态，以及未配置 provider 的空态返回，避免配置页展示层静默漂移
 37. provider config query / catalog service 的纯决策层已补 API 单测，当前覆盖 endpoint slug 收集、default/enabled 一致性校验、catalog sync 前置条件和 Ark/Platou 同步消息格式，避免 settings/provider service seam 静默漂移
 38. settings/provider 页面 helper 已补 web 单测，当前覆盖 draft 初始化、text/image/video 测试优先级、audio 模型选择读写和自动静默 sync 判定，避免配置页 UI 规则静默漂移
+39. settings/provider 请求与错误解析 helper 已补 web 单测，当前覆盖保存 payload 组装、providerConfig 失败态透传和 auth user 解析，避免配置页 fetch 层静默漂移
 
 DoD：
 

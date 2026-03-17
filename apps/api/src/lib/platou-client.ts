@@ -1,3 +1,4 @@
+import { captureJsonResponse, tryReplayJsonResponse } from './provider-capture-replay.js';
 import { emitTransportHook, type TransportHookMetadata } from './transport-hooks.js';
 
 interface PlatouRequestOptions {
@@ -25,6 +26,59 @@ export class PlatouApiError extends Error {
 async function requestPlatou<T>({ baseUrl, apiKey, path, body, method = 'POST', capability, metadata }: PlatouRequestOptions): Promise<T> {
   const url = `${baseUrl.replace(/\/$/, '')}${path}`;
   const startedAt = Date.now();
+  const request = {
+    providerCode: 'platou' as const,
+    capability,
+    operation: path,
+    request: {
+      url,
+      method,
+      ...(body ? { body } : {}),
+    },
+  };
+  const replayDir = process.env.AIV_PROVIDER_REPLAY_DIR?.trim() || null;
+  const captureDir = process.env.AIV_PROVIDER_CAPTURE_DIR?.trim() || null;
+
+  const replayed = await tryReplayJsonResponse<T>({
+    replayDir,
+    request,
+  });
+  if (replayed) {
+    if (!replayed.ok) {
+      await emitTransportHook({
+        providerCode: 'platou',
+        capability,
+        operation: path,
+        request: request.request,
+        response: replayed.payload,
+        error: {
+          message: 'Replayed Platou error response.',
+        },
+        latencyMs: 0,
+        metadata: {
+          ...metadata,
+          replayed: true,
+        },
+      });
+      throw new PlatouApiError(`Platou replayed request failed: ${path}`, replayed.status, replayed.payload);
+    }
+
+    await emitTransportHook({
+      providerCode: 'platou',
+      capability,
+      operation: path,
+      request: request.request,
+      response: replayed.payload,
+      latencyMs: 0,
+      metadata: {
+        ...metadata,
+        replayed: true,
+      },
+    });
+
+    return replayed.payload;
+  }
+
   const response = await fetch(url, {
     method,
     headers: {
@@ -36,6 +90,13 @@ async function requestPlatou<T>({ baseUrl, apiKey, path, body, method = 'POST', 
   });
 
   const payload = (await response.json()) as T & { error?: { message?: string }; message?: string };
+  await captureJsonResponse({
+    captureDir,
+    request,
+    ok: response.ok,
+    status: response.status,
+    response: payload,
+  });
   if (!response.ok) {
     await emitTransportHook({
       providerCode: 'platou',

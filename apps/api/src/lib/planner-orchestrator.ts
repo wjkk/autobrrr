@@ -86,6 +86,23 @@ function applyTargetVideoModelToStructuredDoc(doc: PlannerStructuredDoc, targetV
   } satisfies PlannerStructuredDoc;
 }
 
+function buildPersistedPromptArtifact(input: Record<string, unknown>) {
+  const promptText = readString(input.prompt);
+  const targetVideoModelFamilySlug = readString(input.targetVideoModelFamilySlug);
+  const contextSnapshot = readObject(input.contextSnapshot);
+  const selectedVideoModel = readObject(contextSnapshot.selectedVideoModel);
+  const targetVideoModelSummary = readString(selectedVideoModel.capabilitySummary);
+  const promptSnapshot = readObject(input.promptSnapshot);
+
+  return {
+    promptText,
+    targetVideoModelFamilySlug,
+    targetVideoModelSummary,
+    stepDefinitions: normalizeSteps(input.stepDefinitions),
+    promptSnapshot,
+  } satisfies Record<string, unknown>;
+}
+
 export function resolvePlannerStepDefinitions(selection: ResolvedPlannerAgentSelection) {
   const subSteps = normalizeSteps(selection.subAgentProfile.stepDefinitionsJson);
   if (subSteps.length > 0) {
@@ -104,6 +121,14 @@ export interface PlannerPromptSnapshot {
     content: string;
   }>;
   inputContextSnapshot: Record<string, unknown>;
+}
+
+export interface PlannerPromptArtifact {
+  promptText: string;
+  promptSnapshot: PlannerPromptSnapshot;
+  stepDefinitions: PlannerStepAnalysisItem[];
+  targetVideoModelFamilySlug: string | null;
+  targetVideoModelSummary: string | null;
 }
 
 function buildPlannerPromptSnapshot(args: {
@@ -266,11 +291,19 @@ export function buildPlannerGenerationPrompt(args: {
     `步骤定义：${JSON.stringify(stepDefinitions)}`,
     `用户最新需求：${args.userPrompt}`,
   ];
+  const promptText = promptSections.filter(Boolean).join('\n');
 
   return {
-    promptText: promptSections.filter(Boolean).join('\n'),
+    promptText,
     stepDefinitions,
     promptSnapshot,
+    promptArtifact: {
+      promptText,
+      promptSnapshot,
+      stepDefinitions,
+      targetVideoModelFamilySlug: args.targetVideoModelFamilySlug ?? null,
+      targetVideoModelSummary: args.targetVideoModelSummary ?? null,
+    } satisfies PlannerPromptArtifact,
   };
 }
 
@@ -320,6 +353,7 @@ export async function finalizePlannerConversation(args: {
   const triggerType = readString(input.triggerType) ?? (targetStage === 'outline' ? 'generate_outline' : 'generate_doc');
   const inputSourceOutlineVersionId = readString(input.sourceOutlineVersionId);
   const targetVideoModelFamilySlug = readString(input.targetVideoModelFamilySlug);
+  const promptArtifact = buildPersistedPromptArtifact(input);
 
   const rawAssistantPackage = parsePlannerAssistantPackage({
     targetStage,
@@ -389,7 +423,10 @@ export async function finalizePlannerConversation(args: {
           documentTitle: assistantPackage.documentTitle ?? assistantPackage.outlineDoc.projectTitle,
           generatedText: args.generatedText,
           outlineDocJson: assistantPackage.outlineDoc as Prisma.InputJsonValue,
-          inputSnapshotJson: inputSnapshot as Prisma.InputJsonValue,
+          inputSnapshotJson: {
+            ...inputSnapshot,
+            promptArtifact,
+          } as Prisma.InputJsonValue,
           modelSnapshotJson: modelSnapshot,
           operationsJson: assistantPackage.operations as Prisma.InputJsonValue,
           isActive: true,
@@ -534,7 +571,10 @@ export async function finalizePlannerConversation(args: {
         documentTitle: assistantPackage.documentTitle ?? assistantPackage.structuredDoc.projectTitle,
         generatedText: args.generatedText,
         structuredDocJson: assistantPackage.structuredDoc as Prisma.InputJsonValue,
-        inputSnapshotJson: inputSnapshot as Prisma.InputJsonValue,
+        inputSnapshotJson: {
+          ...inputSnapshot,
+          promptArtifact,
+        } as Prisma.InputJsonValue,
         modelSnapshotJson: modelSnapshot,
         operationsJson: assistantPackage.operations as Prisma.InputJsonValue,
         isActive: true,

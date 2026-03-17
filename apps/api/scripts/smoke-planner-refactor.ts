@@ -70,6 +70,9 @@ async function main() {
   assert.match(promptPackage.promptText, /ark-seedance-2-video/);
   assert.match(promptPackage.promptText, /目标视频模型能力摘要/);
   assert.equal(promptPackage.promptSnapshot.inputContextSnapshot.targetVideoModelFamilySlug, seedance.familySlug);
+  assert.equal(promptPackage.promptArtifact.targetVideoModelFamilySlug, seedance.familySlug);
+  assert.equal(promptPackage.promptArtifact.promptText, promptPackage.promptText);
+  assert.equal(promptPackage.promptArtifact.promptSnapshot.systemPromptFinal, promptPackage.promptSnapshot.systemPromptFinal);
 
   const multiShotPrompts = generateShotPrompts({
     modelFamilySlug: seedance.familySlug,

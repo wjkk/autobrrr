@@ -1,3 +1,9 @@
+import {
+  captureBinaryResponse,
+  captureJsonResponse,
+  tryReplayBinaryResponse,
+  tryReplayJsonResponse,
+} from './provider-capture-replay.js';
 import { emitTransportHook, type TransportHookMetadata } from './transport-hooks.js';
 
 interface ArkRequestOptions {
@@ -44,6 +50,58 @@ async function requestArk<T>({
 }: ArkRequestOptions): Promise<T> {
   const url = `${baseUrl.replace(/\/$/, '')}${path}`;
   const startedAt = Date.now();
+  const request = {
+    providerCode: 'ark' as const,
+    capability,
+    operation: path,
+    request: {
+      url,
+      method,
+      ...(body ? { body } : {}),
+    },
+  };
+  const replayDir = process.env.AIV_PROVIDER_REPLAY_DIR?.trim() || null;
+  const captureDir = process.env.AIV_PROVIDER_CAPTURE_DIR?.trim() || null;
+
+  const replayed = await tryReplayJsonResponse<T>({
+    replayDir,
+    request,
+  });
+  if (replayed) {
+    if (!replayed.ok) {
+      await emitTransportHook({
+        providerCode: 'ark',
+        capability,
+        operation: path,
+        request: request.request,
+        response: replayed.payload,
+        error: {
+          message: 'Replayed ARK error response.',
+        },
+        latencyMs: 0,
+        metadata: {
+          ...metadata,
+          replayed: true,
+        },
+      });
+      throw new ArkApiError(`ARK replayed request failed: ${path}`, replayed.status, replayed.payload);
+    }
+
+    await emitTransportHook({
+      providerCode: 'ark',
+      capability,
+      operation: path,
+      request: request.request,
+      response: replayed.payload,
+      latencyMs: 0,
+      metadata: {
+        ...metadata,
+        replayed: true,
+      },
+    });
+
+    return replayed.payload;
+  }
 
   const response = await fetch(url, {
     method,
@@ -56,6 +114,13 @@ async function requestArk<T>({
   });
 
   const payload = (await response.json()) as T & { error?: { message?: string; code?: string } };
+  await captureJsonResponse({
+    captureDir,
+    request,
+    ok: response.ok,
+    status: response.status,
+    response: payload,
+  });
   if (!response.ok) {
     await emitTransportHook({
       providerCode: 'ark',
@@ -108,6 +173,61 @@ async function requestArkBinary({
 }: ArkBinaryRequestOptions) {
   const url = `${baseUrl.replace(/\/$/, '')}${path}`;
   const startedAt = Date.now();
+  const request = {
+    providerCode: 'ark' as const,
+    capability,
+    operation: path,
+    request: {
+      url,
+      method: 'POST' as const,
+      body,
+    },
+  };
+  const replayDir = process.env.AIV_PROVIDER_REPLAY_DIR?.trim() || null;
+  const captureDir = process.env.AIV_PROVIDER_CAPTURE_DIR?.trim() || null;
+
+  const replayed = await tryReplayBinaryResponse({
+    replayDir,
+    request,
+  });
+  if (replayed) {
+    if (!replayed.ok) {
+      await emitTransportHook({
+        providerCode: 'ark',
+        capability,
+        operation: path,
+        request: request.request,
+        error: { message: 'Replayed ARK binary error response.' },
+        latencyMs: 0,
+        metadata: {
+          ...metadata,
+          replayed: true,
+        },
+      });
+      throw new ArkApiError(`ARK replayed request failed: ${path}`, replayed.status);
+    }
+
+    await emitTransportHook({
+      providerCode: 'ark',
+      capability,
+      operation: path,
+      request: request.request,
+      response: {
+        contentType: replayed.contentType,
+        byteLength: replayed.buffer.byteLength,
+      },
+      latencyMs: 0,
+      metadata: {
+        ...metadata,
+        replayed: true,
+      },
+    });
+
+    return {
+      contentType: replayed.contentType,
+      buffer: replayed.buffer,
+    };
+  }
 
   const response = await fetch(url, {
     method: 'POST',
@@ -137,6 +257,13 @@ async function requestArkBinary({
       }
     }
 
+    await captureJsonResponse({
+      captureDir,
+      request,
+      ok: false,
+      status: response.status,
+      response: payload,
+    });
     await emitTransportHook({
       providerCode: 'ark',
       capability,
@@ -155,6 +282,14 @@ async function requestArkBinary({
   }
 
   const buffer = Buffer.from(await response.arrayBuffer());
+  await captureBinaryResponse({
+    captureDir,
+    request,
+    ok: true,
+    status: response.status,
+    contentType,
+    buffer,
+  });
   await emitTransportHook({
     providerCode: 'ark',
     capability,

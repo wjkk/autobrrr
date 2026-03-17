@@ -394,6 +394,7 @@ DoD：
 4. AI 纯逻辑已补 node:test 单元测试，当前覆盖 `run-input`、`planner-rerun-scope`、`planner-target-video-model`、`model-capability`、`shot-prompt-generator`、`transport-hooks`
 5. 当前最小 AI 回归入口为 `pnpm test:ai:regression`
 6. 文档与任务清单中不再出现 “ARK = text-only provider” 的现行口径
+7. Planner 最终 prompt 已作为 artifact 固化到版本快照；provider client 支持通过 `AIV_PROVIDER_CAPTURE_DIR` / `AIV_PROVIDER_REPLAY_DIR` 做 file-based capture / replay
 
 DoD：
 

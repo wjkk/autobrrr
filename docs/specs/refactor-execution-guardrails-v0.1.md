@@ -196,6 +196,13 @@
 1. `pnpm test:unit:api`
 2. `pnpm test:ai:regression`
 
+当前辅助机制：
+
+1. Planner prompt artifact 会随版本快照持久化到 `inputSnapshotJson.promptArtifact`
+2. provider client 支持 file-based capture / replay：
+   `AIV_PROVIDER_CAPTURE_DIR=/abs/path`
+   `AIV_PROVIDER_REPLAY_DIR=/abs/path`
+
 ## 8. 回滚与停手条件
 
 出现以下情况时，应先停手收口，不继续横向扩写：

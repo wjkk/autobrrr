@@ -1,0 +1,55 @@
+{
+  "modelFamilySlug": "seedance-2-0",
+  "capability": {
+    "supportsMultiShot": true,
+    "maxShotsPerGeneration": 6,
+    "timestampMeaning": "narrative-hint",
+    "audioDescStyle": "inline",
+    "referenceImageSupport": "full",
+    "maxReferenceImages": 4,
+    "maxReferenceVideos": 0,
+    "maxReferenceAudios": 0,
+    "cameraVocab": "english-cinematic",
+    "maxDurationSeconds": 10,
+    "maxResolution": "1080p",
+    "promptStyle": "narrative",
+    "knownIssues": []
+  },
+  "shots": [
+    {
+      "id": "shot-1",
+      "actKey": "act-1",
+      "actTitle": "第一幕",
+      "sceneName": "天台",
+      "title": "角色登场",
+      "durationSeconds": 3,
+      "visualDescription": "角色从门后走出",
+      "composition": "全景",
+      "cameraMotion": "移镜",
+      "soundDesign": "脚步声与风声",
+      "sortOrder": 1
+    },
+    {
+      "id": "shot-2",
+      "actKey": "act-1",
+      "actTitle": "第一幕",
+      "sceneName": "天台",
+      "title": "冲突升级",
+      "durationSeconds": 4,
+      "visualDescription": "角色逼近镜头",
+      "composition": "中景",
+      "cameraMotion": "推镜",
+      "dialogue": "你必须现在做决定",
+      "soundDesign": "风声增强",
+      "sortOrder": 2
+    }
+  ],
+  "expected": [
+    {
+      "groupId": "act-1:group-1",
+      "shotIds": ["shot-1", "shot-2"],
+      "mode": "multi-shot",
+      "promptText": "开场，天台，时长约 3 秒，wide shot，角色从门后走出，tracking shot，脚步声与风声。镜头2，天台，时长约 4 秒，medium shot，角色逼近镜头，dolly in，风声增强，对白/旁白：你必须现在做决定。"
+    }
+  ]
+}

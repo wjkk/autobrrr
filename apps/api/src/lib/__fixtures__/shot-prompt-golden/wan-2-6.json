@@ -1,0 +1,41 @@
+{
+  "modelFamilySlug": "wan-2-6",
+  "capability": {
+    "supportsMultiShot": false,
+    "maxShotsPerGeneration": 1,
+    "timestampMeaning": "ignored",
+    "audioDescStyle": "none",
+    "referenceImageSupport": "style",
+    "maxReferenceImages": 1,
+    "maxReferenceVideos": 0,
+    "maxReferenceAudios": 0,
+    "cameraVocab": "chinese",
+    "maxDurationSeconds": null,
+    "maxResolution": null,
+    "promptStyle": "single-shot",
+    "knownIssues": []
+  },
+  "shots": [
+    {
+      "id": "shot-1",
+      "actKey": "act-1",
+      "actTitle": "第一幕",
+      "sceneName": "走廊",
+      "title": "转场",
+      "visualDescription": "角色在昏暗走廊内停下脚步",
+      "composition": "近景",
+      "cameraMotion": "拉镜",
+      "dialogue": "别回头。",
+      "soundDesign": "脚步与回声",
+      "sortOrder": 1
+    }
+  ],
+  "expected": [
+    {
+      "groupId": "act-1:shot-1",
+      "shotIds": ["shot-1"],
+      "mode": "single-shot",
+      "promptText": "走廊，近景，角色在昏暗走廊内停下脚步，拉镜，对白/旁白：别回头。。"
+    }
+  ]
+}

@@ -391,7 +391,9 @@ DoD：
 1. `provider-gateway.ts` 的接口设计允许 ARK 接入图片 / 视频 / 音频能力
 2. `apps/api/scripts/seed-model-registry.ts` 不再把 ARK 限定为仅 text family
 3. `apps/api/src/routes/provider-configs.ts` 的 `/test` 路径设计允许后续扩展 ARK 的 image / video / audio 测试
-4. 文档与任务清单中不再出现 “ARK = text-only provider” 的现行口径
+4. AI 纯逻辑已补 node:test 单元测试，当前覆盖 `run-input`、`planner-rerun-scope`、`planner-target-video-model`、`model-capability`、`shot-prompt-generator`、`transport-hooks`
+5. 当前最小 AI 回归入口为 `pnpm test:ai:regression`
+6. 文档与任务清单中不再出现 “ARK = text-only provider” 的现行口径
 
 DoD：
 

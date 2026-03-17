@@ -9,6 +9,8 @@
     "build": "pnpm --filter @aiv/web build",
     "build:api": "pnpm --filter @aiv/api build",
     "typecheck": "pnpm --filter @aiv/web typecheck",
-    "typecheck:api": "pnpm --filter @aiv/api typecheck"
+    "typecheck:api": "pnpm --filter @aiv/api typecheck",
+    "test:unit:api": "pnpm --filter @aiv/api test:unit",
+    "test:ai:regression": "pnpm --filter @aiv/api test:ai:regression"
   }
 }

@@ -87,12 +87,20 @@ function buildSyntheticSteps(run: { id: string; runType: string; inputJson: Pris
   }));
 }
 
-async function buildPlannerStreamSnapshot(args: {
+interface PlannerStreamDeps {
+  prisma: typeof prisma;
+}
+
+const defaultPlannerStreamDeps: PlannerStreamDeps = {
+  prisma,
+};
+
+async function buildPlannerStreamSnapshotWithDeps(args: {
   projectId: string;
   episodeId: string;
   runId?: string;
-}) {
-  const plannerSession = await prisma.plannerSession.findFirst({
+}, deps: PlannerStreamDeps) {
+  const plannerSession = await deps.prisma.plannerSession.findFirst({
     where: {
       projectId: args.projectId,
       episodeId: args.episodeId,
@@ -134,7 +142,7 @@ async function buildPlannerStreamSnapshot(args: {
   });
 
   const trackedRun = args.runId
-    ? await prisma.run.findFirst({
+    ? await deps.prisma.run.findFirst({
         where: {
           id: args.runId,
           projectId: args.projectId,
@@ -186,6 +194,14 @@ async function buildPlannerStreamSnapshot(args: {
     steps,
     terminal,
   };
+}
+
+async function buildPlannerStreamSnapshot(args: {
+  projectId: string;
+  episodeId: string;
+  runId?: string;
+}) {
+  return buildPlannerStreamSnapshotWithDeps(args, defaultPlannerStreamDeps);
 }
 
 export async function registerPlannerStreamRoutes(app: FastifyInstance) {
@@ -277,3 +293,10 @@ export async function registerPlannerStreamRoutes(app: FastifyInstance) {
     return reply;
   });
 }
+
+export const __testables = {
+  toStepStatus,
+  readStepDefinitions,
+  buildSyntheticSteps,
+  buildPlannerStreamSnapshotWithDeps,
+};

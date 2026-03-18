@@ -7,6 +7,7 @@ interface PlannerPageHeaderProps {
   brief: string;
   plannerModeLabel: string;
   onBackToExplore: () => void;
+  onOpenAgentDebug?: () => void;
 }
 
 export function PlannerPageHeader(props: PlannerPageHeaderProps) {
@@ -20,6 +21,11 @@ export function PlannerPageHeader(props: PlannerPageHeaderProps) {
 
       <div className={styles.topActions}>
         <span className={styles.modePill}>{props.plannerModeLabel}</span>
+        {props.onOpenAgentDebug ? (
+          <button type="button" className={styles.topGhostButton} onClick={props.onOpenAgentDebug}>
+            Agent 调试
+          </button>
+        ) : null}
         <button type="button" className={styles.topGhostButton} onClick={props.onBackToExplore}>
           返回广场
         </button>

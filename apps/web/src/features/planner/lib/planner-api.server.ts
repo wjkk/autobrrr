@@ -1,19 +1,24 @@
-import { requestAivApiFromServer } from '@/lib/aiv-api';
+import { AivApiError, requestAivApiFromServer } from '@/lib/aiv-api';
+import { toWorkspaceBootstrapError } from '@/features/shared/lib/workspace-bootstrap-error';
 
 import type { PlannerPageBootstrap, ApiPlannerWorkspace } from './planner-api';
-import { buildPlannerBootstrap, buildPlannerFixtureFallback, selectPlannerEpisodeId } from './planner-api-bootstrap';
+import { buildPlannerBootstrap, selectPlannerEpisodeId } from './planner-api-bootstrap';
 import type { ApiPlannerProjectDetail } from './planner-page-bootstrap';
 
-export async function fetchPlannerStudioProject(projectId: string): Promise<PlannerPageBootstrap> {
+function readEpisodeIdOverride(value: string | undefined) {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+export async function fetchPlannerStudioProject(projectId: string, episodeIdOverride?: string): Promise<PlannerPageBootstrap> {
   try {
     const project = await requestAivApiFromServer<ApiPlannerProjectDetail>(`/api/studio/projects/${encodeURIComponent(projectId)}`, { allowNotFound: true });
     if (!project) {
       return { studio: null };
     }
 
-    const episodeId = selectPlannerEpisodeId(project);
+    const episodeId = readEpisodeIdOverride(episodeIdOverride) ?? selectPlannerEpisodeId(project);
     if (!episodeId) {
-      return { studio: null };
+      throw new AivApiError('Project did not expose a planner episode id.', 'AIV_PLANNER_EPISODE_REQUIRED');
     }
 
     const workspace = await requestAivApiFromServer<ApiPlannerWorkspace>(
@@ -21,11 +26,14 @@ export async function fetchPlannerStudioProject(projectId: string): Promise<Plan
     );
 
     if (!workspace) {
-      return { studio: null };
+      throw new AivApiError('Planner workspace is empty.', 'AIV_PLANNER_WORKSPACE_EMPTY');
     }
 
     return buildPlannerBootstrap(project, workspace);
-  } catch {
-    return buildPlannerFixtureFallback(projectId);
+  } catch (error) {
+    return {
+      studio: null,
+      error: toWorkspaceBootstrapError(error, '加载策划工作区失败。'),
+    };
   }
 }

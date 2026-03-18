@@ -17,6 +17,8 @@ export const debugRunSchema = z.object({
   configSource: z.enum(['draft', 'published']).default('draft'),
   targetStage: z.enum(['outline', 'refinement']).default('refinement'),
   partialRerunScope: z.enum(['none', 'subject_only', 'scene_only', 'shots_only']).default('none'),
+  projectId: z.string().trim().max(191).optional(),
+  episodeId: z.string().trim().max(191).optional(),
   projectTitle: z.string().trim().min(1).max(255).default('调试项目'),
   episodeTitle: z.string().trim().min(1).max(255).default('第1集'),
   userPrompt: z.string().trim().min(1).max(20000),

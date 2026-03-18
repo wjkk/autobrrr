@@ -74,3 +74,29 @@ test('mapPlannerLatestRun drops invalid output payloads to null fields', () => {
     finishedAt: null,
   });
 });
+
+test('readPlannerDebugApplySource extracts debug apply metadata from refinement snapshots', () => {
+  assert.deepEqual(
+    __testables.readPlannerDebugApplySource('debug_apply', {
+      appliedFromDebugRunId: 'debug-run-12345678',
+      appliedFromDebugRunAt: '2026-03-18T08:00:00.000Z',
+    }),
+    {
+      debugRunId: 'debug-run-12345678',
+      appliedAt: '2026-03-18T08:00:00.000Z',
+    },
+  );
+
+  assert.deepEqual(
+    __testables.readPlannerDebugApplySource('follow_up', {
+      appliedFromDebugRunId: 'debug-run-2',
+    }),
+    {
+      debugRunId: 'debug-run-2',
+      appliedAt: null,
+    },
+  );
+
+  assert.equal(__testables.readPlannerDebugApplySource('follow_up', null), null);
+  assert.equal(__testables.readPlannerDebugApplySource('follow_up', { appliedFromDebugRunId: null }), null);
+});

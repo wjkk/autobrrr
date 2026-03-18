@@ -48,6 +48,7 @@ import { toPlannerSeedData, toStructuredPlannerDoc } from '../lib/planner-struct
 import type { PlannerThreadMessage } from '../lib/planner-thread';
 import { sekoPlanThreadData } from '../lib/seko-plan-thread-data';
 import { PLANNER_VIDEO_MODEL_OPTIONS } from '../lib/planner-video-model-options';
+import { buildPlannerDebugSearch } from '@/features/planner-debug/lib/planner-debug-runtime';
 import { PlannerDocumentPanel } from './planner-document-panel';
 import { PlannerEpisodeRail } from './planner-episode-rail';
 import { PlannerPageDialogs } from './planner-page-dialogs';
@@ -153,6 +154,17 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
     subjectImagePool: SUBJECT_IMAGE_POOL,
     sceneImagePool: SCENE_IMAGE_POOL,
   });
+  const activeEpisodeRuntimeId = runtimeApi?.episodeId ?? runtimeWorkspace?.episode.id ?? null;
+  const plannerDebugSearch = buildPlannerDebugSearch({
+    projectId: runtimeApi?.projectId ?? null,
+    episodeId: activeEpisodeRuntimeId,
+    projectTitle: displayTitle || studio.project.title,
+    episodeTitle: runtimeWorkspace?.episode.title ?? activeEpisode?.title ?? null,
+  });
+  const activeDebugApplySource = runtimeActiveRefinement?.debugApplySource ?? null;
+  const openDebugRun = (debugRunId: string) => {
+    router.push(`/admin/planner-debug/runs/${encodeURIComponent(debugRunId)}${plannerDebugSearch}`);
+  };
 
   useEffect(() => {
     if (!initialPlannerReady || !initialGeneratedText || versions.length > 0) {
@@ -504,6 +516,13 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
           title={displayTitle}
           brief={studio.project.brief}
           plannerModeLabel={plannerModeLabel(plannerMode)}
+          onOpenAgentDebug={
+            runtimeApi
+              ? () => {
+                  router.push(`/admin/planner-debug${plannerDebugSearch}`);
+                }
+              : undefined
+          }
           onBackToExplore={() => router.push('/explore')}
         />
 
@@ -530,8 +549,11 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
                 activeDocumentTitle={runtimeActiveRefinement?.documentTitle ?? runtimeWorkspace?.activeOutline?.documentTitle ?? null}
                 activeRefinementVersionNumber={runtimeActiveRefinement?.versionNumber ?? null}
                 activeRefinementAgentName={runtimeActiveRefinement?.subAgentProfile?.displayName ?? null}
+                activeRefinementTrigger={runtimeActiveRefinement?.triggerType ?? null}
+                activeDebugApplySource={activeDebugApplySource}
                 assistantName={studio.assistantName}
                 notice={notice}
+                onOpenDebugRun={openDebugRun}
                 onRequirementChange={setRequirement}
                 onSubmit={handleComposerSubmit}
                 onConfirmOutline={handleConfirmOutline}
@@ -545,9 +567,11 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
               activeEpisodeTitle={activeEpisode?.title ?? ''}
               fallbackEpisodeTitle={plannerDoc.episodeTitle}
               saveState={saveState}
+              activeDebugApplySource={activeDebugApplySource}
               historyMenuOpen={historyMenuOpen}
               historyVersions={historyVersions}
               historyActiveVersionId={historyActiveVersionId}
+              onOpenDebugRun={openDebugRun}
               onToggleHistory={() => setHistoryMenuOpen((current) => !current)}
               onSelectHistoryVersion={handleSelectHistoryVersion}
             />

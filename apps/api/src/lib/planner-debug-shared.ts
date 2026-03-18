@@ -167,6 +167,7 @@ export function readPromptSnapshot(value: unknown) {
     developerPromptFinal: readString(record.developerPromptFinal) ?? '',
     messagesFinal: messages,
     inputContextSnapshot: readObject(record.inputContextSnapshot),
+    modelSelectionSnapshot: readObject(record.modelSelectionSnapshot),
   };
 }
 

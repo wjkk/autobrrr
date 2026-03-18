@@ -39,6 +39,11 @@ export interface ApiPublishWorkspace {
 
 export interface PublishPageBootstrap {
   studio: PublishPageData | null;
+  error?: {
+    code: string;
+    message: string;
+    status?: number;
+  } | null;
   runtimeApi?: PublishRuntimeApiContext;
   initialPublishWorkspace?: ApiPublishWorkspace | null;
 }

@@ -13,6 +13,52 @@ import {
   type PlannerPreviewCardItem,
 } from '../lib/planner-debug-presenters';
 
+function readObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function readString(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : '';
+}
+
+function readStepAnalysis(assistantPackage: unknown) {
+  const rawSteps = Array.isArray(readObject(assistantPackage).stepAnalysis) ? (readObject(assistantPackage).stepAnalysis as unknown[]) : [];
+  return rawSteps.map((item, index) => {
+    const record = readObject(item);
+    const details = Array.isArray(record.details) ? record.details.filter((detail): detail is string => typeof detail === 'string' && detail.trim().length > 0) : [];
+    return {
+      key: readString(record.id) || `step-${index + 1}`,
+      title: readString(record.title) || `步骤 ${index + 1}`,
+      status: readString(record.status) || 'done',
+      details,
+    };
+  });
+}
+
+function stepDiffLabel(left: ReturnType<typeof readStepAnalysis>, right: ReturnType<typeof readStepAnalysis>) {
+  const leftSummary = left.map((step) => `${step.title}:${step.status}`).join(' / ') || '-';
+  const rightSummary = right.map((step) => `${step.title}:${step.status}`).join(' / ') || '-';
+  return `步骤状态：A ${leftSummary}；B ${rightSummary}。`;
+}
+
+function renderStepDiffBlock(steps: ReturnType<typeof readStepAnalysis>) {
+  if (!steps.length) {
+    return <div className={styles.fieldHint}>当前结果没有返回 stepAnalysis。</div>;
+  }
+
+  return (
+    <div className={styles.compareStack}>
+      {steps.map((step) => (
+        <div key={step.key} className={styles.summaryCard}>
+          <span>{step.title}</span>
+          <strong>{step.status}</strong>
+          {step.details.length ? <span>{step.details.join(' / ')}</span> : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function outputFieldDiffLabel(left: string[], right: string[]) {
   const leftOnly = left.filter((item) => !right.includes(item));
   const rightOnly = right.filter((item) => !left.includes(item));
@@ -82,6 +128,7 @@ function ResultColumn({
   const summary = useMemo(() => buildPlannerResultSummary(result.assistantPackage), [result.assistantPackage]);
   const preview = useMemo(() => buildPlannerResultPreview(result.input, result.assistantPackage), [result.assistantPackage, result.input]);
   const promptStats = useMemo(() => summarizePrompt(result.finalPrompt), [result.finalPrompt]);
+  const steps = useMemo(() => readStepAnalysis(result.assistantPackage), [result.assistantPackage]);
 
   return (
     <div className={styles.compareColumn}>
@@ -126,6 +173,15 @@ function ResultColumn({
             <pre className={styles.pre}>{summary.missingFields.join('\n')}</pre>
           </details>
         ) : null}
+        <details className={styles.jsonPreview}>
+          <summary className={styles.jsonPreviewSummary}>Model Selection Snapshot</summary>
+          <pre className={styles.pre}>{JSON.stringify(result.promptSnapshot?.modelSelectionSnapshot ?? {}, null, 2)}</pre>
+        </details>
+      </div>
+
+      <div className={styles.compareBlock}>
+        <h5 className={styles.resultTitle}>步骤差异明细</h5>
+        {renderStepDiffBlock(steps)}
       </div>
 
       <div className={styles.compareBlock}>
@@ -155,11 +211,14 @@ export function PlannerDebugCompareView({
   const rightPreview = useMemo(() => buildPlannerResultPreview(compareResult.right.input, compareResult.right.assistantPackage), [compareResult.right.assistantPackage, compareResult.right.input]);
   const leftPrompt = useMemo(() => summarizePrompt(compareResult.left.finalPrompt), [compareResult.left.finalPrompt]);
   const rightPrompt = useMemo(() => summarizePrompt(compareResult.right.finalPrompt), [compareResult.right.finalPrompt]);
+  const leftSteps = useMemo(() => readStepAnalysis(compareResult.left.assistantPackage), [compareResult.left.assistantPackage]);
+  const rightSteps = useMemo(() => readStepAnalysis(compareResult.right.assistantPackage), [compareResult.right.assistantPackage]);
 
   const diffItems = [
     `Prompt 长度差异：A ${leftPrompt.charCount} 字，B ${rightPrompt.charCount} 字。`,
     outputFieldDiffLabel(leftSummary.outputKeys, rightSummary.outputKeys),
-    `步骤差异：A ${leftSummary.stepTitles.join(' / ') || '-'}；B ${rightSummary.stepTitles.join(' / ') || '-'}.`,
+    `步骤标题：A ${leftSummary.stepTitles.join(' / ') || '-'}；B ${rightSummary.stepTitles.join(' / ') || '-'}.`,
+    stepDiffLabel(leftSteps, rightSteps),
     `结构化结果：A ${leftSummary.subjectCount}/${leftSummary.sceneCount}/${leftSummary.shotCount}，B ${rightSummary.subjectCount}/${rightSummary.sceneCount}/${rightSummary.shotCount}。`,
     `字段完整度：A ${leftSummary.completenessScore}%（缺 ${leftSummary.missingFields.length} 项），B ${rightSummary.completenessScore}%（缺 ${rightSummary.missingFields.length} 项）。`,
     `Token / Cost：A ${usageLabel(compareResult.left)}，B ${usageLabel(compareResult.right)}。`,

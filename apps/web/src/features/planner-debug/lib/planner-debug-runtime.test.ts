@@ -1,18 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildInitialDebugForm, parseDebugContext, stringifyJsonInput } from './planner-debug-runtime';
+import { buildInitialDebugForm, buildPlannerDebugSearch, parseDebugContext, stringifyJsonInput } from './planner-debug-runtime';
 
 test('buildInitialDebugForm uses preset overrides for known sub-agent slugs and falls back for unknown slugs', () => {
   const preset = buildInitialDebugForm('knowledge-emotion');
-  const fallback = buildInitialDebugForm('unknown-slug');
+  const fallback = buildInitialDebugForm('unknown-slug', {
+    projectId: 'project-1',
+    episodeId: 'episode-1',
+    projectTitle: '真实项目',
+    episodeTitle: '真实集',
+  });
 
   assert.equal(preset.projectTitle, '慢一点也没关系');
   assert.equal(preset.selectedImageModelLabel, 'Knowledge Image V1');
   assert.match(preset.plannerAssetsJson, /asset-generated-main/);
 
-  assert.equal(fallback.projectTitle, '调试项目');
   assert.equal(fallback.targetStage, 'refinement');
+  assert.equal(fallback.projectId, 'project-1');
+  assert.equal(fallback.episodeId, 'episode-1');
+  assert.equal(fallback.projectTitle, '真实项目');
+  assert.equal(fallback.episodeTitle, '真实集');
+});
+
+test('buildPlannerDebugSearch serializes planner workspace context and replay options', () => {
+  assert.equal(
+    buildPlannerDebugSearch({
+      projectId: 'project-1',
+      episodeId: 'episode-1',
+      replayRunId: 'run-1',
+      autoRun: true,
+    }),
+    '?projectId=project-1&episodeId=episode-1&replayRunId=run-1&autoRun=1',
+  );
 });
 
 test('stringifyJsonInput returns pretty json for objects and empty string for nullish values', () => {

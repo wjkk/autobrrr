@@ -456,6 +456,13 @@
   gap: 10px;
 }
 
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .button,
 .buttonGhost {
   border-radius: 16px;
@@ -503,7 +510,18 @@
   font-weight: 600;
 }
 
-.linkRow a:hover {
+.linkRow button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.linkRow a:hover,
+.linkRow button:hover {
   text-decoration: underline;
 }
 

@@ -1,10 +1,10 @@
 import type { CreationWorkspace, ProjectStatus } from '@aiv/domain';
 
 import { AivApiError, requestAivApiFromServer } from '@/lib/aiv-api';
+import { toWorkspaceBootstrapError } from '@/features/shared/lib/workspace-bootstrap-error';
 
 import {
   buildCreationBootstrap,
-  buildCreationFixtureFallback,
   selectCreationEpisodeId,
   type CreationPageBootstrap,
 } from './creation-api-bootstrap';
@@ -31,7 +31,10 @@ export async function fetchCreationStudioProject(projectId: string): Promise<Cre
     }
 
     return buildCreationBootstrap(project, workspace);
-  } catch {
-    return buildCreationFixtureFallback(projectId);
+  } catch (error) {
+    return {
+      studio: null,
+      error: toWorkspaceBootstrapError(error, '加载创作工作区失败。'),
+    };
   }
 }

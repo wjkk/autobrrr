@@ -2,7 +2,14 @@ import { PlannerAgentDebugPage } from '@/features/planner-debug/components/plann
 
 interface PageProps {
   params: Promise<{ subAgentSlug: string }>;
-  searchParams?: Promise<{ replayRunId?: string; autoRun?: string }>;
+  searchParams?: Promise<{
+    replayRunId?: string;
+    autoRun?: string;
+    projectId?: string;
+    episodeId?: string;
+    projectTitle?: string;
+    episodeTitle?: string;
+  }>;
 }
 
 export default async function AdminPlannerDebugDetailPage({ params, searchParams }: PageProps) {
@@ -14,6 +21,10 @@ export default async function AdminPlannerDebugDetailPage({ params, searchParams
       mode="debug"
       initialReplayRunId={nextSearchParams?.replayRunId}
       initialAutoRun={nextSearchParams?.autoRun === '1'}
+      initialProjectId={nextSearchParams?.projectId}
+      initialEpisodeId={nextSearchParams?.episodeId}
+      initialProjectTitle={nextSearchParams?.projectTitle}
+      initialEpisodeTitle={nextSearchParams?.episodeTitle}
       chrome="admin"
     />
   );

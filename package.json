@@ -13,6 +13,9 @@
     "test:unit:api": "pnpm --filter @aiv/api test:unit",
     "test:web:unit": "pnpm --filter @aiv/web test:unit",
     "test:ai:regression": "pnpm --filter @aiv/api test:ai:regression",
+    "test:planner:api-smoke": "bash scripts/run-planner-api-smoke.sh",
+    "test:planner:browser-smoke": "python scripts/smoke-browser-main-flow.py",
+    "test:planner:gate": "pnpm test:planner:api-smoke && pnpm test:planner:browser-smoke",
     "test:web:regression": "python scripts/smoke-browser-main-flow.py",
     "test:quality": "pnpm test:unit:api && pnpm test:web:unit && pnpm test:ai:regression && pnpm test:web:regression"
   }

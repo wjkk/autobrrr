@@ -1,12 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { AdminShell } from '@/features/admin/components/admin-shell';
 import styles from './planner-agent-debug-page.module.css';
 
-import type { PlannerDebugRunDetail, PlannerDebugRunListItem } from '../lib/planner-agent-debug-types';
+import type { PlannerDebugApplyResult, PlannerDebugRunDetail, PlannerDebugRunListItem } from '../lib/planner-agent-debug-types';
+import { buildPlannerDebugSearch } from '../lib/planner-debug-runtime';
 
 interface EnvelopeSuccess<T> {
   ok: true;
@@ -47,16 +49,44 @@ async function requestJson<T>(path: string, init?: RequestInit) {
 
 interface PlannerDebugRunBrowserProps {
   initialRunId?: string;
+  initialProjectId?: string;
+  initialEpisodeId?: string;
+  initialProjectTitle?: string;
+  initialEpisodeTitle?: string;
   chrome?: 'default' | 'admin';
 }
 
-export function PlannerDebugRunBrowser({ initialRunId, chrome = 'default' }: PlannerDebugRunBrowserProps) {
+function readContextValue(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+export function PlannerDebugRunBrowser({
+  initialRunId,
+  initialProjectId,
+  initialEpisodeId,
+  initialProjectTitle,
+  initialEpisodeTitle,
+  chrome = 'default',
+}: PlannerDebugRunBrowserProps) {
+  const router = useRouter();
   const debugBasePath = chrome === 'admin' ? '/admin/planner-debug' : '/internal/planner-debug';
   const [runs, setRuns] = useState<PlannerDebugRunListItem[]>([]);
   const [selectedRun, setSelectedRun] = useState<PlannerDebugRunDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [replaying, setReplaying] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const plannerProjectId = readContextValue(selectedRun?.input?.projectId) ?? readContextValue(initialProjectId);
+  const plannerEpisodeId = readContextValue(selectedRun?.input?.episodeId) ?? readContextValue(initialEpisodeId);
+  const selectedRunRouteSearch = buildPlannerDebugSearch({
+    projectId: plannerProjectId,
+    episodeId: plannerEpisodeId,
+    projectTitle: readContextValue(selectedRun?.input?.projectTitle) ?? readContextValue(initialProjectTitle),
+    episodeTitle: readContextValue(selectedRun?.input?.episodeTitle) ?? readContextValue(initialEpisodeTitle),
+  });
+  const plannerWorkspaceHref = plannerProjectId
+    ? `/projects/${encodeURIComponent(plannerProjectId)}/planner${plannerEpisodeId ? `?episodeId=${encodeURIComponent(plannerEpisodeId)}` : ''}`
+    : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -129,6 +159,26 @@ export function PlannerDebugRunBrowser({ initialRunId, chrome = 'default' }: Pla
     }
   };
 
+  const handleApply = async () => {
+    if (!selectedRun) {
+      return;
+    }
+
+    setApplying(true);
+    setError(null);
+    try {
+      const applied = await requestJson<PlannerDebugApplyResult>(
+        `/api/planner/debug/runs/${encodeURIComponent(selectedRun.id)}/apply`,
+        { method: 'POST' },
+      );
+      router.push(`/projects/${encodeURIComponent(applied.projectId)}/planner?episodeId=${encodeURIComponent(applied.episodeId)}`);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : '应用调试运行失败。');
+    } finally {
+      setApplying(false);
+    }
+  };
+
   const content = (
       <div className={chrome === 'admin' ? styles.adminShell : styles.shell}>
         <section className={styles.hero}>
@@ -140,6 +190,11 @@ export function PlannerDebugRunBrowser({ initialRunId, chrome = 'default' }: Pla
           <div className={styles.heroMeta}>
             <div className={styles.metaPill}>调试记录来自 MySQL 表</div>
             <div className={styles.metaPill}>支持从列表跳转到具体 run</div>
+            {plannerWorkspaceHref ? (
+              <Link href={plannerWorkspaceHref} className={styles.inlineLinkPill}>
+                返回策划工作区
+              </Link>
+            ) : null}
           </div>
         </section>
 
@@ -180,6 +235,9 @@ export function PlannerDebugRunBrowser({ initialRunId, chrome = 'default' }: Pla
               </div>
               <button type="button" className={styles.buttonGhost} onClick={handleReplay} disabled={!selectedRun || replaying}>
                 {replaying ? '重放中…' : '按当前 run 重放'}
+              </button>
+              <button type="button" className={styles.buttonGhost} onClick={handleApply} disabled={!selectedRun || applying}>
+                {applying ? '应用中…' : '应用到主流程'}
               </button>
             </div>
             <div className={styles.panelBody}>
@@ -235,6 +293,10 @@ export function PlannerDebugRunBrowser({ initialRunId, chrome = 'default' }: Pla
                           <pre className={styles.pre}>{JSON.stringify(selectedRun.promptSnapshot.messagesFinal, null, 2)}</pre>
                         </details>
                         <details className={styles.jsonPreview}>
+                          <summary className={styles.jsonPreviewSummary}>Model Selection Snapshot</summary>
+                          <pre className={styles.pre}>{JSON.stringify(selectedRun.promptSnapshot.modelSelectionSnapshot ?? {}, null, 2)}</pre>
+                        </details>
+                        <details className={styles.jsonPreview}>
                           <summary className={styles.jsonPreviewSummary}>Input Context Snapshot</summary>
                           <pre className={styles.pre}>{JSON.stringify(selectedRun.promptSnapshot.inputContextSnapshot, null, 2)}</pre>
                         </details>
@@ -254,10 +316,13 @@ export function PlannerDebugRunBrowser({ initialRunId, chrome = 'default' }: Pla
                     <pre className={styles.pre}>{JSON.stringify(selectedRun.assistantPackage, null, 2)}</pre>
                   </div>
                   <div className={styles.linkRow}>
-                    {selectedRun.subAgentProfile?.slug ? (
-                      <Link href={`${debugBasePath}/${encodeURIComponent(selectedRun.subAgentProfile.slug)}`}>返回该子 Agent 调试页</Link>
+                    {plannerWorkspaceHref ? (
+                      <Link href={plannerWorkspaceHref}>返回策划工作区</Link>
                     ) : null}
-                    <Link href={`${debugBasePath}/compare`}>打开 A/B 对比页</Link>
+                    {selectedRun.subAgentProfile?.slug ? (
+                      <Link href={`${debugBasePath}/${encodeURIComponent(selectedRun.subAgentProfile.slug)}${selectedRunRouteSearch}`}>返回该子 Agent 调试页</Link>
+                    ) : null}
+                    <Link href={`${debugBasePath}/compare${selectedRunRouteSearch}`}>打开 A/B 对比页</Link>
                   </div>
                 </div>
               ) : null}

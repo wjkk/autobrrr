@@ -5,3 +5,4 @@ export {
   replayPlannerDebugRun,
   toPrismaJsonInput,
 } from './planner-debug-execution-service.js';
+export { applyPlannerDebugRunToMainFlow } from './planner-debug-apply-service.js';

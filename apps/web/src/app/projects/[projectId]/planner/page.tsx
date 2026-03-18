@@ -5,11 +5,22 @@ import { fetchPlannerStudioProject } from '@/features/planner/lib/planner-api.se
 
 interface PlannerRouteProps {
   params: Promise<{ projectId: string }>;
+  searchParams?: Promise<{
+    episodeId?: string;
+  }>;
 }
 
-export default async function PlannerRoute({ params }: PlannerRouteProps) {
+export default async function PlannerRoute({ params, searchParams }: PlannerRouteProps) {
   const { projectId } = await params;
-  const { studio, runtimeApi, initialGeneratedText, initialPlannerReady, initialWorkspace } = await fetchPlannerStudioProject(projectId);
+  const nextSearchParams = searchParams ? await searchParams : undefined;
+  const { studio, error, runtimeApi, initialGeneratedText, initialPlannerReady, initialWorkspace } = await fetchPlannerStudioProject(
+    projectId,
+    nextSearchParams?.episodeId,
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
 
   if (!studio) {
     notFound();

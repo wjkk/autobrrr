@@ -8,11 +8,14 @@ import styles from './planner-agent-debug-page.module.css';
 export function PlannerDebugRunPane(props: {
   chrome: 'default' | 'admin';
   debugBasePath: string;
+  debugRouteSearch?: string;
   selectedSubAgentEntry: PlannerSubAgentCatalogEntry | null;
   running: boolean;
   debugForm: DebugFormState;
   debugResult: PlannerDebugRunResponse | null;
   onRun: () => void;
+  onApply?: () => void;
+  applying?: boolean;
   onDebugFormChange: (updater: (current: DebugFormState) => DebugFormState) => void;
 }) {
   return (
@@ -20,14 +23,31 @@ export function PlannerDebugRunPane(props: {
       <div className={styles.panelHeader}>
         <div>
           <h2 className={styles.panelTitle}>调试运行</h2>
-          <p className={styles.panelHint}>运行一次独立试跑，不会回写主流程工作区。</p>
+          <p className={styles.panelHint}>默认只做独立试跑；确认结果后，可手动应用到主流程工作区。</p>
         </div>
-        <button type="button" className={styles.button} onClick={props.onRun} disabled={props.running || !props.selectedSubAgentEntry}>
-          {props.running ? '运行中…' : '运行调试'}
-        </button>
+        <div className={styles.headerActions}>
+          {props.debugResult ? (
+            <button type="button" className={styles.buttonGhost} onClick={props.onApply} disabled={!props.onApply || props.applying}>
+              {props.applying ? '应用中…' : '应用到主流程'}
+            </button>
+          ) : null}
+          <button type="button" className={styles.button} onClick={props.onRun} disabled={props.running || !props.selectedSubAgentEntry}>
+            {props.running ? '运行中…' : '运行调试'}
+          </button>
+        </div>
       </div>
       <div className={styles.panelBody}>
         <div className={styles.stack}>
+          <div className={styles.twoCol}>
+            <div className={styles.fieldGroup}>
+              <label className={styles.fieldLabel}>项目 ID</label>
+              <input className={styles.input} value={props.debugForm.projectId} onChange={(event) => props.onDebugFormChange((current) => ({ ...current, projectId: event.target.value }))} />
+            </div>
+            <div className={styles.fieldGroup}>
+              <label className={styles.fieldLabel}>集 ID</label>
+              <input className={styles.input} value={props.debugForm.episodeId} onChange={(event) => props.onDebugFormChange((current) => ({ ...current, episodeId: event.target.value }))} />
+            </div>
+          </div>
           <div className={styles.twoCol}>
             <div className={styles.fieldGroup}>
               <label className={styles.fieldLabel}>项目标题</label>
@@ -119,8 +139,15 @@ export function PlannerDebugRunPane(props: {
             <PlannerDebugResultView
               debugResult={props.debugResult}
               chrome={props.chrome}
-              replayHref={`${props.debugBasePath}/runs/${encodeURIComponent(props.debugResult.debugRunId)}`}
-              refillHref={props.selectedSubAgentEntry ? `${props.debugBasePath}/${encodeURIComponent(props.selectedSubAgentEntry.subAgent.slug)}?replayRunId=${encodeURIComponent(props.debugResult.debugRunId)}` : null}
+              debugRouteSearch={props.debugRouteSearch}
+              onApply={props.onApply}
+              applying={props.applying}
+              replayHref={`${props.debugBasePath}/runs/${encodeURIComponent(props.debugResult.debugRunId)}${props.debugRouteSearch ?? ''}`}
+              refillHref={
+                props.selectedSubAgentEntry
+                  ? `${props.debugBasePath}/${encodeURIComponent(props.selectedSubAgentEntry.subAgent.slug)}${props.debugRouteSearch ? `${props.debugRouteSearch}&replayRunId=${encodeURIComponent(props.debugResult.debugRunId)}` : `?replayRunId=${encodeURIComponent(props.debugResult.debugRunId)}`}`
+                  : null
+              }
             />
           ) : null}
         </div>

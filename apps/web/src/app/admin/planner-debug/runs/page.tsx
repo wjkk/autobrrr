@@ -1,5 +1,23 @@
 import { PlannerDebugRunBrowser } from '@/features/planner-debug/components/planner-debug-run-browser';
 
-export default function AdminPlannerDebugRunsPage() {
-  return <PlannerDebugRunBrowser chrome="admin" />;
+interface PageProps {
+  searchParams?: Promise<{
+    projectId?: string;
+    episodeId?: string;
+    projectTitle?: string;
+    episodeTitle?: string;
+  }>;
+}
+
+export default async function AdminPlannerDebugRunsPage({ searchParams }: PageProps) {
+  const params = searchParams ? await searchParams : undefined;
+  return (
+    <PlannerDebugRunBrowser
+      chrome="admin"
+      initialProjectId={params?.projectId}
+      initialEpisodeId={params?.episodeId}
+      initialProjectTitle={params?.projectTitle}
+      initialEpisodeTitle={params?.episodeTitle}
+    />
+  );
 }

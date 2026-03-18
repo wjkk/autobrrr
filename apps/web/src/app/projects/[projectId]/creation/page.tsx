@@ -13,7 +13,11 @@ interface CreationRouteProps {
 
 export default async function CreationRoute({ params, searchParams }: CreationRouteProps) {
   const [{ projectId }, query] = await Promise.all([params, searchParams]);
-  const { studio, runtimeApi } = await fetchCreationStudioProject(projectId);
+  const { studio, error, runtimeApi } = await fetchCreationStudioProject(projectId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 
   if (!studio) {
     notFound();

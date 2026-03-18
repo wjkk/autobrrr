@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildPlannerBootstrap, buildPlannerFixtureFallback, selectPlannerEpisodeId } from './planner-api-bootstrap';
+import { buildPlannerBootstrap, selectPlannerEpisodeId } from './planner-api-bootstrap';
 
 test('planner api bootstrap selects current episode first and falls back to first episode', () => {
   assert.equal(
@@ -196,8 +196,4 @@ test('planner api bootstrap prefers refinement doc then outline preview and late
     activeRefinement: null,
   });
   assert.equal(latestOnly.initialStructuredDoc?.episodeTitle, 'latest');
-});
-
-test('planner api bootstrap fixture fallback returns null studio when fixture does not exist', () => {
-  assert.deepEqual(buildPlannerFixtureFallback('missing-project-id'), { studio: null });
 });

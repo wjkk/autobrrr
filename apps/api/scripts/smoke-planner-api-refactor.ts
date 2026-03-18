@@ -32,6 +32,15 @@ function readObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
+async function assertDatabaseReady() {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Database is not reachable for smoke-planner-api-refactor. Start MySQL for ${process.env.DATABASE_URL ?? 'DATABASE_URL'} before rerunning. (${message})`);
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit & { cookie?: string }) {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
@@ -226,6 +235,84 @@ async function seedPlannerState(args: {
         status: 'ACTIVE',
         priority: 1,
         isDefault: true,
+      },
+    });
+    const plannerAgent = await tx.plannerAgentProfile.upsert({
+      where: { slug: 'smoke-planner-agent' },
+      update: {
+        contentType: '短剧漫剧',
+        displayName: 'Smoke Planner Agent',
+        description: 'Planner debug/apply smoke agent',
+        defaultSystemPrompt: '你是一个用于 smoke 的策划 agent。',
+        defaultDeveloperPrompt: '输出合法 JSON。',
+        defaultStepDefinitionsJson: [
+          {
+            id: 'step-1',
+            title: '拆解需求',
+            status: 'done',
+            details: ['识别主体、场景与分镜需求'],
+          },
+        ] as Prisma.InputJsonValue,
+        enabled: true,
+        status: 'ACTIVE',
+      },
+      create: {
+        slug: 'smoke-planner-agent',
+        contentType: '短剧漫剧',
+        displayName: 'Smoke Planner Agent',
+        description: 'Planner debug/apply smoke agent',
+        defaultSystemPrompt: '你是一个用于 smoke 的策划 agent。',
+        defaultDeveloperPrompt: '输出合法 JSON。',
+        defaultStepDefinitionsJson: [
+          {
+            id: 'step-1',
+            title: '拆解需求',
+            status: 'done',
+            details: ['识别主体、场景与分镜需求'],
+          },
+        ] as Prisma.InputJsonValue,
+        enabled: true,
+        status: 'ACTIVE',
+      },
+    });
+    const plannerSubAgent = await tx.plannerSubAgentProfile.upsert({
+      where: { slug: 'smoke-planner-dialogue' },
+      update: {
+        agentProfileId: plannerAgent.id,
+        subtype: '对话剧情',
+        displayName: 'Smoke Dialogue Agent',
+        description: 'Planner debug/apply smoke sub-agent',
+        systemPromptOverride: '保持输出稳定，便于 smoke 验证。',
+        developerPromptOverride: '优先输出 refinement assistant package。',
+        stepDefinitionsJson: [
+          {
+            id: 'step-1',
+            title: '整理剧情',
+            status: 'done',
+            details: ['基于输入上下文补齐 refinement 文档'],
+          },
+        ] as Prisma.InputJsonValue,
+        enabled: true,
+        status: 'ACTIVE',
+      },
+      create: {
+        agentProfileId: plannerAgent.id,
+        slug: 'smoke-planner-dialogue',
+        subtype: '对话剧情',
+        displayName: 'Smoke Dialogue Agent',
+        description: 'Planner debug/apply smoke sub-agent',
+        systemPromptOverride: '保持输出稳定，便于 smoke 验证。',
+        developerPromptOverride: '优先输出 refinement assistant package。',
+        stepDefinitionsJson: [
+          {
+            id: 'step-1',
+            title: '整理剧情',
+            status: 'done',
+            details: ['基于输入上下文补齐 refinement 文档'],
+          },
+        ] as Prisma.InputJsonValue,
+        enabled: true,
+        status: 'ACTIVE',
       },
     });
     const imageProvider = await tx.modelProvider.upsert({
@@ -490,11 +577,16 @@ async function seedPlannerState(args: {
       textModelEndpointSlug: textEndpoint.slug,
       imageModelFamilySlug: imageFamily.slug,
       imageModelEndpointSlug: imageEndpoint.slug,
+      debugAgentContentType: plannerAgent.contentType,
+      debugSubAgentId: plannerSubAgent.id,
+      debugSubAgentSubtype: plannerSubAgent.subtype,
     };
   });
 }
 
 async function main() {
+  await assertDatabaseReady();
+
   const health = await fetch(`${apiBaseUrl}/health`);
   if (!health.ok) {
     throw new Error(`API server is not reachable at ${apiBaseUrl}.`);
@@ -876,6 +968,102 @@ async function main() {
   assert.ok(afterShotImageGeneration.data.activeRefinement?.shotScripts[0]?.generatedAssetIds.includes(finalizedPlannerShotImageRun.assetId!));
   assert.ok(afterShotImageGeneration.data.activeRefinement?.structuredDoc?.acts[0]?.shots[0]?.generatedAssetIds?.includes(finalizedPlannerShotImageRun.assetId!));
 
+  const debugRun = await request<{
+    debugRunId: string;
+    executionMode: 'live' | 'fallback';
+    input: {
+      projectId: string | null;
+      episodeId: string | null;
+    };
+  }>('/api/planner/debug/run', {
+    method: 'POST',
+    cookie,
+    body: JSON.stringify({
+      subAgentId: seeded.debugSubAgentId,
+      contentType: seeded.debugAgentContentType,
+      subtype: seeded.debugSubAgentSubtype,
+      configSource: 'draft',
+      targetStage: 'refinement',
+      partialRerunScope: 'none',
+      projectId: createdProject.data.projectId,
+      episodeId,
+      projectTitle: '调试应用版项目',
+      episodeTitle: '调试应用版第一集',
+      userPrompt: '请把当前策划改写成更适合调试 apply 验证的版本。',
+      currentStructuredDoc: afterShotImageGeneration.data.activeRefinement?.structuredDoc,
+      plannerAssets: [
+        {
+          id: finalizedPlannerShotImageRun.assetId!,
+          sourceUrl: tinyPngDataUrl,
+          sourceKind: 'generated',
+        },
+      ],
+      modelFamily: seeded.textModelFamilySlug,
+      modelEndpoint: seeded.textModelEndpointSlug,
+    }),
+  });
+  assert.equal(debugRun.data.input.projectId, createdProject.data.projectId);
+  assert.equal(debugRun.data.input.episodeId, episodeId);
+
+  const appliedDebugRun = await request<{
+    debugRunId: string;
+    refinementVersionId: string;
+    plannerSessionId: string;
+    projectId: string;
+    episodeId: string;
+  }>(`/api/planner/debug/runs/${debugRun.data.debugRunId}/apply`, {
+    method: 'POST',
+    cookie,
+  });
+  assert.equal(appliedDebugRun.data.debugRunId, debugRun.data.debugRunId);
+  assert.equal(appliedDebugRun.data.projectId, createdProject.data.projectId);
+  assert.equal(appliedDebugRun.data.episodeId, episodeId);
+
+  const afterDebugApplyWorkspace = await request<{
+    plannerSession: { id: string } | null;
+    activeRefinement: {
+      id: string;
+      triggerType: string;
+      debugApplySource?: {
+        debugRunId: string | null;
+        appliedAt: string | null;
+      } | null;
+      documentTitle: string;
+      structuredDoc: {
+        projectTitle: string;
+        episodeTitle: string;
+      } | null;
+    } | null;
+  }>(`/api/projects/${createdProject.data.projectId}/planner/workspace?episodeId=${episodeId}`, { cookie });
+  assert.equal(afterDebugApplyWorkspace.data.plannerSession?.id, appliedDebugRun.data.plannerSessionId);
+  assert.equal(afterDebugApplyWorkspace.data.activeRefinement?.id, appliedDebugRun.data.refinementVersionId);
+  assert.equal(afterDebugApplyWorkspace.data.activeRefinement?.triggerType, 'debug_apply');
+  assert.equal(afterDebugApplyWorkspace.data.activeRefinement?.debugApplySource?.debugRunId, debugRun.data.debugRunId);
+  assert.equal(afterDebugApplyWorkspace.data.activeRefinement?.structuredDoc?.projectTitle, '调试应用版项目');
+  assert.equal(afterDebugApplyWorkspace.data.activeRefinement?.structuredDoc?.episodeTitle, '调试应用版第一集');
+
+  const appliedRefinementRecord = await prisma.plannerRefinementVersion.findUnique({
+    where: { id: appliedDebugRun.data.refinementVersionId },
+    select: {
+      triggerType: true,
+      sourceRefinementVersionId: true,
+      inputSnapshotJson: true,
+      messages: {
+        orderBy: { createdAt: 'asc' },
+        select: {
+          messageType: true,
+          contentJson: true,
+        },
+      },
+    },
+  });
+  assert.equal(appliedRefinementRecord?.triggerType, 'debug_apply');
+  assert.equal(appliedRefinementRecord?.sourceRefinementVersionId, seeded.refinementVersionId);
+  const appliedInputSnapshot = readObject(appliedRefinementRecord?.inputSnapshotJson);
+  assert.equal(appliedInputSnapshot.appliedFromDebugRunId, debugRun.data.debugRunId);
+  const appliedReceipt = appliedRefinementRecord?.messages.find((message) => message.messageType === 'ASSISTANT_DOCUMENT_RECEIPT');
+  assert.equal(readObject(appliedReceipt?.contentJson).debugRunId, debugRun.data.debugRunId);
+
   const finalizedPlannerShotImageRunRecord = await prisma.run.findUnique({
     where: { id: shotImageRun.data.run.id },
     select: {
@@ -895,6 +1083,17 @@ async function main() {
         createdById: true,
       },
     });
+    const nextVersionNumber =
+      (
+        await tx.plannerRefinementVersion.aggregate({
+          where: {
+            plannerSessionId: sourceRefinement.plannerSessionId,
+          },
+          _max: {
+            versionNumber: true,
+          },
+        })
+      )._max.versionNumber ?? 0;
 
     const activatedDoc = {
       projectTitle: '雨夜机械猫·激活版',
@@ -945,7 +1144,7 @@ async function main() {
     const created = await tx.plannerRefinementVersion.create({
       data: {
         plannerSessionId: sourceRefinement.plannerSessionId,
-        versionNumber: 2,
+        versionNumber: nextVersionNumber + 1,
         triggerType: 'follow_up',
         status: 'READY',
         documentTitle: '雨夜机械猫·激活版',

@@ -3,6 +3,7 @@
 import type { PlannerStepStatus } from '@aiv/domain';
 import { cx } from '@aiv/ui';
 
+import { formatPlannerDebugRunLabel } from '../lib/planner-page-helpers';
 import { sekoPlanThreadData } from '../lib/seko-plan-thread-data';
 import type { PlannerThreadMessage } from '../lib/planner-thread';
 import styles from './planner-page.module.css';
@@ -32,8 +33,14 @@ interface PlannerThreadPanelProps {
   activeDocumentTitle?: string | null;
   activeRefinementVersionNumber?: number | null;
   activeRefinementAgentName?: string | null;
+  activeRefinementTrigger?: string | null;
+  activeDebugApplySource?: {
+    debugRunId: string | null;
+    appliedAt: string | null;
+  } | null;
   assistantName: string;
   notice: string | null;
+  onOpenDebugRun?: (debugRunId: string) => void;
   onRequirementChange: (value: string) => void;
   onSubmit: () => void;
   onConfirmOutline: () => void;
@@ -42,9 +49,27 @@ interface PlannerThreadPanelProps {
 const SEKO_ASSISTANT_NAME = 'Seko';
 
 export function PlannerThreadPanel(props: PlannerThreadPanelProps) {
+  const showActiveDebugApplyNotice = props.activeRefinementTrigger?.toLowerCase() === 'debug_apply';
+  const activeDebugRunId = props.activeDebugApplySource?.debugRunId ?? null;
+
   return (
     <div className={styles.commandColumn}>
       <div className={styles.messageScroll}>
+        {showActiveDebugApplyNotice ? (
+          <article className={styles.threadNoticeCard}>
+            <strong>当前工作区版本来自 Planner Debug 调试应用</strong>
+            <p>
+              {props.activeDebugApplySource?.debugRunId
+                ? `来源 ${formatPlannerDebugRunLabel(props.activeDebugApplySource.debugRunId)}，已同步为主流程可编辑版本。`
+                : '该版本已由调试结果同步为主流程可编辑版本。'}
+            </p>
+            {activeDebugRunId && props.onOpenDebugRun ? (
+              <button type="button" className={styles.threadNoticeAction} onClick={() => props.onOpenDebugRun?.(activeDebugRunId)}>
+                查看调试 Run
+              </button>
+            ) : null}
+          </article>
+        ) : null}
         {props.usingRuntimePlanner && props.messages.length > 0 ? (
           props.messages.map((item) => {
             const isUser = item.role === 'user';
@@ -162,6 +187,10 @@ export function PlannerThreadPanel(props: PlannerThreadPanelProps) {
                 Array.isArray(item.rawContent?.diffSummary)
                   ? item.rawContent.diffSummary.filter((detail): detail is string => typeof detail === 'string' && detail.trim().length > 0)
                   : [];
+              const receiptDebugRunId =
+                typeof item.rawContent?.debugRunId === 'string' && item.rawContent.debugRunId.trim().length > 0
+                  ? item.rawContent.debugRunId.trim()
+                  : null;
               return (
                 <article key={item.id} className={styles.assistantThread}>
                   <header className={styles.messageAgentHeader}>
@@ -181,6 +210,18 @@ export function PlannerThreadPanel(props: PlannerThreadPanelProps) {
                     ) : null}
                     {props.activeRefinementVersionNumber ? (
                       <p>{`当前版本：V${props.activeRefinementVersionNumber} · ${props.activeRefinementAgentName ?? '未命名子 Agent'}`}</p>
+                    ) : null}
+                    {showActiveDebugApplyNotice ? (
+                      <p>
+                        {props.activeDebugApplySource?.debugRunId
+                          ? `版本来源：${formatPlannerDebugRunLabel(props.activeDebugApplySource.debugRunId)}`
+                          : '版本来源：Planner Debug 调试应用'}
+                      </p>
+                    ) : null}
+                    {receiptDebugRunId && props.onOpenDebugRun ? (
+                      <button type="button" className={styles.threadNoticeAction} onClick={() => props.onOpenDebugRun?.(receiptDebugRunId)}>
+                        查看来源调试 Run
+                      </button>
                     ) : null}
                   </article>
                 </article>

@@ -1,11 +1,11 @@
 import type { ProjectStatus } from '@aiv/domain';
 
-import { requestAivApiFromServer } from '@/lib/aiv-api';
+import { AivApiError, requestAivApiFromServer } from '@/lib/aiv-api';
+import { toWorkspaceBootstrapError } from '@/features/shared/lib/workspace-bootstrap-error';
 
 import type { ApiPublishWorkspace, PublishPageBootstrap } from './publish-api';
 import {
   buildPublishBootstrap,
-  buildPublishFixtureFallback,
   selectPublishEpisodeId,
   type ApiProjectDetail,
 } from './publish-api-bootstrap';
@@ -19,7 +19,7 @@ export async function fetchPublishStudioProject(projectId: string): Promise<Publ
 
     const episodeId = selectPublishEpisodeId(project);
     if (!episodeId) {
-      return { studio: null };
+      throw new AivApiError('Project did not expose a publish episode id.', 'AIV_PUBLISH_EPISODE_REQUIRED');
     }
 
     const workspace = await requestAivApiFromServer<ApiPublishWorkspace>(
@@ -27,11 +27,14 @@ export async function fetchPublishStudioProject(projectId: string): Promise<Publ
     );
 
     if (!workspace) {
-      return { studio: null };
+      throw new AivApiError('Publish workspace is empty.', 'AIV_PUBLISH_WORKSPACE_EMPTY');
     }
 
     return buildPublishBootstrap(project, workspace);
-  } catch {
-    return buildPublishFixtureFallback(projectId);
+  } catch (error) {
+    return {
+      studio: null,
+      error: toWorkspaceBootstrapError(error, '加载发布工作区失败。'),
+    };
   }
 }

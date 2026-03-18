@@ -7,7 +7,7 @@ import { resolvePlannerAgentSelection, type ResolvedPlannerAgentSelection } from
 import { parsePlannerAssistantPackage } from './planner-agent-schemas.js';
 import { debugRunSchema, type PlannerDebugCompareInput, type PlannerDebugRunInput } from './planner-debug-contract.js';
 import type { PlannerStructuredDoc } from './planner-doc.js';
-import { buildPlannerGenerationPrompt } from './planner-orchestrator.js';
+import { buildPlannerGenerationPrompt, type PlannerPromptSnapshot } from './planner-orchestrator.js';
 import { applyPartialRerunScope } from './planner-refinement-partial.js';
 import { buildUsageSummary, deriveDiffSummary, readObject } from './planner-debug-shared.js';
 import { resolvePlannerTargetVideoModel } from './planner-target-video-model.js';
@@ -58,6 +58,45 @@ function parseStoredDebugInput(value: unknown) {
 interface PlannerDebugDeps {
   prisma: typeof prisma;
   resolvePlannerAgentSelection: typeof resolvePlannerAgentSelection;
+}
+
+function buildPlannerDebugModelSelectionSnapshot(args: {
+  requestedModelFamilySlug?: string;
+  requestedModelEndpointSlug?: string;
+  resolvedModel: Awaited<ReturnType<typeof resolveModelSelection>>;
+  targetVideoModel: Awaited<ReturnType<typeof resolvePlannerTargetVideoModel>>;
+}) {
+  return {
+    requestedTextModelFamilySlug: args.requestedModelFamilySlug ?? null,
+    requestedTextModelEndpointSlug: args.requestedModelEndpointSlug ?? null,
+    resolvedTextModel: args.resolvedModel
+      ? {
+          family: {
+            id: args.resolvedModel.family.id,
+            slug: args.resolvedModel.family.slug,
+            name: args.resolvedModel.family.name,
+          },
+          provider: {
+            id: args.resolvedModel.provider.id,
+            code: args.resolvedModel.provider.code,
+            name: args.resolvedModel.provider.name,
+          },
+          endpoint: {
+            id: args.resolvedModel.endpoint.id,
+            slug: args.resolvedModel.endpoint.slug,
+            label: args.resolvedModel.endpoint.label,
+            remoteModelKey: args.resolvedModel.endpoint.remoteModelKey,
+          },
+        }
+      : null,
+    targetVideoModel: args.targetVideoModel
+      ? {
+          familySlug: args.targetVideoModel.familySlug,
+          familyName: args.targetVideoModel.familyName,
+          summary: args.targetVideoModel.summary,
+        }
+      : null,
+  } satisfies Record<string, unknown>;
 }
 
 const defaultPlannerDebugDeps: PlannerDebugDeps = {
@@ -214,13 +253,20 @@ export async function executePlannerDebugRun(args: PlannerDebugRunInput & {
     throw new Error('No active text model endpoint matched the selection.');
   }
 
+  const targetVideoModel = await resolvePlannerTargetVideoModel({
+    requestedFamilySlug: args.targetVideoModelFamilySlug,
+  });
+  const modelSelectionSnapshot = buildPlannerDebugModelSelectionSnapshot({
+    requestedModelFamilySlug: args.modelFamily,
+    requestedModelEndpointSlug: args.modelEndpoint,
+    resolvedModel,
+    targetVideoModel,
+  });
+
   const promptPackage = buildPlannerGenerationPrompt({
-    ...(await resolvePlannerTargetVideoModel({
-      requestedFamilySlug: args.targetVideoModelFamilySlug,
-    }).then((targetVideoModel) => ({
-      targetVideoModelFamilySlug: targetVideoModel?.familySlug ?? null,
-      targetVideoModelSummary: targetVideoModel?.summary ?? null,
-    }))),
+    targetVideoModelFamilySlug: targetVideoModel?.familySlug ?? null,
+    targetVideoModelSummary: targetVideoModel?.summary ?? null,
+    modelSelectionSnapshot,
     selection,
     targetStage: args.targetStage,
     userPrompt: args.userPrompt,
@@ -234,6 +280,11 @@ export async function executePlannerDebugRun(args: PlannerDebugRunInput & {
     currentOutlineDoc: args.currentOutlineDoc,
     currentStructuredDoc: args.currentStructuredDoc,
   });
+  const promptSnapshot: PlannerPromptSnapshot = {
+    ...promptPackage.promptSnapshot,
+    modelSelectionSnapshot,
+  };
+  const promptSnapshotJson = promptSnapshot as unknown as Prisma.InputJsonValue;
 
   const runtimeConfig = await resolveProviderRuntimeConfigForUser({
     userId: args.userId,
@@ -327,6 +378,8 @@ export async function executePlannerDebugRun(args: PlannerDebugRunInput & {
         configSource: args.configSource,
         targetStage: args.targetStage,
         partialRerunScope: args.partialRerunScope ?? 'none',
+        projectId: args.projectId ?? null,
+        episodeId: args.episodeId ?? null,
         projectTitle: args.projectTitle,
         episodeTitle: args.episodeTitle,
         userPrompt: args.userPrompt,
@@ -340,8 +393,8 @@ export async function executePlannerDebugRun(args: PlannerDebugRunInput & {
         targetEntity: args.targetEntity ?? null,
         plannerAssets: args.plannerAssets ?? [],
         replaySourceRunId: args.replaySourceRunId ?? null,
-        promptSnapshot: promptPackage.promptSnapshot,
-      } as Prisma.InputJsonValue,
+        promptSnapshot: promptSnapshotJson,
+      } as unknown as Prisma.InputJsonValue,
       finalPrompt: promptPackage.promptText,
       rawText,
       providerOutputJson: (providerOutput ?? Prisma.JsonNull) as Prisma.InputJsonValue,
@@ -393,7 +446,7 @@ export async function executePlannerDebugRun(args: PlannerDebugRunInput & {
       },
     },
     finalPrompt: promptPackage.promptText,
-    promptSnapshot: promptPackage.promptSnapshot,
+    promptSnapshot,
     rawText,
     providerOutput,
     assistantPackage,
@@ -402,6 +455,8 @@ export async function executePlannerDebugRun(args: PlannerDebugRunInput & {
       subtype: args.subtype,
       targetStage: args.targetStage,
       partialRerunScope: args.partialRerunScope ?? 'none',
+      projectId: args.projectId ?? null,
+      episodeId: args.episodeId ?? null,
       projectTitle: args.projectTitle,
       episodeTitle: args.episodeTitle,
       userPrompt: args.userPrompt,

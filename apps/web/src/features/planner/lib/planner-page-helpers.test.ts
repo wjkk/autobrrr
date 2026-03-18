@@ -5,6 +5,7 @@ import type { ApiPlannerWorkspace } from './planner-api';
 import {
   buildPlannerAssetThumbCandidates,
   buildPlannerEpisodes,
+  formatPlannerDebugRunLabel,
   mapWorkspaceMessagesToThread,
   readPreferredStoryboardModelId,
   toHistoryVersions,
@@ -162,7 +163,11 @@ test('toHistoryVersions prefers runtime refinement versions and normalises trigg
         {
           id: 'ref-1',
           versionNumber: 1,
-          triggerType: 'GENERATE_DOC',
+          debugApplySource: {
+            debugRunId: 'debug-run-12345678',
+            appliedAt: '2026-03-17T11:00:10.000Z',
+          },
+          triggerType: 'DEBUG_APPLY',
           status: 'unknown_status',
           createdAt: '2026-03-17T11:00:00.000Z',
         },
@@ -183,7 +188,11 @@ test('toHistoryVersions prefers runtime refinement versions and normalises trigg
     {
       id: 'ref-1',
       versionNumber: 1,
-      trigger: 'generate_doc',
+      debugApplySource: {
+        debugRunId: 'debug-run-12345678',
+        appliedAt: '2026-03-17T11:00:10.000Z',
+      },
+      trigger: 'debug_apply',
       status: 'ready',
       createdAt: new Date('2026-03-17T11:00:00.000Z').getTime(),
     },
@@ -195,4 +204,9 @@ test('toHistoryVersions prefers runtime refinement versions and normalises trigg
       createdAt: new Date('2026-03-17T12:00:00.000Z').getTime(),
     },
   ]);
+});
+
+test('formatPlannerDebugRunLabel returns short debug run labels', () => {
+  assert.equal(formatPlannerDebugRunLabel('debug-run-12345678'), 'Debug Run 12345678');
+  assert.equal(formatPlannerDebugRunLabel(''), 'Debug Run');
 });

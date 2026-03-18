@@ -13,6 +13,7 @@ import {
 export function PlannerPageToolbar(props: {
   mode: 'manage' | 'debug';
   debugBasePath: string;
+  debugRouteSearch?: string;
   selectedEntry: {
     contentType: string;
     subtype: string;
@@ -37,10 +38,10 @@ export function PlannerPageToolbar(props: {
             </CollectionToolbarChips>
             <CollectionToolbarChips>
               {props.mode === 'manage' ? (
-                <CollectionToolbarLink href={`${props.debugBasePath}/${encodeURIComponent(props.selectedEntry.slug)}`}>打开单项调试页</CollectionToolbarLink>
+                <CollectionToolbarLink href={`${props.debugBasePath}/${encodeURIComponent(props.selectedEntry.slug)}${props.debugRouteSearch ?? ''}`}>打开单项调试页</CollectionToolbarLink>
               ) : null}
-              <CollectionToolbarLink href={`${props.debugBasePath}/compare`}>打开 A/B 对比页</CollectionToolbarLink>
-              <CollectionToolbarLink href={`${props.debugBasePath}/runs`}>查看调试历史</CollectionToolbarLink>
+              <CollectionToolbarLink href={`${props.debugBasePath}/compare${props.debugRouteSearch ?? ''}`}>打开 A/B 对比页</CollectionToolbarLink>
+              <CollectionToolbarLink href={`${props.debugBasePath}/runs${props.debugRouteSearch ?? ''}`}>查看调试历史</CollectionToolbarLink>
             </CollectionToolbarChips>
           </>
         ) : (

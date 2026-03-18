@@ -1,11 +1,10 @@
-import { getMockStudioProject } from '@aiv/mock-data';
-
-import { creationPageDataFromFixture } from './creation-page-data';
 import { buildCreationPageDataFromApi } from './creation-page-bootstrap';
 import type { ApiCreationWorkspace, ApiProjectDetail, CreationRuntimeApiContext } from './creation-api';
+import type { WorkspaceBootstrapError } from '@/features/shared/lib/workspace-bootstrap-error';
 
 export interface CreationPageBootstrap {
   studio: ReturnType<typeof buildCreationPageDataFromApi> | null;
+  error?: WorkspaceBootstrapError | null;
   runtimeApi?: CreationRuntimeApiContext;
 }
 
@@ -16,16 +15,10 @@ export function selectCreationEpisodeId(project: ApiProjectDetail) {
 export function buildCreationBootstrap(project: ApiProjectDetail, workspace: ApiCreationWorkspace) {
   return {
     studio: buildCreationPageDataFromApi(project, workspace),
+    error: null,
     runtimeApi: {
       projectId: project.id,
       episodeId: workspace.episode.id,
     },
   } satisfies CreationPageBootstrap;
-}
-
-export function buildCreationFixtureFallback(projectId: string): CreationPageBootstrap {
-  const fixture = getMockStudioProject(projectId);
-  return {
-    studio: fixture ? creationPageDataFromFixture(fixture) : null,
-  };
 }

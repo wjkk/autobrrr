@@ -57,6 +57,11 @@ export interface ApiPlannerAssetOption {
   createdAt: string;
 }
 
+export interface ApiPlannerDebugApplySource {
+  debugRunId: string | null;
+  appliedAt: string | null;
+}
+
 export interface ApiPlannerWorkspace {
   availableAssets?: Array<{
     id: string;
@@ -137,6 +142,7 @@ export interface ApiPlannerWorkspace {
     createdAt: string;
   }>;
   activeRefinement?: {
+    debugApplySource?: ApiPlannerDebugApplySource | null;
     id: string;
     versionNumber: number;
     triggerType: string;
@@ -259,6 +265,7 @@ export interface ApiPlannerWorkspace {
     createdAt: string;
   } | null;
   refinementVersions?: Array<{
+    debugApplySource?: ApiPlannerDebugApplySource | null;
     id: string;
     versionNumber: number;
     triggerType: string;
@@ -400,6 +407,11 @@ export type PlannerRerunScope =
 
 export interface PlannerPageBootstrap {
   studio: PlannerPageData | null;
+  error?: {
+    code: string;
+    message: string;
+    status?: number;
+  } | null;
   runtimeApi?: PlannerRuntimeApiContext;
   initialGeneratedText?: string | null;
   initialStructuredDoc?: PlannerStructuredDoc | null;

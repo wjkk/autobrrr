@@ -66,6 +66,7 @@ export interface PlannerPromptSnapshot {
     content: string;
   }>;
   inputContextSnapshot: Record<string, unknown>;
+  modelSelectionSnapshot?: Record<string, unknown>;
 }
 
 export interface PlannerUsageSummary {
@@ -162,4 +163,12 @@ export interface PlannerDebugCompareResponse {
   compareGroupKey: string;
   left: PlannerDebugRunResponse;
   right: PlannerDebugRunResponse;
+}
+
+export interface PlannerDebugApplyResult {
+  debugRunId: string;
+  projectId: string;
+  episodeId: string;
+  plannerSessionId: string;
+  refinementVersionId: string;
 }

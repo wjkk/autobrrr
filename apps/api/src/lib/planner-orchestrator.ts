@@ -121,6 +121,7 @@ export interface PlannerPromptSnapshot {
     content: string;
   }>;
   inputContextSnapshot: Record<string, unknown>;
+  modelSelectionSnapshot?: Record<string, unknown>;
 }
 
 export interface PlannerPromptArtifact {
@@ -147,6 +148,7 @@ function buildPlannerPromptSnapshot(args: {
   currentStructuredDoc?: unknown;
   targetVideoModelFamilySlug?: string | null;
   targetVideoModelSummary?: string | null;
+  modelSelectionSnapshot?: Record<string, unknown>;
   stepDefinitions: PlannerStepAnalysisItem[];
 }) {
   const systemPromptFinal = [
@@ -238,6 +240,7 @@ function buildPlannerPromptSnapshot(args: {
       stepDefinitions: args.stepDefinitions,
       userPrompt: args.userPrompt,
     } satisfies Record<string, unknown>,
+    ...(args.modelSelectionSnapshot ? { modelSelectionSnapshot: args.modelSelectionSnapshot } : {}),
   } satisfies PlannerPromptSnapshot;
 }
 
@@ -257,6 +260,7 @@ export function buildPlannerGenerationPrompt(args: {
   currentStructuredDoc?: unknown;
   targetVideoModelFamilySlug?: string | null;
   targetVideoModelSummary?: string | null;
+  modelSelectionSnapshot?: Record<string, unknown>;
 }) {
   const stepDefinitions = resolvePlannerStepDefinitions(args.selection);
   const promptSnapshot = buildPlannerPromptSnapshot({

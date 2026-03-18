@@ -35,9 +35,12 @@ export function PlannerDebugResultView(props: {
   debugResult: PlannerDebugRunResponse;
   replayHref?: string | null;
   refillHref?: string | null;
+  debugRouteSearch?: string;
+  onApply?: () => void;
+  applying?: boolean;
   chrome?: 'default' | 'admin';
 }) {
-  const compareHref = props.chrome === 'admin' ? '/admin/planner-debug/compare' : '/internal/planner-debug/compare';
+  const compareHref = `${props.chrome === 'admin' ? '/admin/planner-debug/compare' : '/internal/planner-debug/compare'}${props.debugRouteSearch ?? ''}`;
   const preview = useMemo(
     () => buildPlannerResultPreview(props.debugResult.input, props.debugResult.assistantPackage),
     [props.debugResult.assistantPackage, props.debugResult.input],
@@ -62,6 +65,11 @@ export function PlannerDebugResultView(props: {
         {props.replayHref ? <Link href={props.replayHref}>打开本次回放页</Link> : null}
         <Link href={compareHref}>打开 A/B 对比页</Link>
         {props.refillHref ? <Link href={props.refillHref}>用本次结果回填调试表单</Link> : null}
+        {props.onApply ? (
+          <button type="button" className={styles.buttonGhost} onClick={props.onApply} disabled={props.applying}>
+            {props.applying ? '应用中…' : '应用到主流程'}
+          </button>
+        ) : null}
       </div>
 
       {props.debugResult.diffSummary?.length ? (
@@ -109,6 +117,14 @@ export function PlannerDebugResultView(props: {
             <details className={styles.jsonPreview}>
               <summary className={styles.jsonPreviewSummary}>Messages Final</summary>
               <pre className={styles.pre}>{JSON.stringify(props.debugResult.promptSnapshot.messagesFinal, null, 2)}</pre>
+            </details>
+            <details className={styles.jsonPreview}>
+              <summary className={styles.jsonPreviewSummary}>Model Selection Snapshot</summary>
+              <pre className={styles.pre}>{JSON.stringify(props.debugResult.promptSnapshot.modelSelectionSnapshot ?? {}, null, 2)}</pre>
+            </details>
+            <details className={styles.jsonPreview}>
+              <summary className={styles.jsonPreviewSummary}>Input Context Snapshot</summary>
+              <pre className={styles.pre}>{JSON.stringify(props.debugResult.promptSnapshot.inputContextSnapshot, null, 2)}</pre>
             </details>
           </div>
         </div>

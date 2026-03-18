@@ -63,6 +63,7 @@ test('readPromptSnapshot returns normalized messages and drops invalid payloads'
   const parsed = readPromptSnapshot({
     systemPromptFinal: 'system',
     developerPromptFinal: 'developer',
+    modelSelectionSnapshot: { requestedTextModelFamilySlug: 'doubao-text' },
     inputContextSnapshot: { projectTitle: '谜雾校园' },
     messagesFinal: [
       { role: 'user', content: '给我一个版本' },
@@ -75,6 +76,7 @@ test('readPromptSnapshot returns normalized messages and drops invalid payloads'
   assert.deepEqual(parsed, {
     systemPromptFinal: 'system',
     developerPromptFinal: 'developer',
+    modelSelectionSnapshot: { requestedTextModelFamilySlug: 'doubao-text' },
     inputContextSnapshot: { projectTitle: '谜雾校园' },
     messagesFinal: [
       { role: 'user', content: '给我一个版本' },

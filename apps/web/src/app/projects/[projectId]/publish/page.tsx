@@ -9,7 +9,11 @@ interface PublishRouteProps {
 
 export default async function PublishRoute({ params }: PublishRouteProps) {
   const { projectId } = await params;
-  const { studio, runtimeApi, initialPublishWorkspace } = await fetchPublishStudioProject(projectId);
+  const { studio, error, runtimeApi, initialPublishWorkspace } = await fetchPublishStudioProject(projectId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 
   if (!studio) {
     notFound();

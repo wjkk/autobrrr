@@ -83,6 +83,30 @@ function mapPlannerLatestRun(
   };
 }
 
+function readPlannerDebugApplySource(triggerType: string | null | undefined, inputSnapshotJson: unknown) {
+  const inputSnapshot =
+    inputSnapshotJson && typeof inputSnapshotJson === 'object' && !Array.isArray(inputSnapshotJson)
+      ? (inputSnapshotJson as Record<string, unknown>)
+      : null;
+  const debugRunId =
+    inputSnapshot && typeof inputSnapshot.appliedFromDebugRunId === 'string' && inputSnapshot.appliedFromDebugRunId.trim().length > 0
+      ? inputSnapshot.appliedFromDebugRunId.trim()
+      : null;
+  const appliedAt =
+    inputSnapshot && typeof inputSnapshot.appliedFromDebugRunAt === 'string' && inputSnapshot.appliedFromDebugRunAt.trim().length > 0
+      ? inputSnapshot.appliedFromDebugRunAt.trim()
+      : null;
+
+  if ((triggerType ?? '').toLowerCase() !== 'debug_apply' && !debugRunId) {
+    return null;
+  }
+
+  return {
+    debugRunId,
+    appliedAt,
+  };
+}
+
 export async function getPlannerWorkspace(args: {
   projectId: string;
   episodeId: string;
@@ -202,6 +226,7 @@ export async function getPlannerWorkspace(args: {
             assistantMessage: true,
             generatedText: true,
             structuredDocJson: true,
+            inputSnapshotJson: true,
             isConfirmed: true,
             confirmedAt: true,
             createdAt: true,
@@ -245,6 +270,7 @@ export async function getPlannerWorkspace(args: {
             isConfirmed: true,
             confirmedAt: true,
             createdAt: true,
+            inputSnapshotJson: true,
           },
         }),
       ])
@@ -342,6 +368,7 @@ export async function getPlannerWorkspace(args: {
     })),
     activeRefinement: activeRefinement
       ? {
+          debugApplySource: readPlannerDebugApplySource(activeRefinement.triggerType, activeRefinement.inputSnapshotJson),
           id: activeRefinement.id,
           versionNumber: activeRefinement.versionNumber,
           triggerType: activeRefinement.triggerType,
@@ -476,6 +503,7 @@ export async function getPlannerWorkspace(args: {
       sortOrder: shot.sortOrder,
     })),
     refinementVersions: refinementVersions.map((version) => ({
+      debugApplySource: readPlannerDebugApplySource(version.triggerType, version.inputSnapshotJson),
       id: version.id,
       versionNumber: version.versionNumber,
       triggerType: version.triggerType,
@@ -496,4 +524,5 @@ export const __testables = {
   resolvePlannerStage,
   collectPlannerAssetIds,
   mapPlannerLatestRun,
+  readPlannerDebugApplySource,
 };

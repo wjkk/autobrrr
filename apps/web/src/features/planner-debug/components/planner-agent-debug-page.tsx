@@ -17,6 +17,7 @@ import { PlannerPageToolbar } from './planner-page-toolbar';
 import type {
   PlannerAgentProfileDebugItem,
   PlannerDebugCompareResponse,
+  PlannerDebugApplyResult,
   PlannerDebugRunDetail,
   PlannerDebugRunListItem,
   PlannerDebugRunResponse,
@@ -25,7 +26,7 @@ import type {
   PlannerSubAgentProfileDebugItem,
   PlannerStepDefinitionEditorItem,
 } from '../lib/planner-agent-debug-types';
-import { buildInitialDebugForm, parseDebugContext, stringifyJsonInput } from '../lib/planner-debug-runtime';
+import { buildInitialDebugForm, buildPlannerDebugSearch, parseDebugContext, stringifyJsonInput } from '../lib/planner-debug-runtime';
 import type { DebugFormState } from '../lib/planner-debug-runtime';
 import {
   normalizeGenerationConfig,
@@ -294,10 +295,24 @@ interface PlannerAgentDebugPageProps {
   mode?: 'manage' | 'debug';
   initialReplayRunId?: string;
   initialAutoRun?: boolean;
+  initialProjectId?: string;
+  initialEpisodeId?: string;
+  initialProjectTitle?: string;
+  initialEpisodeTitle?: string;
   chrome?: 'default' | 'admin';
 }
 
-export function PlannerAgentDebugPage({ initialSubAgentSlug, mode = 'debug', initialReplayRunId, initialAutoRun = false, chrome = 'default' }: PlannerAgentDebugPageProps) {
+export function PlannerAgentDebugPage({
+  initialSubAgentSlug,
+  mode = 'debug',
+  initialReplayRunId,
+  initialAutoRun = false,
+  initialProjectId,
+  initialEpisodeId,
+  initialProjectTitle,
+  initialEpisodeTitle,
+  chrome = 'default',
+}: PlannerAgentDebugPageProps) {
   const router = useRouter();
   const debugBasePath = chrome === 'admin' ? '/admin/planner-debug' : '/internal/planner-debug';
   const [profiles, setProfiles] = useState<PlannerAgentProfileDebugItem[]>([]);
@@ -307,9 +322,17 @@ export function PlannerAgentDebugPage({ initialSubAgentSlug, mode = 'debug', ini
   const [contentTypeFilter, setContentTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [editorState, setEditorState] = useState<EditableSubAgentState>(buildEditableState(null));
-  const [debugForm, setDebugForm] = useState<DebugFormState>(buildInitialDebugForm(initialSubAgentSlug));
+  const [debugForm, setDebugForm] = useState<DebugFormState>(
+    buildInitialDebugForm(initialSubAgentSlug, {
+      projectId: initialProjectId,
+      episodeId: initialEpisodeId,
+      projectTitle: initialProjectTitle,
+      episodeTitle: initialEpisodeTitle,
+    }),
+  );
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [recentRuns, setRecentRuns] = useState<PlannerDebugRunListItem[]>([]);
   const [selectedRun, setSelectedRun] = useState<PlannerDebugRunDetail | null>(null);
@@ -322,6 +345,12 @@ export function PlannerAgentDebugPage({ initialSubAgentSlug, mode = 'debug', ini
   const [message, setMessage] = useState<{ kind: 'ok' | 'warn' | 'error'; text: string } | null>(null);
   const [debugResult, setDebugResult] = useState<PlannerDebugRunResponse | null>(null);
   const [autoRunPending, setAutoRunPending] = useState(initialAutoRun);
+  const debugRouteSearch = buildPlannerDebugSearch({
+    projectId: debugForm.projectId,
+    episodeId: debugForm.episodeId,
+    projectTitle: debugForm.projectTitle,
+    episodeTitle: debugForm.episodeTitle,
+  });
 
   const subAgents = useMemo<PlannerSubAgentCatalogEntry[]>(
     () =>
@@ -436,8 +465,15 @@ export function PlannerAgentDebugPage({ initialSubAgentSlug, mode = 'debug', ini
   useEffect(() => {
     setEditorState(buildEditableState(selectedSubAgentEntry?.subAgent ?? null));
     setDebugForm((current) => ({
-      ...buildInitialDebugForm(selectedSubAgentEntry?.subAgent.slug ?? initialSubAgentSlug),
+      ...buildInitialDebugForm(selectedSubAgentEntry?.subAgent.slug ?? initialSubAgentSlug, {
+        projectId: current.projectId || initialProjectId,
+        episodeId: current.episodeId || initialEpisodeId,
+        projectTitle: current.projectTitle || initialProjectTitle,
+        episodeTitle: current.episodeTitle || initialEpisodeTitle,
+      }),
       configSource: current.configSource,
+      projectId: current.projectId,
+      episodeId: current.episodeId,
       modelFamily: current.modelFamily || 'doubao-text',
       modelEndpoint: current.modelEndpoint,
     }));
@@ -453,7 +489,7 @@ export function PlannerAgentDebugPage({ initialSubAgentSlug, mode = 'debug', ini
       const fallback = subAgents.find((item) => item.subAgent.id !== selectedSubAgentEntry?.subAgent.id)?.subAgent.id ?? '';
       return fallback;
     });
-  }, [initialReplayRunId, selectedSubAgentEntry]);
+  }, [initialEpisodeId, initialEpisodeTitle, initialProjectId, initialProjectTitle, initialReplayRunId, selectedSubAgentEntry]);
 
   useEffect(() => {
     if (!selectedSubAgentEntry) {
@@ -537,6 +573,8 @@ export function PlannerAgentDebugPage({ initialSubAgentSlug, mode = 'debug', ini
             input.partialRerunScope === 'shots_only'
               ? input.partialRerunScope
               : 'none',
+          projectId: typeof input.projectId === 'string' ? input.projectId : '',
+          episodeId: typeof input.episodeId === 'string' ? input.episodeId : '',
           projectTitle: typeof input.projectTitle === 'string' ? input.projectTitle : current.projectTitle,
           episodeTitle: typeof input.episodeTitle === 'string' ? input.episodeTitle : current.episodeTitle,
           userPrompt: typeof input.userPrompt === 'string' ? input.userPrompt : current.userPrompt,
@@ -596,7 +634,13 @@ export function PlannerAgentDebugPage({ initialSubAgentSlug, mode = 'debug', ini
       setProfiles(nextProfiles);
       setMessage({ kind: 'ok', text: options?.autoRunAfterOpen ? '子 agent 配置已保存，并准备进入调试运行。' : '子 agent 配置已保存到数据库。' });
       if (options?.openDebugAfterSave) {
-        const search = options.autoRunAfterOpen ? '?autoRun=1' : '';
+        const search = buildPlannerDebugSearch({
+          projectId: debugForm.projectId,
+          episodeId: debugForm.episodeId,
+          projectTitle: debugForm.projectTitle,
+          episodeTitle: debugForm.episodeTitle,
+          autoRun: options.autoRunAfterOpen,
+        });
         router.push(`${debugBasePath}/${encodeURIComponent(selectedSubAgentEntry.subAgent.slug)}${search}`);
       }
     } catch (error) {
@@ -664,6 +708,8 @@ export function PlannerAgentDebugPage({ initialSubAgentSlug, mode = 'debug', ini
           configSource: debugForm.configSource,
           targetStage: debugForm.targetStage,
           partialRerunScope: debugForm.targetStage === 'refinement' ? debugForm.partialRerunScope : 'none',
+          projectId: debugForm.projectId || undefined,
+          episodeId: debugForm.episodeId || undefined,
           projectTitle: debugForm.projectTitle,
           episodeTitle: debugForm.episodeTitle,
           userPrompt: debugForm.userPrompt,
@@ -693,6 +739,28 @@ export function PlannerAgentDebugPage({ initialSubAgentSlug, mode = 'debug', ini
       setMessage({ kind: 'error', text: getErrorMessage(error, '调试运行失败。') });
     } finally {
       setRunning(false);
+    }
+  };
+
+  const handleApplyCurrentDebugRun = async () => {
+    if (!debugResult) {
+      return;
+    }
+
+    setApplying(true);
+    try {
+      const applied = await requestJson<PlannerDebugApplyResult>(
+        `/api/planner/debug/runs/${encodeURIComponent(debugResult.debugRunId)}/apply`,
+        {
+          method: 'POST',
+        },
+      );
+      setMessage({ kind: 'ok', text: '调试结果已应用到主流程，正在跳转到策划页。' });
+      router.push(`/projects/${encodeURIComponent(applied.projectId)}/planner`);
+    } catch (error) {
+      setMessage({ kind: 'error', text: getErrorMessage(error, '应用调试结果失败。') });
+    } finally {
+      setApplying(false);
     }
   };
 
@@ -789,6 +857,7 @@ export function PlannerAgentDebugPage({ initialSubAgentSlug, mode = 'debug', ini
       <PlannerPageToolbar
         mode={mode}
         debugBasePath={debugBasePath}
+        debugRouteSearch={debugRouteSearch}
         selectedEntry={
           selectedSubAgentEntry
             ? {
@@ -833,6 +902,7 @@ export function PlannerAgentDebugPage({ initialSubAgentSlug, mode = 'debug', ini
           <PlannerSubAgentBrowser
             mode={mode}
             chrome={chrome}
+            debugRouteSearch={debugRouteSearch}
             loading={loading}
             entries={filteredSubAgents}
             selectedSubAgentId={selectedSubAgentEntry?.subAgent.id ?? null}
@@ -865,16 +935,20 @@ export function PlannerAgentDebugPage({ initialSubAgentSlug, mode = 'debug', ini
             <PlannerDebugRunPane
               chrome={chrome}
               debugBasePath={debugBasePath}
+              debugRouteSearch={debugRouteSearch}
               selectedSubAgentEntry={selectedSubAgentEntry}
               running={running}
               debugForm={debugForm}
               debugResult={debugResult}
+              onApply={handleApplyCurrentDebugRun}
+              applying={applying}
               onRun={handleRun}
               onDebugFormChange={setDebugForm}
             />
             <PlannerDebugHistoryPane
               chrome={chrome}
               debugBasePath={debugBasePath}
+              debugRouteSearch={debugRouteSearch}
               subAgents={subAgents}
               selectedSubAgentEntry={selectedSubAgentEntry}
               compareSubAgentId={compareSubAgentId}

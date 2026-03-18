@@ -19,6 +19,7 @@ import type { PlannerSubAgentCatalogEntry } from '../lib/planner-agent-debug-typ
 interface PlannerSubAgentBrowserProps {
   mode: 'manage' | 'debug';
   chrome?: 'default' | 'admin';
+  debugRouteSearch?: string;
   loading: boolean;
   entries: PlannerSubAgentCatalogEntry[];
   selectedSubAgentId: string | null;
@@ -61,6 +62,7 @@ function statusLabel(status: string) {
 export function PlannerSubAgentBrowser({
   mode,
   chrome = 'default',
+  debugRouteSearch = '',
   loading,
   entries,
   selectedSubAgentId,
@@ -151,14 +153,14 @@ export function PlannerSubAgentBrowser({
                 <div className={styles.catalogMeta}>
                   {mode === 'manage' ? (
                     <Link
-                      href={`${debugBasePath}/${encodeURIComponent(subAgent.slug)}`}
+                      href={`${debugBasePath}/${encodeURIComponent(subAgent.slug)}${debugRouteSearch}`}
                       onClick={(event) => event.stopPropagation()}
                     >
                       打开独立调试页
                     </Link>
                   ) : (
                     <Link
-                      href={`${debugBasePath}/runs`}
+                      href={`${debugBasePath}/runs${debugRouteSearch}`}
                       onClick={(event) => event.stopPropagation()}
                     >
                       查看全部回放

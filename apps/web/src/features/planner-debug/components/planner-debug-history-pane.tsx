@@ -9,6 +9,7 @@ import styles from './planner-agent-debug-page.module.css';
 export function PlannerDebugHistoryPane(props: {
   chrome: 'default' | 'admin';
   debugBasePath: string;
+  debugRouteSearch?: string;
   subAgents: PlannerSubAgentCatalogEntry[];
   selectedSubAgentEntry: PlannerSubAgentCatalogEntry | null;
   compareSubAgentId: string;
@@ -28,7 +29,7 @@ export function PlannerDebugHistoryPane(props: {
           <h2 className={styles.panelTitle}>回放与 A/B</h2>
           <p className={styles.panelHint}>最近调试历史、详情回放，以及同上下文 A/B 对比。</p>
         </div>
-        <Link href={`${props.debugBasePath}/runs`} className={styles.buttonGhost}>
+        <Link href={`${props.debugBasePath}/runs${props.debugRouteSearch ?? ''}`} className={styles.buttonGhost}>
           全部历史
         </Link>
       </div>
@@ -81,9 +82,9 @@ export function PlannerDebugHistoryPane(props: {
                 </ul>
               ) : null}
               <div className={styles.linkRow}>
-                <Link href={`${props.debugBasePath}/runs/${encodeURIComponent(props.selectedRun.id)}`}>打开独立回放页</Link>
+                <Link href={`${props.debugBasePath}/runs/${encodeURIComponent(props.selectedRun.id)}${props.debugRouteSearch ?? ''}`}>打开独立回放页</Link>
                 {props.selectedRun.subAgentProfile?.slug ? (
-                  <Link href={`${props.debugBasePath}/${encodeURIComponent(props.selectedRun.subAgentProfile.slug)}?replayRunId=${encodeURIComponent(props.selectedRun.id)}`}>
+                  <Link href={`${props.debugBasePath}/${encodeURIComponent(props.selectedRun.subAgentProfile.slug)}${props.debugRouteSearch ? `${props.debugRouteSearch}&replayRunId=${encodeURIComponent(props.selectedRun.id)}` : `?replayRunId=${encodeURIComponent(props.selectedRun.id)}`}`}>
                     用该回放结果回填调试表单
                   </Link>
                 ) : null}

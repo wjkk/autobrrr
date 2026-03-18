@@ -1,4 +1,4 @@
-import type { ApiPlannerWorkspace } from './planner-api';
+import type { ApiPlannerDebugApplySource, ApiPlannerWorkspace } from './planner-api';
 import type { PlannerThreadMessage } from './planner-thread';
 import { sekoPlanData } from './seko-plan-data';
 import { findPlannerVideoModelOption, PLANNER_VIDEO_MODEL_OPTIONS } from './planner-video-model-options';
@@ -16,6 +16,7 @@ export interface PlannerEpisodeDraft {
 }
 
 export interface PlannerHistoryVersionView {
+  debugApplySource?: ApiPlannerDebugApplySource | null;
   id: string;
   versionNumber: number;
   trigger: string;
@@ -253,6 +254,15 @@ function normaliseHistoryStatus(status: string): 'running' | 'ready' | 'failed' 
   return 'ready';
 }
 
+export function formatPlannerDebugRunLabel(debugRunId: string | null | undefined) {
+  const normalized = typeof debugRunId === 'string' ? debugRunId.trim() : '';
+  if (!normalized) {
+    return 'Debug Run';
+  }
+
+  return `Debug Run ${normalized.slice(-8)}`;
+}
+
 export function mapWorkspaceMessagesToThread(
   messages: NonNullable<ApiPlannerWorkspace['messages']> | undefined,
 ): PlannerThreadMessage[] {
@@ -377,6 +387,7 @@ export function toHistoryVersions(args: {
       .slice()
       .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
       .map((version) => ({
+        ...(version.debugApplySource ? { debugApplySource: version.debugApplySource } : {}),
         id: version.id,
         versionNumber: version.versionNumber,
         trigger: normaliseHistoryTrigger(version.triggerType),

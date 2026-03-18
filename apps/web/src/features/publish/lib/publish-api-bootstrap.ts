@@ -1,8 +1,5 @@
-import { getMockStudioProject } from '@aiv/mock-data';
-
 import type { ApiPublishWorkspace, PublishPageBootstrap } from './publish-api';
 import { buildPublishStudio } from './publish-page-bootstrap';
-import { publishPageDataFromFixture } from './publish-page-data';
 
 export interface ApiProjectDetail {
   id: string;
@@ -26,17 +23,11 @@ export function selectPublishEpisodeId(project: ApiProjectDetail) {
 export function buildPublishBootstrap(project: ApiProjectDetail, workspace: ApiPublishWorkspace): PublishPageBootstrap {
   return {
     studio: buildPublishStudio(project, workspace),
+    error: null,
     runtimeApi: {
       projectId: project.id,
       episodeId: workspace.episode.id,
     },
     initialPublishWorkspace: workspace,
-  };
-}
-
-export function buildPublishFixtureFallback(projectId: string): PublishPageBootstrap {
-  const fixture = getMockStudioProject(projectId);
-  return {
-    studio: fixture ? publishPageDataFromFixture(fixture) : null,
   };
 }

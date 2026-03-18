@@ -1,9 +1,14 @@
 import { cx } from '@aiv/ui';
 
 import type { PlannerRefinementStatus } from '../../hooks/use-planner-refinement';
+import { formatPlannerDebugRunLabel } from '../../lib/planner-page-helpers';
 import styles from '../planner-page.module.css';
 
 interface PlannerHistoryVersionItem {
+  debugApplySource?: {
+    debugRunId: string | null;
+    appliedAt: string | null;
+  } | null;
   id: string;
   versionNumber: number;
   trigger: string;
@@ -17,6 +22,7 @@ interface PlannerHistoryMenuProps {
   activeVersionId: string | null;
   onToggle: () => void;
   onSelect: (versionId: string) => void;
+  onOpenDebugRun?: (debugRunId: string) => void;
 }
 
 function formatTime(timestamp: number) {
@@ -55,10 +61,14 @@ function triggerLabel(trigger: string) {
     return '开始细化';
   }
 
+  if (trigger === 'debug_apply') {
+    return '调试应用';
+  }
+
   return '重新细化';
 }
 
-export function PlannerHistoryMenu({ open, versions, activeVersionId, onToggle, onSelect }: PlannerHistoryMenuProps) {
+export function PlannerHistoryMenu({ open, versions, activeVersionId, onToggle, onSelect, onOpenDebugRun }: PlannerHistoryMenuProps) {
   return (
     <div className={styles.historyMenuWrap}>
       <button type="button" className={styles.historyButton} onClick={onToggle} aria-label="历史版本" aria-expanded={open}>
@@ -83,24 +93,40 @@ export function PlannerHistoryMenu({ open, versions, activeVersionId, onToggle, 
               .reverse()
               .map((item) => {
                 const active = item.id === activeVersionId;
+                const debugRunId = item.debugApplySource?.debugRunId ?? null;
 
                 return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    role="menuitem"
-                    className={cx(styles.historyItem, active && styles.historyItemActive)}
-                    onClick={() => onSelect(item.id)}
-                  >
-                    <div>
-                      <strong>V{item.versionNumber}</strong>
-                      <span>{triggerLabel(item.trigger)}</span>
-                    </div>
-                    <div>
-                      <small>{formatTime(item.createdAt)}</small>
-                      <small>{statusLabel(item.status)}</small>
-                    </div>
-                  </button>
+                  <div key={item.id} className={styles.historyItemRow}>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={cx(styles.historyItem, active && styles.historyItemActive)}
+                      onClick={() => onSelect(item.id)}
+                    >
+                      <div>
+                        <strong>V{item.versionNumber}</strong>
+                        <span>
+                          {triggerLabel(item.trigger)}
+                          {debugRunId ? ` · ${formatPlannerDebugRunLabel(debugRunId)}` : ''}
+                        </span>
+                      </div>
+                      <div>
+                        <small>{formatTime(item.createdAt)}</small>
+                        <small>{statusLabel(item.status)}</small>
+                      </div>
+                    </button>
+                    {debugRunId && onOpenDebugRun ? (
+                      <button
+                        type="button"
+                        className={styles.historySourceButton}
+                        onClick={() => onOpenDebugRun(debugRunId)}
+                        aria-label={`查看 ${formatPlannerDebugRunLabel(debugRunId)} 来源`}
+                        title="查看来源调试 Run"
+                      >
+                        来源
+                      </button>
+                    ) : null}
+                  </div>
                 );
               })
           ) : (

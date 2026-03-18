@@ -2,6 +2,8 @@ export interface DebugFormState {
   configSource: 'draft' | 'published';
   targetStage: 'outline' | 'refinement';
   partialRerunScope: 'none' | 'subject_only' | 'scene_only' | 'shots_only';
+  projectId: string;
+  episodeId: string;
   projectTitle: string;
   episodeTitle: string;
   userPrompt: string;
@@ -16,6 +18,15 @@ export interface DebugFormState {
   plannerAssetsJson: string;
   modelFamily: string;
   modelEndpoint: string;
+}
+
+export interface PlannerDebugRouteContext {
+  projectId?: string | null;
+  episodeId?: string | null;
+  projectTitle?: string | null;
+  episodeTitle?: string | null;
+  replayRunId?: string | null;
+  autoRun?: boolean;
 }
 
 interface DebugFormPreset extends DebugFormState {}
@@ -42,6 +53,8 @@ function basePreset(): DebugFormPreset {
     configSource: 'draft',
     targetStage: 'refinement',
     partialRerunScope: 'none',
+    projectId: '',
+    episodeId: '',
     projectTitle: '调试项目',
     episodeTitle: '第1集',
     userPrompt: '',
@@ -143,11 +156,39 @@ const debugFormPresetsBySlug: Record<string, Partial<DebugFormPreset>> = {
   },
 };
 
-export function buildInitialDebugForm(subAgentSlug?: string | null): DebugFormState {
+export function buildPlannerDebugSearch(input: PlannerDebugRouteContext) {
+  const search = new URLSearchParams();
+  if (input.projectId) {
+    search.set('projectId', input.projectId);
+  }
+  if (input.episodeId) {
+    search.set('episodeId', input.episodeId);
+  }
+  if (input.projectTitle) {
+    search.set('projectTitle', input.projectTitle);
+  }
+  if (input.episodeTitle) {
+    search.set('episodeTitle', input.episodeTitle);
+  }
+  if (input.replayRunId) {
+    search.set('replayRunId', input.replayRunId);
+  }
+  if (input.autoRun) {
+    search.set('autoRun', '1');
+  }
+  const serialized = search.toString();
+  return serialized ? `?${serialized}` : '';
+}
+
+export function buildInitialDebugForm(subAgentSlug?: string | null, context?: PlannerDebugRouteContext): DebugFormState {
   const preset = subAgentSlug ? debugFormPresetsBySlug[subAgentSlug] : null;
   return {
     ...basePreset(),
     ...(preset ?? {}),
+    projectId: context?.projectId ?? '',
+    episodeId: context?.episodeId ?? '',
+    projectTitle: context?.projectTitle ?? (preset?.projectTitle ?? basePreset().projectTitle),
+    episodeTitle: context?.episodeTitle ?? (preset?.episodeTitle ?? basePreset().episodeTitle),
   };
 }
 

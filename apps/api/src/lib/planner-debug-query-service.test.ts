@@ -44,6 +44,9 @@ test('mapPlannerDebugRunDetail exposes replay source, prompt snapshot, usage and
       promptSnapshot: {
         systemPromptFinal: 'system',
         developerPromptFinal: 'developer',
+        modelSelectionSnapshot: {
+          requestedTextModelFamilySlug: 'doubao-text',
+        },
         messagesFinal: [
           {
             role: 'user',
@@ -114,6 +117,7 @@ test('mapPlannerDebugRunDetail exposes replay source, prompt snapshot, usage and
   assert.equal(result.executionMode, 'fallback');
   assert.equal(result.replaySourceRunId, 'run-0');
   assert.equal(result.promptSnapshot?.systemPromptFinal, 'system');
+  assert.equal(result.promptSnapshot?.modelSelectionSnapshot?.requestedTextModelFamilySlug, 'doubao-text');
   assert.equal(result.usage.promptTokens, 12);
   assert.equal(result.usage.completionTokens, 8);
   assert.equal(result.usage.totalTokens, 20);

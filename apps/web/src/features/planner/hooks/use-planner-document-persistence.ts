@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { savePlannerDocument, type PlannerRuntimeApiContext } from '../lib/planner-api';
+import { buildPlannerNoticeFromError, type PlannerNoticeInput } from '../lib/planner-notice';
 import type { PlannerStructuredDoc } from '../lib/planner-structured-doc';
 
 export type PlannerSaveState =
@@ -15,7 +16,7 @@ interface UsePlannerDocumentPersistenceOptions {
   runtimeApi?: PlannerRuntimeApiContext;
   ensureEditableRuntimeRefinement: () => Promise<unknown>;
   setStructuredPlannerDoc: (doc: PlannerStructuredDoc | null) => void;
-  setNotice: (message: string | null) => void;
+  setNotice: (message: PlannerNoticeInput) => void;
 }
 
 export function usePlannerDocumentPersistence(options: UsePlannerDocumentPersistenceOptions) {
@@ -53,8 +54,9 @@ export function usePlannerDocumentPersistence(options: UsePlannerDocumentPersist
       options.setNotice(successMessage);
       setSaveState({ status: 'saved', message: '已同步到后端。' });
     } catch (error) {
-      const message = error instanceof Error ? error.message : '保存策划文档失败。';
-      options.setNotice(message);
+      const notice = buildPlannerNoticeFromError(error, '保存策划文档失败。');
+      const message = notice.message;
+      options.setNotice(notice);
       setSaveState({ status: 'error', message });
     }
   }, [options]);

@@ -125,6 +125,15 @@ function secondsFromNow(seconds: number) {
   return new Date(Date.now() + seconds * 1000);
 }
 
+function buildProviderNotConfiguredFailure(providerLabel: string): ProviderAdapterUpdate {
+  return {
+    type: 'failed',
+    providerStatus: 'failed',
+    errorCode: 'PROVIDER_NOT_CONFIGURED',
+    errorMessage: `${providerLabel} provider is not configured for this account. Configure and enable a usable provider before running planner AI.`,
+  };
+}
+
 function buildRunTransportMetadata(args: {
   run: Run;
   ownerUserId: string | null;
@@ -292,15 +301,7 @@ const arkAdapter: ProviderAdapter = {
     }
 
     if (!runtimeConfig.enabled || !runtimeConfig.apiKey || !runtimeConfig.baseUrl) {
-      return {
-        type: 'completed',
-        providerStatus: 'succeeded',
-        providerOutput: {
-          mocked: true,
-          provider: 'ark',
-          modelUsed: getEndpointModelKey(run),
-        },
-      };
+      return buildProviderNotConfiguredFailure('ARK');
     }
 
     const model = getEndpointModelKey(run);
@@ -414,7 +415,7 @@ const arkAdapter: ProviderAdapter = {
       traceId: `run:${run.id}:poll`,
     });
     if (!runtimeConfig.enabled || !runtimeConfig.apiKey || !runtimeConfig.baseUrl) {
-      return mockProxyAdapter.poll(run);
+      return buildProviderNotConfiguredFailure('ARK');
     }
     if (!run.providerJobId) {
       return {
@@ -478,7 +479,7 @@ const platouAdapter: ProviderAdapter = {
       traceId: `run:${run.id}:submit`,
     });
     if (!runtimeConfig.enabled || !runtimeConfig.apiKey || !runtimeConfig.baseUrl) {
-      return mockProxyAdapter.submit(run);
+      return buildProviderNotConfiguredFailure('Platou');
     }
 
     const model = getEndpointModelKey(run) ?? null;
@@ -580,7 +581,7 @@ const platouAdapter: ProviderAdapter = {
       traceId: `run:${run.id}:poll`,
     });
     if (!runtimeConfig.enabled || !runtimeConfig.apiKey || !runtimeConfig.baseUrl) {
-      return mockProxyAdapter.poll(run);
+      return buildProviderNotConfiguredFailure('Platou');
     }
     if (!run.providerJobId) {
       return {
@@ -645,6 +646,7 @@ export function resolveProviderAdapter(run: Run): ProviderAdapter {
 export const __testables = {
   readObject,
   readString,
+  buildProviderNotConfiguredFailure,
   getProviderType,
   getProviderCode,
   getEndpointModelKey,

@@ -11,6 +11,7 @@ import {
   type ApiPlannerWorkspace,
   type PlannerRuntimeApiContext,
 } from '../lib/planner-api';
+import type { PlannerNoticeInput } from '../lib/planner-notice';
 import type { PlannerOutlineDoc } from '../lib/planner-outline-doc';
 import type { PlannerStructuredDoc } from '../lib/planner-structured-doc';
 import type { PlannerThreadMessage } from '../lib/planner-thread';
@@ -26,7 +27,7 @@ interface UsePlannerRuntimeWorkspaceOptions {
   setServerPlannerText: (text: string) => void;
   setStructuredPlannerDoc: (doc: PlannerStructuredDoc | null) => void;
   setOutlineConfirmed: (value: boolean) => void;
-  setNotice: (message: string | null) => void;
+  setNotice: (message: PlannerNoticeInput) => void;
   mapWorkspaceMessagesToThread: (messages: ApiPlannerWorkspace['messages']) => PlannerThreadMessage[];
   outlineToPreviewStructuredPlannerDoc: (outline: PlannerOutlineDoc) => PlannerStructuredDoc | null;
 }

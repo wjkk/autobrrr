@@ -28,6 +28,7 @@ test('mapPlannerLatestRun normalizes outputJson and timestamps for planner works
     status: 'COMPLETED',
     providerStatus: 'succeeded',
     outputJson: {
+      executionMode: 'live',
       generatedText: '规划完成',
       structuredDoc: { acts: [] },
     },
@@ -40,6 +41,7 @@ test('mapPlannerLatestRun normalizes outputJson and timestamps for planner works
   assert.deepEqual(mapped, {
     id: 'run-1',
     status: 'completed',
+    executionMode: 'live',
     providerStatus: 'succeeded',
     generatedText: '规划完成',
     structuredDoc: { acts: [] },
@@ -65,6 +67,7 @@ test('mapPlannerLatestRun drops invalid output payloads to null fields', () => {
   assert.deepEqual(mapped, {
     id: 'run-2',
     status: 'failed',
+    executionMode: null,
     providerStatus: null,
     generatedText: null,
     structuredDoc: null,

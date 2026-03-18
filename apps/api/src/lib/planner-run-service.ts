@@ -7,6 +7,7 @@ import { resolvePlannerAgentSelection } from './planner-agent-registry.js';
 import { buildPlannerGenerationPrompt, createPlannerUserMessage } from './planner-orchestrator.js';
 import { serializeRunInput } from './run-input.js';
 import { resolvePlannerTargetVideoModel } from './planner-target-video-model.js';
+import { hasUsableProviderRuntimeConfig, resolveProviderRuntimeConfigForUser } from './provider-runtime-config.js';
 import { resolveUserDefaultModelSelection } from './user-model-defaults.js';
 
 interface QueuePlannerGenerateDocRunArgs {
@@ -24,7 +25,8 @@ interface QueuePlannerGenerateDocRunArgs {
 type QueuePlannerGenerateDocRunError =
   | 'NOT_FOUND'
   | 'MODEL_NOT_FOUND'
-  | 'PLANNER_AGENT_NOT_CONFIGURED';
+  | 'PLANNER_AGENT_NOT_CONFIGURED'
+  | 'PROVIDER_NOT_CONFIGURED';
 
 export type QueuePlannerGenerateDocRunResult =
   | {
@@ -96,6 +98,7 @@ async function queuePlannerGenerateDocRunWithDeps(
     findOrCreateActivePlannerSession: typeof findOrCreateActivePlannerSessionWithDeps;
     resolvePlannerAgentSelection: typeof resolvePlannerAgentSelection;
     resolvePlannerTargetVideoModel: typeof resolvePlannerTargetVideoModel;
+    resolveProviderRuntimeConfigForUser: typeof resolveProviderRuntimeConfigForUser;
     buildPlannerGenerationPrompt: typeof buildPlannerGenerationPrompt;
     createPlannerUserMessage: typeof createPlannerUserMessage;
     prisma: Pick<typeof prisma, 'projectCreationConfig' | 'plannerMessage' | 'plannerOutlineVersion' | 'plannerRefinementVersion' | '$transaction' | 'plannerSession' | 'episode'>;
@@ -118,6 +121,16 @@ async function queuePlannerGenerateDocRunWithDeps(
   });
   if (!resolvedModel) {
     return { ok: false, error: 'MODEL_NOT_FOUND' };
+  }
+
+  const providerRuntimeConfig = await deps.resolveProviderRuntimeConfigForUser({
+    userId: args.userId,
+    providerId: resolvedModel.provider.id,
+    fallbackCode: resolvedModel.provider.code,
+    fallbackBaseUrl: resolvedModel.provider.baseUrl,
+  });
+  if (!hasUsableProviderRuntimeConfig(providerRuntimeConfig)) {
+    return { ok: false, error: 'PROVIDER_NOT_CONFIGURED' };
   }
 
   const plannerSession = await deps.findOrCreateActivePlannerSession(episode.project.id, episode.id, args.userId, { prisma: deps.prisma });
@@ -358,6 +371,7 @@ export async function queuePlannerGenerateDocRun(
     findOrCreateActivePlannerSession: findOrCreateActivePlannerSessionWithDeps,
     resolvePlannerAgentSelection,
     resolvePlannerTargetVideoModel,
+    resolveProviderRuntimeConfigForUser,
     buildPlannerGenerationPrompt,
     createPlannerUserMessage,
     prisma,

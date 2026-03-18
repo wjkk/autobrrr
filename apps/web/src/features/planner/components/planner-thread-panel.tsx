@@ -1,8 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import type { PlannerStepStatus } from '@aiv/domain';
 import { cx } from '@aiv/ui';
 
+import type { PlannerNotice } from '../lib/planner-notice';
 import { formatPlannerDebugRunLabel } from '../lib/planner-page-helpers';
 import { sekoPlanThreadData } from '../lib/seko-plan-thread-data';
 import type { PlannerThreadMessage } from '../lib/planner-thread';
@@ -39,7 +41,7 @@ interface PlannerThreadPanelProps {
     appliedAt: string | null;
   } | null;
   assistantName: string;
-  notice: string | null;
+  notice: PlannerNotice | null;
   onOpenDebugRun?: (debugRunId: string) => void;
   onRequirementChange: (value: string) => void;
   onSubmit: () => void;
@@ -384,7 +386,35 @@ export function PlannerThreadPanel(props: PlannerThreadPanelProps) {
           </div>
         </form>
 
-        {props.notice ? <p className={styles.notice}>{props.notice}</p> : null}
+        {props.notice ? (
+          props.notice.detail || props.notice.action ? (
+            <article
+              className={cx(
+                styles.noticeCard,
+                props.notice.tone === 'warning' && styles.noticeCardWarning,
+                props.notice.tone === 'error' && styles.noticeCardError,
+              )}
+            >
+              <strong>{props.notice.message}</strong>
+              {props.notice.detail ? <p>{props.notice.detail}</p> : null}
+              {props.notice.action ? (
+                <Link href={props.notice.action.href} className={styles.noticeAction}>
+                  {props.notice.action.label}
+                </Link>
+              ) : null}
+            </article>
+          ) : (
+            <p
+              className={cx(
+                styles.notice,
+                props.notice.tone === 'warning' && styles.noticeWarning,
+                props.notice.tone === 'error' && styles.noticeError,
+              )}
+            >
+              {props.notice.message}
+            </p>
+          )
+        ) : null}
       </div>
     </div>
   );

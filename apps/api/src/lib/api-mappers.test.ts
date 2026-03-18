@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import type { Asset, Run, Shot } from '@prisma/client';
 
-import { mapAsset, mapRun, mapShot } from './api-mappers.js';
+import { __testables, mapAsset, mapRun, mapShot } from './api-mappers.js';
 
 test('mapAsset normalizes media enums and timestamps for api output', () => {
   const createdAt = new Date('2026-03-17T00:00:00.000Z');
@@ -48,7 +48,7 @@ test('mapRun normalizes enum fields and nullable timestamps', () => {
     status: 'RUNNING',
     executorType: 'WORKER',
     inputJson: { prompt: '夜晚街头追逐' },
-    outputJson: { providerData: { task_id: 'task-1' } },
+    outputJson: { executionMode: 'live', providerData: { task_id: 'task-1' } },
     errorCode: null,
     errorMessage: null,
     idempotencyKey: 'idem-1',
@@ -68,7 +68,15 @@ test('mapRun normalizes enum fields and nullable timestamps', () => {
   assert.equal(mapped.status, 'running');
   assert.equal(mapped.executorType, 'worker');
   assert.equal(mapped.lastPolledAt, null);
-  assert.deepEqual(mapped.output, { providerData: { task_id: 'task-1' } });
+  assert.deepEqual(mapped.output, { executionMode: 'live', providerData: { task_id: 'task-1' } });
+  assert.equal(mapped.executionMode, 'live');
+});
+
+test('readRunExecutionMode prefers explicit output execution mode and falls back to mocked provider data', () => {
+  assert.equal(__testables.readRunExecutionMode({ executionMode: 'fallback' }), 'fallback');
+  assert.equal(__testables.readRunExecutionMode({ providerData: { mocked: true } }), 'fallback');
+  assert.equal(__testables.readRunExecutionMode({ providerData: { mocked: false } }), 'live');
+  assert.equal(__testables.readRunExecutionMode(null), null);
 });
 
 test('mapShot normalizes active version enums and preserves nullable version', () => {

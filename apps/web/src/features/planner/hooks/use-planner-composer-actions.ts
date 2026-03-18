@@ -5,6 +5,7 @@ import { useCallback } from 'react';
 import { plannerCopy } from '@/lib/copy';
 
 import { confirmPlannerOutlineVersion, type PlannerRuntimeApiContext } from '../lib/planner-api';
+import { buildPlannerNoticeFromError, type PlannerNoticeInput } from '../lib/planner-notice';
 import type { PlannerThreadMessage } from '../lib/planner-thread';
 import { sekoPlanThreadData } from '../lib/seko-plan-thread-data';
 import type { PlannerRefinementTrigger } from './use-planner-refinement';
@@ -29,7 +30,7 @@ interface UsePlannerComposerActionsOptions {
   setPlannerSubmitting: (value: boolean) => void;
   setOutlineConfirmed: (value: boolean) => void;
   setMessages: (updater: (current: PlannerThreadMessage[]) => PlannerThreadMessage[]) => void;
-  setNotice: (message: string | null) => void;
+  setNotice: (message: PlannerNoticeInput) => void;
   nextLocalId: (prefix: string) => string;
 }
 
@@ -58,7 +59,7 @@ export function usePlannerComposerActions(options: UsePlannerComposerActionsOpti
           options.setNotice('已确认当前大纲，下一步可开始细化剧情内容。');
         })
         .catch((error: unknown) => {
-          options.setNotice(error instanceof Error ? error.message : '确认大纲失败。');
+          options.setNotice(buildPlannerNoticeFromError(error, '确认大纲失败。'));
         })
         .finally(() => {
           options.setPlannerSubmitting(false);
@@ -89,7 +90,7 @@ export function usePlannerComposerActions(options: UsePlannerComposerActionsOpti
     if (options.runtimeApi) {
       options.submitPlannerRunViaApi('rerun', instruction || '请重新细化剧情内容。').catch((error: unknown) => {
         options.setPlannerSubmitting(false);
-        options.setNotice(error instanceof Error ? error.message : '策划生成失败，请稍后重试。');
+        options.setNotice(buildPlannerNoticeFromError(error, '策划生成失败，请稍后重试。'));
       });
       options.setHistoryMenuOpen(false);
       options.setNotice('已提交新的策划生成任务。');
@@ -122,7 +123,7 @@ export function usePlannerComposerActions(options: UsePlannerComposerActionsOpti
       const trigger = options.runtimeActiveOutlineId ? 'update_outline' : 'generate_outline';
       options.submitPlannerRunViaApi(trigger, instruction).catch((error: unknown) => {
         options.setPlannerSubmitting(false);
-        options.setNotice(error instanceof Error ? error.message : '策划生成失败，请稍后重试。');
+        options.setNotice(buildPlannerNoticeFromError(error, '策划生成失败，请稍后重试。'));
       });
       options.setNotice(options.runtimeActiveOutlineId ? '已提交大纲修改任务。' : '已提交剧本大纲生成任务。');
       return;

@@ -18,6 +18,10 @@ export interface ProviderRuntimeConfig {
   ownerUserId: string | null;
 }
 
+export function hasUsableProviderRuntimeConfig(config: ProviderRuntimeConfig) {
+  return Boolean(config.enabled && config.apiKey && config.baseUrl);
+}
+
 type RuntimeProviderRecord = {
   id: string;
   code: string;
@@ -196,6 +200,7 @@ export async function resolveRunProviderRuntimeConfig(run: Run): Promise<Provide
 }
 
 export const __testables = {
+  hasUsableProviderRuntimeConfig,
   resolveProviderRuntimeConfigForUserWithDeps,
   resolveRunProviderRuntimeConfigWithDeps,
 };

@@ -1,4 +1,4 @@
-import { mapAsset } from './api-mappers.js';
+import { mapAsset, readRunExecutionMode } from './api-mappers.js';
 import { prisma } from './prisma.js';
 import { requireOwnedEpisode } from './workspace-shared.js';
 
@@ -73,6 +73,7 @@ function mapPlannerLatestRun(
   return {
     id: latestPlannerRun.id,
     status: latestPlannerRun.status.toLowerCase(),
+    executionMode: readRunExecutionMode(latestPlannerRun.outputJson),
     providerStatus: latestPlannerRun.providerStatus,
     generatedText: (outputJson?.generatedText as string | undefined) ?? null,
     structuredDoc: (outputJson?.structuredDoc as Record<string, unknown> | undefined) ?? null,

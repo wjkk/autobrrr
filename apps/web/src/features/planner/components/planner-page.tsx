@@ -2,13 +2,14 @@
 
 import type { PlannerStepStatus } from '@aiv/domain';
 import { cx } from '@aiv/ui';
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 
 import {
   type ApiPlannerWorkspace,
   type PlannerRuntimeApiContext,
 } from '../lib/planner-api';
+import { buildPlannerNoticeFromError, toPlannerNotice, type PlannerNotice, type PlannerNoticeInput } from '../lib/planner-notice';
 import type { PlannerPageData } from '../lib/planner-page-data';
 import {
   ASPECT_RATIO_OPTIONS,
@@ -81,7 +82,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
   const [remainingPoints, setRemainingPoints] = useState(studio.creation.points);
 
   const [requirement, setRequirement] = useState(studio.planner.submittedRequirement || sekoPlanThreadData.userPrompt);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNoticeState] = useState<PlannerNotice | null>(null);
   const [outlineConfirmed, setOutlineConfirmed] = useState(false);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
   const [runtimeWorkspace, setRuntimeWorkspace] = useState<ApiPlannerWorkspace | null>(initialWorkspace ?? null);
@@ -94,12 +95,15 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
   const [structuredPlannerDoc, setStructuredPlannerDoc] = useState<PlannerStructuredDoc | null>(initialStructuredDoc ?? null);
   const [plannerSubmitting, setPlannerSubmitting] = useState(false);
   const { streamState, startPlannerStream, stopPlannerStream } = usePlannerStream(runtimeApi);
+  const setNotice = useCallback((value: PlannerNoticeInput) => {
+    setNoticeState(toPlannerNotice(value));
+  }, []);
 
   const plannerDoc = useMemo(() => (structuredPlannerDoc ? toPlannerSeedData(structuredPlannerDoc, sekoPlanData) : sekoPlanData), [structuredPlannerDoc]);
   const workspaceStepAnalysis = streamState?.steps.length ? streamState.steps : (runtimeWorkspace?.activeRefinement?.stepAnalysis ?? []);
-  const workspaceHistoryVersions = runtimeWorkspace?.refinementVersions ?? [];
   const runtimeActiveOutline = runtimeWorkspace?.activeOutline ?? null;
   const runtimeActiveRefinement = runtimeWorkspace?.activeRefinement ?? null;
+  const latestPlannerExecutionMode = runtimeWorkspace?.latestPlannerRun?.executionMode ?? null;
 
   const {
     versions,
@@ -223,7 +227,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
     startPlannerStream,
     stopPlannerStream,
     setPlannerSubmitting,
-    onRunCompleted: async ({ trigger, instruction, generatedText, structuredDoc, workspace }) => {
+    onRunCompleted: async ({ trigger, instruction, executionMode, generatedText, structuredDoc, workspace }) => {
       if (!workspace) {
         setServerPlannerText(generatedText);
         setStructuredPlannerDoc(structuredDoc);
@@ -252,25 +256,27 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
       }
 
       setNotice(
-        workspace?.activeRefinement
-          ? trigger === 'confirm_outline'
-            ? '已完成细化并更新策划文档。'
-            : trigger === 'subject_only'
-              ? '已按要求局部重写主体并更新策划文档。'
-              : trigger === 'scene_only'
-                ? '已按要求局部重写场景并更新策划文档。'
-                : trigger === 'shots_only'
-                  ? '已按要求局部重写分镜并更新策划文档。'
-                  : trigger === 'subject_image'
-                    ? '已生成主体图片并回写到策划文档。'
-                    : trigger === 'scene_image'
-                      ? '已生成场景图片并回写到策划文档。'
-                      : trigger === 'shot_image'
-                        ? '已生成分镜草图并回写到策划文档。'
-                        : '已生成新的策划版本。'
-          : trigger === 'generate_outline' || trigger === 'update_outline'
-            ? '已生成新的剧本大纲版本。'
-            : '已生成剧本大纲，请确认后继续细化。',
+        `${executionMode === 'live' ? '已通过真实模型执行。' : executionMode === 'fallback' ? '当前结果来自回退生成。' : ''}${
+          workspace?.activeRefinement
+            ? trigger === 'confirm_outline'
+              ? '已完成细化并更新策划文档。'
+              : trigger === 'subject_only'
+                ? '已按要求局部重写主体并更新策划文档。'
+                : trigger === 'scene_only'
+                  ? '已按要求局部重写场景并更新策划文档。'
+                  : trigger === 'shots_only'
+                    ? '已按要求局部重写分镜并更新策划文档。'
+                    : trigger === 'subject_image'
+                      ? '已生成主体图片并回写到策划文档。'
+                      : trigger === 'scene_image'
+                        ? '已生成场景图片并回写到策划文档。'
+                        : trigger === 'shot_image'
+                          ? '已生成分镜草图并回写到策划文档。'
+                          : '已生成新的策划版本。'
+            : trigger === 'generate_outline' || trigger === 'update_outline'
+              ? '已生成新的剧本大纲版本。'
+              : '已生成剧本大纲，请确认后继续细化。'
+        }`,
       );
     },
     onRunFailed: (message) => {
@@ -498,7 +504,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
       try {
         await activateHistoryVersion(versionId);
       } catch (error) {
-        setNotice(error instanceof Error ? error.message : '切换策划版本失败。');
+        setNotice(buildPlannerNoticeFromError(error, '切换策划版本失败。'));
       } finally {
         setHistoryMenuOpen(false);
       }
@@ -567,6 +573,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
               activeEpisodeTitle={activeEpisode?.title ?? ''}
               fallbackEpisodeTitle={plannerDoc.episodeTitle}
               saveState={saveState}
+              latestExecutionMode={latestPlannerExecutionMode}
               activeDebugApplySource={activeDebugApplySource}
               historyMenuOpen={historyMenuOpen}
               historyVersions={historyVersions}

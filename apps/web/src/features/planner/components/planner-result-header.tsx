@@ -15,6 +15,7 @@ interface PlannerResultHeaderProps {
     | { status: 'saving'; message: string }
     | { status: 'saved'; message: string }
     | { status: 'error'; message: string };
+  latestExecutionMode?: 'live' | 'fallback' | null;
   activeDebugApplySource?: {
     debugRunId: string | null;
     appliedAt: string | null;
@@ -39,6 +40,7 @@ interface PlannerResultHeaderProps {
 
 export function PlannerResultHeader(props: PlannerResultHeaderProps) {
   const activeDebugRunId = props.activeDebugApplySource?.debugRunId ?? null;
+  const executionModeLabel = props.latestExecutionMode === 'live' ? '真实模型' : props.latestExecutionMode === 'fallback' ? '回退生成' : null;
 
   return (
     <header className={styles.resultHeader}>
@@ -49,6 +51,16 @@ export function PlannerResultHeader(props: PlannerResultHeaderProps) {
         </h2>
         <div className={styles.resultMetaRow}>
           <p>内容由 AI 生成</p>
+          {executionModeLabel ? (
+            <span
+              className={cx(
+                styles.executionModeBadge,
+                props.latestExecutionMode === 'live' ? styles.executionModeBadgeLive : styles.executionModeBadgeFallback,
+              )}
+            >
+              本次执行：{executionModeLabel}
+            </span>
+          ) : null}
           {props.activeDebugApplySource ? (
             <span className={styles.debugApplyBadge}>
               当前版本来自调试应用

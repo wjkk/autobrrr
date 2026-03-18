@@ -365,6 +365,46 @@ async function seedPlannerState(args: {
         isDefault: true,
       },
     });
+    await tx.userProviderConfig.upsert({
+      where: {
+        userId_providerId: {
+          userId: args.userId,
+          providerId: textProvider.id,
+        },
+      },
+      update: {
+        apiKey: 'smoke-text-key',
+        baseUrlOverride: textProvider.baseUrl,
+        enabled: true,
+      },
+      create: {
+        userId: args.userId,
+        providerId: textProvider.id,
+        apiKey: 'smoke-text-key',
+        baseUrlOverride: textProvider.baseUrl,
+        enabled: true,
+      },
+    });
+    await tx.userProviderConfig.upsert({
+      where: {
+        userId_providerId: {
+          userId: args.userId,
+          providerId: imageProvider.id,
+        },
+      },
+      update: {
+        apiKey: 'smoke-image-key',
+        baseUrlOverride: imageProvider.baseUrl,
+        enabled: true,
+      },
+      create: {
+        userId: args.userId,
+        providerId: imageProvider.id,
+        apiKey: 'smoke-image-key',
+        baseUrlOverride: imageProvider.baseUrl,
+        enabled: true,
+      },
+    });
 
     await tx.modelFamily.upsert({
       where: { slug: 'ark-seedance-2-video' },

@@ -643,6 +643,73 @@
   padding: 8px 10px;
 }
 
+.noticeWarning {
+  border-color: #fcd9bd;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.noticeError {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.noticeCard {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  border: 1px solid #c8d7f7;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+  color: #1e3a8a;
+  padding: 12px;
+}
+
+.noticeCard strong {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.noticeCard p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: inherit;
+}
+
+.noticeCardWarning {
+  border-color: #fcd9bd;
+  background: linear-gradient(180deg, #fffaf3 0%, #fff1df 100%);
+  color: #9a3412;
+}
+
+.noticeCardError {
+  border-color: #fecaca;
+  background: linear-gradient(180deg, #fff5f5 0%, #fee2e2 100%);
+  color: #b91c1c;
+}
+
+.noticeAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid currentColor;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.noticeAction:hover {
+  background: rgba(255, 255, 255, 0.92);
+}
+
 .rightPanel {
   min-height: 0;
   border: 1px solid var(--border-default);
@@ -744,6 +811,26 @@
   font-size: 11px;
   font-weight: 700;
   padding: 0 10px;
+}
+
+.executionModeBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0 10px;
+}
+
+.executionModeBadgeLive {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.executionModeBadgeFallback {
+  background: #fff7ed;
+  color: #c2410c;
 }
 
 .historyButton {

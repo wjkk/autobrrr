@@ -194,6 +194,15 @@ test('mock proxy adapter simulates submit, poll and callback transitions', async
   });
 });
 
+test('buildProviderNotConfiguredFailure returns a hard failure instead of mocked planner success', () => {
+  assert.deepEqual(__testables.buildProviderNotConfiguredFailure('ARK'), {
+    type: 'failed',
+    providerStatus: 'failed',
+    errorCode: 'PROVIDER_NOT_CONFIGURED',
+    errorMessage: 'ARK provider is not configured for this account. Configure and enable a usable provider before running planner AI.',
+  });
+});
+
 test('official adapter rejects poll and callback because no async provider behavior exists', async () => {
   const run = buildRun(buildProviderInput({
     modelProvider: {

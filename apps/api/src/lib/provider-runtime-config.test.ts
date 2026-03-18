@@ -5,6 +5,24 @@ import type { Run } from '@prisma/client';
 
 import { __testables } from './provider-runtime-config.js';
 
+test('hasUsableProviderRuntimeConfig requires enabled provider, baseUrl and apiKey', () => {
+  assert.equal(__testables.hasUsableProviderRuntimeConfig({
+    providerCode: 'ark',
+    baseUrl: 'https://ark.example.com',
+    apiKey: 'secret',
+    enabled: true,
+    ownerUserId: 'user-1',
+  }), true);
+
+  assert.equal(__testables.hasUsableProviderRuntimeConfig({
+    providerCode: 'ark',
+    baseUrl: 'https://ark.example.com',
+    apiKey: null,
+    enabled: true,
+    ownerUserId: 'user-1',
+  }), false);
+});
+
 test('resolveProviderRuntimeConfigForUserWithDeps falls back when provider is missing', async () => {
   const result = await __testables.resolveProviderRuntimeConfigForUserWithDeps(
     {

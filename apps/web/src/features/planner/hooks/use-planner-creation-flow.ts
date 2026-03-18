@@ -5,6 +5,7 @@ import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.
 
 import { finalizePlannerRefinement, type ApiPlannerWorkspace, type PlannerRuntimeApiContext } from '../lib/planner-api';
 import { resolvePlannerCreationActionState } from '../lib/planner-creation-flow-logic';
+import { buildPlannerNoticeFromError, type PlannerNoticeInput } from '../lib/planner-notice';
 import type { SekoActDraft } from '../lib/seko-plan-data';
 
 const BOOT_PROGRESS_STEPS = [28, 49, 67, 85, 100];
@@ -21,7 +22,7 @@ interface UsePlannerCreationFlowOptions {
   storyboardModelId: string;
   studioProjectId: string;
   refreshPlannerWorkspace: () => Promise<ApiPlannerWorkspace | null>;
-  setNotice: (message: string | null) => void;
+  setNotice: (message: PlannerNoticeInput) => void;
 }
 
 export function usePlannerCreationFlow(options: UsePlannerCreationFlowOptions) {
@@ -113,7 +114,7 @@ export function usePlannerCreationFlow(options: UsePlannerCreationFlowOptions) {
       clearPendingTimers();
       setBooting(false);
       setBootProgress(0);
-      options.setNotice(error instanceof Error ? error.message : '确认策划并进入创作失败。');
+      options.setNotice(buildPlannerNoticeFromError(error, '确认策划并进入创作失败。'));
     }
   }, [clearPendingTimers, creationReady, hasReadyShots, hasSufficientPoints, options, shouldFinalizeBeforeNavigate]);
 

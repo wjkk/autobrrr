@@ -55,6 +55,7 @@ test('buildProviderOutputJson merges provider data into existing object payloads
 
   assert.deepEqual(merged, {
     preserved: true,
+    executionMode: 'live',
     providerData: { id: 'provider-1' },
   });
   assert.equal(missing, undefined);

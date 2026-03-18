@@ -10,6 +10,7 @@ import {
   type ApiPlannerWorkspace,
   type PlannerRuntimeApiContext,
 } from '../lib/planner-api';
+import { buildPlannerNoticeFromError, type PlannerNoticeInput } from '../lib/planner-notice';
 import type { PlannerStructuredDoc } from '../lib/planner-structured-doc';
 import { toStructuredPlannerDoc } from '../lib/planner-structured-doc';
 import type { SekoImageCard, SekoPlanData } from '../lib/seko-plan-data';
@@ -59,7 +60,7 @@ interface UsePlannerAssetActionsOptions {
   setPlannerImageAssets: (updater: (current: ApiPlannerAssetOption[]) => ApiPlannerAssetOption[]) => void;
   setAssetUploadPending: (value: 'subject' | 'scene' | null) => void;
   setPlannerSubmitting: (value: boolean) => void;
-  setNotice: (message: string | null) => void;
+  setNotice: (message: PlannerNoticeInput) => void;
   resetSubjectUploadInput: () => void;
   resetSceneUploadInput: () => void;
 }
@@ -86,7 +87,7 @@ export function usePlannerAssetActions(options: UsePlannerAssetActionsOptions) {
       options.setSubjectAdjustMode('upload');
       options.setNotice('主体参考图已上传。');
     } catch (error) {
-      options.setNotice(error instanceof Error ? error.message : '主体参考图上传失败。');
+      options.setNotice(buildPlannerNoticeFromError(error, '主体参考图上传失败。'));
     } finally {
       options.setAssetUploadPending(null);
       options.resetSubjectUploadInput();
@@ -124,7 +125,7 @@ export function usePlannerAssetActions(options: UsePlannerAssetActionsOptions) {
         await options.refreshPlannerWorkspace();
         options.setNotice('主体设定已更新。');
       } catch (error) {
-        options.setNotice(error instanceof Error ? error.message : '主体设定更新失败。');
+        options.setNotice(buildPlannerNoticeFromError(error, '主体设定更新失败。'));
       }
       options.closeSubjectAdjustDialog();
       return;
@@ -182,7 +183,7 @@ export function usePlannerAssetActions(options: UsePlannerAssetActionsOptions) {
       options.setSceneAdjustMode('upload');
       options.setNotice('场景参考图已上传。');
     } catch (error) {
-      options.setNotice(error instanceof Error ? error.message : '场景参考图上传失败。');
+      options.setNotice(buildPlannerNoticeFromError(error, '场景参考图上传失败。'));
     } finally {
       options.setAssetUploadPending(null);
       options.resetSceneUploadInput();
@@ -220,7 +221,7 @@ export function usePlannerAssetActions(options: UsePlannerAssetActionsOptions) {
         await options.refreshPlannerWorkspace();
         options.setNotice('场景设定已更新。');
       } catch (error) {
-        options.setNotice(error instanceof Error ? error.message : '场景设定更新失败。');
+        options.setNotice(buildPlannerNoticeFromError(error, '场景设定更新失败。'));
       }
       options.closeSceneAdjustDialog();
       return;
@@ -276,7 +277,7 @@ export function usePlannerAssetActions(options: UsePlannerAssetActionsOptions) {
       options.setNotice('已提交主体局部重写任务。');
     } catch (error) {
       options.setPlannerSubmitting(false);
-      options.setNotice(error instanceof Error ? error.message : '主体局部重写失败。');
+      options.setNotice(buildPlannerNoticeFromError(error, '主体局部重写失败。'));
     }
   }, [options]);
 
@@ -298,7 +299,7 @@ export function usePlannerAssetActions(options: UsePlannerAssetActionsOptions) {
       options.setNotice('已提交主体图片生成任务。');
     } catch (error) {
       options.setPlannerSubmitting(false);
-      options.setNotice(error instanceof Error ? error.message : '主体图片生成失败。');
+      options.setNotice(buildPlannerNoticeFromError(error, '主体图片生成失败。'));
     }
   }, [options]);
 
@@ -321,7 +322,7 @@ export function usePlannerAssetActions(options: UsePlannerAssetActionsOptions) {
       options.setNotice('已提交场景局部重写任务。');
     } catch (error) {
       options.setPlannerSubmitting(false);
-      options.setNotice(error instanceof Error ? error.message : '场景局部重写失败。');
+      options.setNotice(buildPlannerNoticeFromError(error, '场景局部重写失败。'));
     }
   }, [options]);
 
@@ -343,7 +344,7 @@ export function usePlannerAssetActions(options: UsePlannerAssetActionsOptions) {
       options.setNotice('已提交场景图片生成任务。');
     } catch (error) {
       options.setPlannerSubmitting(false);
-      options.setNotice(error instanceof Error ? error.message : '场景图片生成失败。');
+      options.setNotice(buildPlannerNoticeFromError(error, '场景图片生成失败。'));
     }
   }, [options]);
 

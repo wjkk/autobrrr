@@ -120,6 +120,13 @@ test('queuePlannerGenerateDocRunWithDeps returns early failure states', async ()
       },
       resolvePlannerAgentSelection: async () => null,
       resolvePlannerTargetVideoModel: async () => null,
+      resolveProviderRuntimeConfigForUser: async () => ({
+        providerCode: 'ark',
+        baseUrl: 'https://ark.example.com',
+        apiKey: 'secret',
+        enabled: true,
+        ownerUserId: 'user-1',
+      }),
       buildPlannerGenerationPrompt: () => buildPromptPackage() as never,
       createPlannerUserMessage: async () => buildUserMessage() as never,
       prisma: {} as never,
@@ -142,6 +149,13 @@ test('queuePlannerGenerateDocRunWithDeps returns early failure states', async ()
       },
       resolvePlannerAgentSelection: async () => null,
       resolvePlannerTargetVideoModel: async () => null,
+      resolveProviderRuntimeConfigForUser: async () => ({
+        providerCode: 'ark',
+        baseUrl: 'https://ark.example.com',
+        apiKey: 'secret',
+        enabled: true,
+        ownerUserId: 'user-1',
+      }),
       buildPlannerGenerationPrompt: () => buildPromptPackage() as never,
       createPlannerUserMessage: async () => buildUserMessage() as never,
       prisma: {} as never,
@@ -169,6 +183,13 @@ test('queuePlannerGenerateDocRunWithDeps returns PLANNER_AGENT_NOT_CONFIGURED wh
       findOrCreateActivePlannerSession: async () => buildPlannerSession(null),
       resolvePlannerAgentSelection: async () => null,
       resolvePlannerTargetVideoModel: async () => null,
+      resolveProviderRuntimeConfigForUser: async () => ({
+        providerCode: 'ark',
+        baseUrl: 'https://ark.example.com',
+        apiKey: 'secret',
+        enabled: true,
+        ownerUserId: 'user-1',
+      }),
       buildPlannerGenerationPrompt: () => buildPromptPackage() as never,
       createPlannerUserMessage: async () => buildUserMessage() as never,
       prisma: {
@@ -186,6 +207,45 @@ test('queuePlannerGenerateDocRunWithDeps returns PLANNER_AGENT_NOT_CONFIGURED wh
   );
 
   assert.deepEqual(result, { ok: false, error: 'PLANNER_AGENT_NOT_CONFIGURED' });
+});
+
+test('queuePlannerGenerateDocRunWithDeps returns PROVIDER_NOT_CONFIGURED when text provider is unavailable', async () => {
+  const result = await __testables.queuePlannerGenerateDocRunWithDeps(
+    {
+      projectId: 'project-1',
+      episodeId: 'episode-1',
+      userId: 'user-1',
+      prompt: '生成策划',
+    },
+    {
+      findOwnedEpisode: async () => buildOwnedEpisode() as never,
+      resolveUserDefaultModelSelection: async () => ({ familySlug: 'doubao', endpointSlug: 'doubao-default' }),
+      resolveModelSelection: async () => ({
+        family: { id: 'family-1', slug: 'doubao', name: 'Doubao' },
+        provider: { id: 'provider-1', code: 'ark', name: 'Ark', providerType: 'OFFICIAL', baseUrl: 'https://ark.example.com' },
+        endpoint: { id: 'endpoint-1', slug: 'doubao-default', label: 'Doubao', remoteModelKey: 'doubao' },
+      } as never),
+      findOrCreateActivePlannerSession: async () => {
+        throw new Error('should not create session');
+      },
+      resolvePlannerAgentSelection: async () => {
+        throw new Error('should not resolve planner agent');
+      },
+      resolvePlannerTargetVideoModel: async () => null,
+      resolveProviderRuntimeConfigForUser: async () => ({
+        providerCode: 'ark',
+        baseUrl: 'https://ark.example.com',
+        apiKey: null,
+        enabled: true,
+        ownerUserId: 'user-1',
+      }),
+      buildPlannerGenerationPrompt: () => buildPromptPackage() as never,
+      createPlannerUserMessage: async () => buildUserMessage() as never,
+      prisma: {} as never,
+    },
+  );
+
+  assert.deepEqual(result, { ok: false, error: 'PROVIDER_NOT_CONFIGURED' });
 });
 
 test('queuePlannerGenerateDocRunWithDeps builds outline and refinement trigger types correctly', async () => {
@@ -229,6 +289,13 @@ test('queuePlannerGenerateDocRunWithDeps builds outline and refinement trigger t
       }, 'seedance-2-0'),
     }),
     buildPlannerGenerationPrompt: () => buildPromptPackage() as never,
+    resolveProviderRuntimeConfigForUser: async () => ({
+      providerCode: 'ark',
+      baseUrl: 'https://ark.example.com',
+      apiKey: 'secret',
+      enabled: true,
+      ownerUserId: 'user-1',
+    }),
     createPlannerUserMessage: async () => buildUserMessage() as never,
     prisma: {
       projectCreationConfig: { findUnique: async () => ({ selectedTab: '短剧漫剧', selectedSubtype: '对话剧情', scriptContent: null, scriptSourceName: null, settingsJson: null, subjectProfile: null, stylePreset: null, imageModelEndpoint: null }) },

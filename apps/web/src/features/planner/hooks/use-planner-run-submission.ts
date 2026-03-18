@@ -34,6 +34,7 @@ interface UsePlannerRunSubmissionOptions {
   onRunCompleted: (args: {
     trigger: PlannerRunTrigger;
     instruction: string;
+    executionMode: 'live' | 'fallback' | null;
     generatedText: string;
     structuredDoc: PlannerStructuredDoc | null;
     workspace: ApiPlannerWorkspace | null;
@@ -58,6 +59,7 @@ export function usePlannerRunSubmission(options: UsePlannerRunSubmissionOptions)
         await options.onRunCompleted({
           trigger,
           instruction,
+          executionMode: run.executionMode ?? run.output?.executionMode ?? null,
           generatedText,
           structuredDoc: run.output?.structuredDoc ?? null,
           workspace,
@@ -94,8 +96,6 @@ export function usePlannerRunSubmission(options: UsePlannerRunSubmissionOptions)
       projectId: options.runtimeApi.projectId,
       episodeId: options.runtimeApi.episodeId,
       prompt: instruction,
-      modelFamily: 'doubao-text',
-      modelEndpoint: 'ark-doubao-seed-1-8-251228',
     });
 
     options.startPlannerStream(result.run.id);

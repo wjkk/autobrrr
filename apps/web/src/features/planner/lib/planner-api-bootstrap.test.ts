@@ -112,6 +112,7 @@ test('planner api bootstrap prefers refinement doc then outline preview and late
     latestPlannerRun: {
       id: 'run-1',
       status: 'succeeded',
+      executionMode: 'live' as const,
       providerStatus: 'completed',
       generatedText: 'generated',
       structuredDoc: latestRunStructuredDoc,

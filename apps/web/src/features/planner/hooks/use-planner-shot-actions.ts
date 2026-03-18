@@ -3,6 +3,7 @@
 import { useCallback } from 'react';
 
 import { deletePlannerEntity, patchPlannerEntity, type ApiPlannerWorkspace, type PlannerRuntimeApiContext } from '../lib/planner-api';
+import { buildPlannerNoticeFromError, type PlannerNoticeInput } from '../lib/planner-notice';
 import { toStructuredPlannerDoc, type PlannerStructuredDoc } from '../lib/planner-structured-doc';
 import type { PlannerShotDraftState, PlannerShotPointer } from '../lib/planner-shot-editor';
 import type { SekoActDraft, SekoPlanData } from '../lib/seko-plan-data';
@@ -29,7 +30,7 @@ interface UsePlannerShotActionsOptions {
   cancelShotInlineEditor: () => void;
   closeShotDeleteDialog: () => void;
   setPlannerSubmitting: (value: boolean) => void;
-  setNotice: (message: string | null) => void;
+  setNotice: (message: PlannerNoticeInput) => void;
   updateShot: (actId: string, shotId: string, updater: (shot: SekoActDraft['shots'][number]) => SekoActDraft['shots'][number]) => void;
   deleteShot: (actId: string, shotId: string) => void;
 }
@@ -60,7 +61,7 @@ export function usePlannerShotActions(options: UsePlannerShotActionsOptions) {
         await options.refreshPlannerWorkspace();
         options.setNotice('分镜内容已更新。');
       } catch (error: unknown) {
-        options.setNotice(error instanceof Error ? error.message : '分镜更新失败。');
+        options.setNotice(buildPlannerNoticeFromError(error, '分镜更新失败。'));
       }
       options.cancelShotInlineEditor();
       return;
@@ -119,7 +120,7 @@ export function usePlannerShotActions(options: UsePlannerShotActionsOptions) {
       options.setNotice('已提交分镜局部重写任务。');
     } catch (error: unknown) {
       options.setPlannerSubmitting(false);
-      options.setNotice(error instanceof Error ? error.message : '分镜局部重写失败。');
+      options.setNotice(buildPlannerNoticeFromError(error, '分镜局部重写失败。'));
     }
   }, [options]);
 
@@ -140,7 +141,7 @@ export function usePlannerShotActions(options: UsePlannerShotActionsOptions) {
       options.setNotice('已提交分镜草图生成任务。');
     } catch (error: unknown) {
       options.setPlannerSubmitting(false);
-      options.setNotice(error instanceof Error ? error.message : '分镜草图生成失败。');
+      options.setNotice(buildPlannerNoticeFromError(error, '分镜草图生成失败。'));
     }
   }, [options]);
 
@@ -175,7 +176,7 @@ export function usePlannerShotActions(options: UsePlannerShotActionsOptions) {
       options.setNotice(`已提交 ${act.title} 的幕级重写任务。`);
     } catch (error: unknown) {
       options.setPlannerSubmitting(false);
-      options.setNotice(error instanceof Error ? error.message : '幕级局部重写失败。');
+      options.setNotice(buildPlannerNoticeFromError(error, '幕级局部重写失败。'));
     }
   }, [options]);
 
@@ -193,7 +194,7 @@ export function usePlannerShotActions(options: UsePlannerShotActionsOptions) {
         await options.refreshPlannerWorkspace();
         options.setNotice('分镜已删除。');
       } catch (error: unknown) {
-        options.setNotice(error instanceof Error ? error.message : '删除分镜失败。');
+        options.setNotice(buildPlannerNoticeFromError(error, '删除分镜失败。'));
       }
       options.closeShotDeleteDialog();
       return;

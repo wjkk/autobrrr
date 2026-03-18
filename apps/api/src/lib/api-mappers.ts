@@ -1,5 +1,26 @@
 import type { Asset, Run, Shot } from '@prisma/client';
 
+export function readRunExecutionMode(outputJson: unknown): 'live' | 'fallback' | null {
+  const output =
+    outputJson && typeof outputJson === 'object' && !Array.isArray(outputJson)
+      ? (outputJson as Record<string, unknown>)
+      : null;
+  const direct = typeof output?.executionMode === 'string' ? output.executionMode.trim().toLowerCase() : null;
+  if (direct === 'live' || direct === 'fallback') {
+    return direct;
+  }
+
+  const providerData =
+    output?.providerData && typeof output.providerData === 'object' && !Array.isArray(output.providerData)
+      ? (output.providerData as Record<string, unknown>)
+      : null;
+  if (providerData && 'mocked' in providerData) {
+    return providerData.mocked === true ? 'fallback' : 'live';
+  }
+
+  return null;
+}
+
 export function mapAsset(asset: Asset) {
   return {
     id: asset.id,
@@ -37,6 +58,7 @@ export function mapRun(run: Run) {
     executorType: run.executorType.toLowerCase(),
     input: run.inputJson,
     output: run.outputJson,
+    executionMode: readRunExecutionMode(run.outputJson),
     errorCode: run.errorCode,
     errorMessage: run.errorMessage,
     idempotencyKey: run.idempotencyKey,
@@ -50,6 +72,10 @@ export function mapRun(run: Run) {
     createdAt: run.createdAt.toISOString(),
   };
 }
+
+export const __testables = {
+  readRunExecutionMode,
+};
 
 export function mapShot(shot: Shot & { activeVersion?: { id: string; label: string; mediaKind: string; status: string } | null }) {
   return {

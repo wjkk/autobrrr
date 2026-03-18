@@ -100,6 +100,7 @@ export interface ApiPlannerWorkspace {
   latestPlannerRun: {
     id: string;
     status: string;
+    executionMode: 'live' | 'fallback' | null;
     providerStatus: string | null;
     generatedText: string | null;
     structuredDoc: PlannerStructuredDoc | null;
@@ -435,6 +436,29 @@ interface ApiEnvelopeFailure {
 
 type ApiEnvelope<T> = ApiEnvelopeSuccess<T> | ApiEnvelopeFailure;
 
+export class PlannerApiError extends Error {
+  code: string;
+  status: number;
+  details?: unknown;
+
+  constructor(args: {
+    message: string;
+    code: string;
+    status: number;
+    details?: unknown;
+  }) {
+    super(args.message);
+    this.name = 'PlannerApiError';
+    this.code = args.code;
+    this.status = args.status;
+    this.details = args.details;
+  }
+}
+
+export function isPlannerApiError(error: unknown): error is PlannerApiError {
+  return error instanceof PlannerApiError;
+}
+
 async function plannerJsonRequest<T>(path: string, init?: RequestInit, fallbackMessage?: string) {
   const response = await fetch(path, {
     ...init,
@@ -445,10 +469,21 @@ async function plannerJsonRequest<T>(path: string, init?: RequestInit, fallbackM
     },
   });
 
-  const payload = (await response.json()) as ApiEnvelope<T>;
-  if (!response.ok || !payload.ok) {
-    const errorPayload = payload as ApiEnvelopeFailure;
-    throw new Error(errorPayload.error?.message ?? fallbackMessage ?? `请求失败：${path}`);
+  let payload: ApiEnvelope<T> | null = null;
+  try {
+    payload = (await response.json()) as ApiEnvelope<T>;
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok || !payload || !payload.ok) {
+    const errorPayload = payload as ApiEnvelopeFailure | null;
+    throw new PlannerApiError({
+      message: errorPayload?.error?.message ?? fallbackMessage ?? `请求失败：${path}`,
+      code: errorPayload?.error?.code ?? 'REQUEST_FAILED',
+      status: response.status,
+      details: errorPayload?.error?.details,
+    });
   }
 
   return payload.data;
@@ -630,8 +665,8 @@ export async function submitPlannerGenerateDoc(args: {
   projectId: string;
   episodeId: string;
   prompt: string;
-  modelFamily: string;
-  modelEndpoint: string;
+  modelFamily?: string;
+  modelEndpoint?: string;
 }) {
   return plannerJsonRequest<{ run: { id: string; status: string } }>(
     `/api/planner/projects/${encodeURIComponent(args.projectId)}/generate-doc`,
@@ -640,8 +675,8 @@ export async function submitPlannerGenerateDoc(args: {
       body: JSON.stringify({
         episodeId: args.episodeId,
         prompt: args.prompt,
-        modelFamily: args.modelFamily,
-        modelEndpoint: args.modelEndpoint,
+        ...(args.modelFamily ? { modelFamily: args.modelFamily } : {}),
+        ...(args.modelEndpoint ? { modelEndpoint: args.modelEndpoint } : {}),
       }),
     },
     '提交策划生成任务失败。',
@@ -673,7 +708,9 @@ export async function fetchPlannerRun(args: {
 }) {
   return plannerJsonRequest<{
     status: string;
+    executionMode: 'live' | 'fallback' | null;
     output: {
+      executionMode?: 'live' | 'fallback' | null;
       generatedText?: string;
       structuredDoc?: PlannerStructuredDoc | null;
     } | null;
@@ -701,10 +738,21 @@ export async function uploadPlannerImageAsset(args: {
     body: formData,
   });
 
-  const payload = (await response.json()) as ApiEnvelope<ApiPlannerAssetOption>;
-  if (!response.ok || !payload.ok) {
-    const errorPayload = payload as ApiEnvelopeFailure;
-    throw new Error(errorPayload.error?.message ?? '上传素材失败。');
+  let payload: ApiEnvelope<ApiPlannerAssetOption> | null = null;
+  try {
+    payload = (await response.json()) as ApiEnvelope<ApiPlannerAssetOption>;
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok || !payload || !payload.ok) {
+    const errorPayload = payload as ApiEnvelopeFailure | null;
+    throw new PlannerApiError({
+      message: errorPayload?.error?.message ?? '上传素材失败。',
+      code: errorPayload?.error?.code ?? 'REQUEST_FAILED',
+      status: response.status,
+      details: errorPayload?.error?.details,
+    });
   }
 
   return payload.data;

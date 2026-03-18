@@ -16,6 +16,10 @@ function buildProviderOutputJson(run: Run, update: ProviderAdapterUpdate) {
 
   return {
     ...currentOutput,
+    executionMode:
+      update.providerOutput && typeof update.providerOutput === 'object' && 'mocked' in update.providerOutput
+        ? update.providerOutput.mocked === true ? 'fallback' : 'live'
+        : 'live',
     providerData: update.providerOutput,
   } as Prisma.InputJsonValue;
 }

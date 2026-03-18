@@ -72,6 +72,16 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
         });
       }
 
+      if (result.error === 'PROVIDER_NOT_CONFIGURED') {
+        return reply.code(409).send({
+          ok: false,
+          error: {
+            code: 'PROVIDER_NOT_CONFIGURED',
+            message: '请先在 /settings/providers 中为当前账号配置并启用可用的文本模型 Provider，再执行策划生成。',
+          },
+        });
+      }
+
       return reply.code(409).send({
         ok: false,
         error: {

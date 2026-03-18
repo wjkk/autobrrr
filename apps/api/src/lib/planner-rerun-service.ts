@@ -7,6 +7,7 @@ import { getPlannerRerunScopeTriggerType, getPlannerRerunScopeUserLabel, type Pl
 import { prisma } from './prisma.js';
 import { serializeRunInput } from './run-input.js';
 import { resolvePlannerTargetVideoModel } from './planner-target-video-model.js';
+import { hasUsableProviderRuntimeConfig, resolveProviderRuntimeConfigForUser } from './provider-runtime-config.js';
 import { resolveUserDefaultModelSelection } from './user-model-defaults.js';
 
 interface QueuePlannerPartialRerunArgs {
@@ -27,7 +28,8 @@ type QueuePlannerPartialRerunError =
   | 'REFINEMENT_LOCKED'
   | 'SCOPE_TARGET_NOT_FOUND'
   | 'MODEL_NOT_FOUND'
-  | 'PLANNER_AGENT_NOT_CONFIGURED';
+  | 'PLANNER_AGENT_NOT_CONFIGURED'
+  | 'PROVIDER_NOT_CONFIGURED';
 
 export type QueuePlannerPartialRerunResult =
   | {
@@ -293,6 +295,16 @@ export async function queuePlannerPartialRerun(
   });
   if (!resolvedModel) {
     return { ok: false, error: 'MODEL_NOT_FOUND' };
+  }
+
+  const providerRuntimeConfig = await resolveProviderRuntimeConfigForUser({
+    userId: args.userId,
+    providerId: resolvedModel.provider.id,
+    fallbackCode: resolvedModel.provider.code,
+    fallbackBaseUrl: resolvedModel.provider.baseUrl,
+  });
+  if (!hasUsableProviderRuntimeConfig(providerRuntimeConfig)) {
+    return { ok: false, error: 'PROVIDER_NOT_CONFIGURED' };
   }
 
   const selection = await resolvePlannerAgentSelection({

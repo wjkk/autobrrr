@@ -57,6 +57,15 @@ export interface ApiPlannerAssetOption {
   createdAt: string;
 }
 
+export interface ApiPlannerEntityRecommendation {
+  id: string;
+  title: string;
+  prompt: string;
+  rationale: string;
+  referenceAssetIds: string[];
+  referenceAssets: ApiPlannerAssetOption[];
+}
+
 export interface ApiPlannerDebugApplySource {
   debugRunId: string | null;
   appliedAt: string | null;
@@ -388,6 +397,13 @@ export interface ApiPlannerFinalizeResult {
   finalizedAt: string;
 }
 
+export interface ApiPlannerEntityRecommendationResult {
+  entityKind: 'subject' | 'scene';
+  entityId: string;
+  entityName: string;
+  recommendations: ApiPlannerEntityRecommendation[];
+}
+
 export type PlannerRerunScope =
   | {
       type: 'subject';
@@ -700,6 +716,30 @@ export async function submitPlannerMediaGeneration(args: {
       }),
     },
     '提交图片生成任务失败。',
+  );
+}
+
+export async function fetchPlannerEntityRecommendations(args: {
+  projectId: string;
+  episodeId: string;
+  entityKind: 'subject' | 'scene';
+  entityId: string;
+  signal?: AbortSignal;
+}) {
+  const search = new URLSearchParams({
+    episodeId: args.episodeId,
+  });
+  const path = args.entityKind === 'subject'
+    ? `/api/planner/projects/${encodeURIComponent(args.projectId)}/subjects/${encodeURIComponent(args.entityId)}/recommendations?${search.toString()}`
+    : `/api/planner/projects/${encodeURIComponent(args.projectId)}/scenes/${encodeURIComponent(args.entityId)}/recommendations?${search.toString()}`;
+
+  return plannerJsonRequest<ApiPlannerEntityRecommendationResult>(
+    path,
+    {
+      method: 'GET',
+      signal: args.signal,
+    },
+    '获取实体素材推荐失败。',
   );
 }
 

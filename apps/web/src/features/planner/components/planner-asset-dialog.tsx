@@ -3,6 +3,7 @@
 import { cx } from '@aiv/ui';
 import type { ReactNode } from 'react';
 
+import type { ApiPlannerEntityRecommendation } from '../lib/planner-api';
 import styles from './planner-page.module.css';
 
 interface PlannerAssetDialogThumb {
@@ -33,10 +34,13 @@ interface PlannerAssetDialogProps {
   selectedImage: string;
   uploadSlot?: ReactNode;
   extraField?: ReactNode;
+  recommendations?: ApiPlannerEntityRecommendation[];
+  recommendationsLoading?: boolean;
   onClose: () => void;
   onSelectThumb: (thumb: PlannerAssetDialogThumb) => void;
   onPromptChange: (value: string) => void;
   onPromptModeChange: (mode: 'upload' | 'ai') => void;
+  onApplyRecommendation?: (recommendation: ApiPlannerEntityRecommendation) => void;
   onGenerate: () => void;
   onRerun?: () => void;
   onApply: () => void;
@@ -129,6 +133,47 @@ export function PlannerAssetDialog(props: PlannerAssetDialogProps) {
               </div>
               {props.promptMode === 'upload' ? props.uploadSlot : null}
             </div>
+
+            {props.runtimeEnabled ? (
+              <div className={styles.assetField}>
+                <span>推荐方案</span>
+                <div className={styles.assetRecommendationList}>
+                  {props.recommendationsLoading ? (
+                    <div className={styles.assetRecommendationEmpty}>正在生成推荐...</div>
+                  ) : props.recommendations?.length ? (
+                    props.recommendations.map((recommendation) => {
+                      const previewAsset = recommendation.referenceAssets.find((asset) => Boolean(asset.sourceUrl)) ?? null;
+                      return (
+                        <article key={recommendation.id} className={styles.assetRecommendationCard}>
+                          <div className={styles.assetRecommendationHeader}>
+                            <div>
+                              <strong>{recommendation.title}</strong>
+                              <small>{recommendation.rationale}</small>
+                            </div>
+                            <button
+                              type="button"
+                              className={styles.assetRecommendationApply}
+                              onClick={() => props.onApplyRecommendation?.(recommendation)}
+                            >
+                              应用推荐
+                            </button>
+                          </div>
+                          <p>{recommendation.prompt}</p>
+                          <div className={styles.assetRecommendationMeta}>
+                            <span>{recommendation.referenceAssets.length > 0 ? `参考素材 ${recommendation.referenceAssets.length} 张` : '无需参考图也可直接生成'}</span>
+                            {previewAsset?.sourceUrl ? (
+                              <img src={previewAsset.sourceUrl} alt={previewAsset.fileName || recommendation.title} />
+                            ) : null}
+                          </div>
+                        </article>
+                      );
+                    })
+                  ) : (
+                    <div className={styles.assetRecommendationEmpty}>当前实体暂时没有可用推荐。</div>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
             <footer className={styles.assetModalFooter}>
               <span>{props.selectedAssetLabel}</span>

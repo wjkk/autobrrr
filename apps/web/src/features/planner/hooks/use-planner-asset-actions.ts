@@ -1,15 +1,18 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import {
+  fetchPlannerEntityRecommendations,
   patchPlannerEntity,
   putPlannerEntity,
   uploadPlannerImageAsset,
   type ApiPlannerAssetOption,
+  type ApiPlannerEntityRecommendation,
   type ApiPlannerWorkspace,
   type PlannerRuntimeApiContext,
 } from '../lib/planner-api';
+import { applyPlannerRecommendationDraft } from '../lib/planner-asset-recommendations';
 import { buildPlannerNoticeFromError, type PlannerNoticeInput } from '../lib/planner-notice';
 import type { PlannerStructuredDoc } from '../lib/planner-structured-doc';
 import { toStructuredPlannerDoc } from '../lib/planner-structured-doc';
@@ -32,6 +35,7 @@ interface UsePlannerAssetActionsOptions {
   subjectPromptDraft: string;
   subjectImageDraft: string;
   subjectAssetDraftId: string | null;
+  setSubjectPromptDraft: (value: string) => void;
   setSubjectImageDraft: (value: string) => void;
   setSubjectAssetDraftId: (value: string | null) => void;
   setSubjectAdjustMode: (value: 'upload' | 'ai') => void;
@@ -41,6 +45,7 @@ interface UsePlannerAssetActionsOptions {
   scenePromptDraft: string;
   sceneImageDraft: string;
   sceneAssetDraftId: string | null;
+  setScenePromptDraft: (value: string) => void;
   setSceneImageDraft: (value: string) => void;
   setSceneAssetDraftId: (value: string | null) => void;
   setSceneAdjustMode: (value: 'upload' | 'ai') => void;
@@ -66,6 +71,87 @@ interface UsePlannerAssetActionsOptions {
 }
 
 export function usePlannerAssetActions(options: UsePlannerAssetActionsOptions) {
+  const [subjectRecommendations, setSubjectRecommendations] = useState<ApiPlannerEntityRecommendation[]>([]);
+  const [subjectRecommendationsLoading, setSubjectRecommendationsLoading] = useState(false);
+  const [sceneRecommendations, setSceneRecommendations] = useState<ApiPlannerEntityRecommendation[]>([]);
+  const [sceneRecommendationsLoading, setSceneRecommendationsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!options.runtimeApi || !options.runtimeActiveRefinement || !options.subjectDialogCardId) {
+      setSubjectRecommendations([]);
+      setSubjectRecommendationsLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setSubjectRecommendationsLoading(true);
+    void fetchPlannerEntityRecommendations({
+      projectId: options.runtimeApi.projectId,
+      episodeId: options.runtimeApi.episodeId,
+      entityKind: 'subject',
+      entityId: options.subjectDialogCardId,
+      signal: controller.signal,
+    })
+      .then((result) => {
+        if (!controller.signal.aborted) {
+          setSubjectRecommendations(result.recommendations);
+        }
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          setSubjectRecommendations([]);
+          options.setNotice(buildPlannerNoticeFromError(error, '主体素材推荐获取失败。'));
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setSubjectRecommendationsLoading(false);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [options.runtimeActiveRefinement, options.runtimeApi, options.subjectDialogCardId, options.setNotice]);
+
+  useEffect(() => {
+    if (!options.runtimeApi || !options.runtimeActiveRefinement || !options.sceneDialogCardId) {
+      setSceneRecommendations([]);
+      setSceneRecommendationsLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setSceneRecommendationsLoading(true);
+    void fetchPlannerEntityRecommendations({
+      projectId: options.runtimeApi.projectId,
+      episodeId: options.runtimeApi.episodeId,
+      entityKind: 'scene',
+      entityId: options.sceneDialogCardId,
+      signal: controller.signal,
+    })
+      .then((result) => {
+        if (!controller.signal.aborted) {
+          setSceneRecommendations(result.recommendations);
+        }
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          setSceneRecommendations([]);
+          options.setNotice(buildPlannerNoticeFromError(error, '场景素材推荐获取失败。'));
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setSceneRecommendationsLoading(false);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [options.runtimeActiveRefinement, options.runtimeApi, options.sceneDialogCardId, options.setNotice]);
+
   const handleSubjectUpload = useCallback(async (file: File | null) => {
     if (!file || !options.runtimeApi) {
       return;
@@ -160,6 +246,16 @@ export function usePlannerAssetActions(options: UsePlannerAssetActionsOptions) {
       '主体图片已更新。',
     );
     options.closeSubjectAdjustDialog();
+  }, [options]);
+
+  const applySubjectRecommendation = useCallback((recommendation: ApiPlannerEntityRecommendation) => {
+    const nextDraft = applyPlannerRecommendationDraft(recommendation);
+    options.setSubjectPromptDraft(nextDraft.prompt);
+    options.setSubjectAdjustMode(nextDraft.promptMode);
+    options.setSubjectAssetDraftId(nextDraft.assetId);
+    if (nextDraft.image) {
+      options.setSubjectImageDraft(nextDraft.image);
+    }
   }, [options]);
 
   const handleSceneUpload = useCallback(async (file: File | null) => {
@@ -258,6 +354,16 @@ export function usePlannerAssetActions(options: UsePlannerAssetActionsOptions) {
     options.closeSceneAdjustDialog();
   }, [options]);
 
+  const applySceneRecommendation = useCallback((recommendation: ApiPlannerEntityRecommendation) => {
+    const nextDraft = applyPlannerRecommendationDraft(recommendation);
+    options.setScenePromptDraft(nextDraft.prompt);
+    options.setSceneAdjustMode(nextDraft.promptMode);
+    options.setSceneAssetDraftId(nextDraft.assetId);
+    if (nextDraft.image) {
+      options.setSceneImageDraft(nextDraft.image);
+    }
+  }, [options]);
+
   const rerunSubjectAdjust = useCallback(async () => {
     if (!options.runtimeApi || !options.subjectDialogCardId) {
       return;
@@ -351,11 +457,17 @@ export function usePlannerAssetActions(options: UsePlannerAssetActionsOptions) {
   return {
     handleSubjectUpload,
     applySubjectAdjust,
+    applySubjectRecommendation,
     handleSceneUpload,
     applySceneAdjust,
+    applySceneRecommendation,
     rerunSubjectAdjust,
     generateSubjectImage,
     rerunSceneAdjust,
     generateSceneImage,
+    subjectRecommendations,
+    subjectRecommendationsLoading,
+    sceneRecommendations,
+    sceneRecommendationsLoading,
   };
 }

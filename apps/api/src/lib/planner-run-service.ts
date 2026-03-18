@@ -4,6 +4,7 @@ import { prisma } from './prisma.js';
 import { resolveModelSelection } from './model-registry.js';
 import { findOwnedEpisode } from './ownership.js';
 import { resolvePlannerAgentSelection } from './planner-agent-registry.js';
+import { buildPlannerOutlineRefinementHints } from './planner-outline-doc.js';
 import { buildPlannerGenerationPrompt, createPlannerUserMessage } from './planner-orchestrator.js';
 import { serializeRunInput } from './run-input.js';
 import { resolvePlannerTargetVideoModel } from './planner-target-video-model.js';
@@ -214,6 +215,7 @@ async function queuePlannerGenerateDocRunWithDeps(
     requestedFamilySlug: args.targetVideoModelFamilySlug,
     settingsJson: creationConfig?.settingsJson,
   });
+  const outlineRefinementHints = buildPlannerOutlineRefinementHints(activeOutline?.outlineDocJson ?? null);
 
   const promptPackage = deps.buildPlannerGenerationPrompt({
     selection,
@@ -287,6 +289,7 @@ async function queuePlannerGenerateDocRunWithDeps(
           triggerType,
           ...(activeOutline ? { sourceOutlineVersionId: activeOutline.id } : {}),
           ...(targetVideoModel ? { targetVideoModelFamilySlug: targetVideoModel.familySlug } : {}),
+          outlineRefinementHints: outlineRefinementHints as unknown as Record<string, unknown> | null,
           stepDefinitions: promptPackage.stepDefinitions,
           promptSnapshot: promptPackage.promptSnapshot,
           agentProfile: selection.agentProfile,
@@ -317,6 +320,7 @@ async function queuePlannerGenerateDocRunWithDeps(
                   id: activeOutline.id,
                   versionNumber: activeOutline.versionNumber,
                   outlineDoc: activeOutline.outlineDocJson,
+                  refinementHints: outlineRefinementHints,
                 }
               : null,
             activeRefinement: activeRefinement

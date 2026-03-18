@@ -4,12 +4,15 @@ import { Prisma } from '@prisma/client';
 
 import { resolveModelSelection } from './model-registry.js';
 import { resolvePlannerAgentSelection, type ResolvedPlannerAgentSelection } from './planner-agent-registry.js';
-import { parsePlannerAssistantPackage } from './planner-agent-schemas.js';
+import { inspectPlannerAssistantPackage } from './planner-agent-schemas.js';
 import { debugRunSchema, type PlannerDebugCompareInput, type PlannerDebugRunInput } from './planner-debug-contract.js';
 import type { PlannerStructuredDoc } from './planner-doc.js';
+import { buildPlannerOutlineRefinementHints } from './planner-outline-doc.js';
 import { buildPlannerGenerationPrompt, type PlannerPromptSnapshot } from './planner-orchestrator.js';
 import { applyPartialRerunScope } from './planner-refinement-partial.js';
-import { buildUsageSummary, deriveDiffSummary, readObject } from './planner-debug-shared.js';
+import { buildUsageSummary, deriveDiffSummary, readObject, readTargetEntityId } from './planner-debug-shared.js';
+import { buildPlannerRerunPromptContext } from './planner-rerun-context.js';
+import { parseStoredPlannerRerunScope } from './planner-rerun-scope.js';
 import { resolvePlannerTargetVideoModel } from './planner-target-video-model.js';
 import { extractPlannerText } from './planner-text-extraction.js';
 import { prisma } from './prisma.js';
@@ -256,6 +259,19 @@ export async function executePlannerDebugRun(args: PlannerDebugRunInput & {
   const targetVideoModel = await resolvePlannerTargetVideoModel({
     requestedFamilySlug: args.targetVideoModelFamilySlug,
   });
+  const outlineRefinementHints = buildPlannerOutlineRefinementHints(args.currentOutlineDoc ?? null);
+  const rerunScope = parseStoredPlannerRerunScope({
+    scope: args.partialRerunScope,
+    targetEntityId: readTargetEntityId(args.targetEntity),
+  });
+  const rerunContext =
+    args.targetStage === 'refinement' && rerunScope && args.targetEntity
+      ? buildPlannerRerunPromptContext({
+          scope: rerunScope,
+          targetEntity: args.targetEntity,
+          structuredDoc: args.currentStructuredDoc ?? null,
+        })
+      : null;
   const modelSelectionSnapshot = buildPlannerDebugModelSelectionSnapshot({
     requestedModelFamilySlug: args.modelFamily,
     requestedModelEndpointSlug: args.modelEndpoint,
@@ -279,6 +295,7 @@ export async function executePlannerDebugRun(args: PlannerDebugRunInput & {
     priorMessages: args.priorMessages ?? [],
     currentOutlineDoc: args.currentOutlineDoc,
     currentStructuredDoc: args.currentStructuredDoc,
+    rerunContext,
   });
   const promptSnapshot: PlannerPromptSnapshot = {
     ...promptPackage.promptSnapshot,
@@ -316,7 +333,7 @@ export async function executePlannerDebugRun(args: PlannerDebugRunInput & {
     rawText = errorMessage;
   }
 
-  const parsedAssistantPackage = parsePlannerAssistantPackage({
+  const assistantPackageInspection = inspectPlannerAssistantPackage({
     targetStage: args.targetStage,
     rawText: rawText ?? '',
     userPrompt: args.userPrompt,
@@ -326,6 +343,7 @@ export async function executePlannerDebugRun(args: PlannerDebugRunInput & {
     contentType: selection.contentType,
     subtype: selection.subtype,
   });
+  const parsedAssistantPackage = assistantPackageInspection.assistantPackage;
   const assistantPackage =
     args.targetStage === 'refinement' &&
     args.partialRerunScope &&
@@ -338,6 +356,7 @@ export async function executePlannerDebugRun(args: PlannerDebugRunInput & {
             nextDoc: parsedAssistantPackage.structuredDoc,
             input: {
               scope: args.partialRerunScope,
+              targetEntityId: readTargetEntityId(args.targetEntity),
               targetEntity: args.targetEntity ?? {},
             },
           }),
@@ -389,11 +408,17 @@ export async function executePlannerDebugRun(args: PlannerDebugRunInput & {
         selectedImageModelLabel: args.selectedImageModelLabel ?? null,
         priorMessages: args.priorMessages ?? [],
         currentOutlineDoc: args.currentOutlineDoc ?? null,
+        outlineRefinementHints,
         currentStructuredDoc: args.currentStructuredDoc ?? null,
         targetEntity: args.targetEntity ?? null,
+        rerunContext,
         plannerAssets: args.plannerAssets ?? [],
         replaySourceRunId: args.replaySourceRunId ?? null,
         promptSnapshot: promptSnapshotJson,
+        assistantPackageInspection: {
+          rawCandidate: assistantPackageInspection.rawCandidate,
+          normalizedCandidate: assistantPackageInspection.normalizedCandidate,
+        },
       } as unknown as Prisma.InputJsonValue,
       finalPrompt: promptPackage.promptText,
       rawText,
@@ -466,9 +491,15 @@ export async function executePlannerDebugRun(args: PlannerDebugRunInput & {
       selectedImageModelLabel: args.selectedImageModelLabel ?? null,
       priorMessages: args.priorMessages ?? [],
       currentOutlineDoc: args.currentOutlineDoc ?? null,
+      outlineRefinementHints,
       currentStructuredDoc: args.currentStructuredDoc ?? null,
       targetEntity: args.targetEntity ?? null,
+      rerunContext,
       plannerAssets: args.plannerAssets ?? [],
+      assistantPackageInspection: {
+        rawCandidate: assistantPackageInspection.rawCandidate,
+        normalizedCandidate: assistantPackageInspection.normalizedCandidate,
+      },
     },
     usage: buildUsageSummary({
       providerOutput,

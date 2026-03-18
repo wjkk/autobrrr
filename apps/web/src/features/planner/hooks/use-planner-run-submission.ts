@@ -18,9 +18,10 @@ type PlannerRunTrigger =
   | 'update_outline'
   | 'confirm_outline'
   | 'rerun'
-  | 'subject_only'
-  | 'scene_only'
-  | 'shots_only'
+  | 'subject'
+  | 'scene'
+  | 'shot'
+  | 'act'
   | 'subject_image'
   | 'scene_image'
   | 'shot_image';
@@ -122,12 +123,12 @@ export function usePlannerRunSubmission(options: UsePlannerRunSubmissionOptions)
     return pollPlannerRunUntilTerminal(
       result.run.id,
       rerunScope.type === 'subject'
-        ? 'subject_only'
+        ? 'subject'
         : rerunScope.type === 'scene'
-          ? 'scene_only'
+          ? 'scene'
           : rerunScope.type === 'act'
-            ? 'rerun'
-            : 'shots_only',
+            ? 'act'
+            : 'shot',
       instruction,
     );
   }, [options, pollPlannerRunUntilTerminal]);

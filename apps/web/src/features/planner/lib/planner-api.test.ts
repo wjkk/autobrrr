@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   __testables,
+  fetchPlannerEntityRecommendations,
   fetchPlannerRun,
   isPlannerApiError,
   fetchPlannerShotPromptPreview,
@@ -176,6 +177,42 @@ test('fetchPlannerShotPromptPreview builds the expected query string', async () 
     assert.equal(
       capturedPath,
       '/api/planner/projects/project%2F1/shot-prompts?episodeId=episode%2F1&modelSlug=seedance-2-0',
+    );
+  } finally {
+    restore();
+  }
+});
+
+test('fetchPlannerEntityRecommendations builds subject recommendation path with episode query', async () => {
+  let capturedPath = '';
+  const restore = installFetchStub(async (input) => {
+    capturedPath = String(input);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ok: true,
+        data: {
+          entityKind: 'subject',
+          entityId: 'subject-1',
+          entityName: '主角',
+          recommendations: [],
+        },
+      }),
+    };
+  });
+
+  try {
+    await fetchPlannerEntityRecommendations({
+      projectId: 'project/1',
+      episodeId: 'episode/1',
+      entityKind: 'subject',
+      entityId: 'subject/1',
+    });
+
+    assert.equal(
+      capturedPath,
+      '/api/planner/projects/project%2F1/subjects/subject%2F1/recommendations?episodeId=episode%2F1',
     );
   } finally {
     restore();

@@ -103,6 +103,8 @@
    说明：较早的 Planner 两阶段工作流与文档结构草案。关于当前 Planner AI 的执行口径，以 `planner-ai-capabilities-spec-v0.1.md` 为准；本文保留为工作流补充参考。
 7. `docs/specs/frontend-workspace-contract-migration-v0.1.md`
    说明：前端主工作区从 `StudioFixture` 过渡到正式 workspace DTO / view model 的迁移说明。Phase 7 主路径迁移已完成，当前作为后续契约收口与 mock 退出主路径的参考。
+8. `docs/reviews/planner-real-provider-e2e.md`
+   说明：Planner 真实 provider 浏览器回归的运行说明、环境变量、产物目录与失败定位手册。做真实模型回归时优先参考。
 
 ---
 
@@ -157,5 +159,6 @@
 1. `planner-agent-refactor-design-2026-03-16.md`（做 Planner 重构时）
 2. `planner-agent-orchestration-spec-v0.1.md`（做 Planner Agent 编排时）
 3. `planner-workflow-and-document-spec-v0.1.md`（看较早的工作流草案时）
-4. `planner-agent-final-decisions-2026-03-14.md`（Planner 口径有争议时）
-5. `frontend-workspace-contract-migration-v0.1.md`（做前端契约迁移时）
+4. `planner-real-provider-e2e.md`（做 Planner 真实模型回归时）
+5. `planner-agent-final-decisions-2026-03-14.md`（Planner 口径有争议时）
+6. `frontend-workspace-contract-migration-v0.1.md`（做前端契约迁移时）

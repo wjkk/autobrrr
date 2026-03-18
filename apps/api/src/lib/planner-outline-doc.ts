@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sanitizePlannerDisplayText } from './planner-display-text.js';
 
 const outlineCharacterSchema = z.object({
   id: z.string().trim().min(1).max(120).default('character-1'),
@@ -30,6 +31,89 @@ export const plannerOutlineDocSchema = z.object({
 });
 
 export type PlannerOutlineDoc = z.infer<typeof plannerOutlineDocSchema>;
+export interface PlannerOutlineRefinementHints {
+  characterHints: string[];
+  locationHints: string[];
+  structureHints: string[];
+}
+
+export function sanitizePlannerOutlineDoc(doc: PlannerOutlineDoc): PlannerOutlineDoc {
+  return {
+    ...doc,
+    premise: sanitizePlannerDisplayText(doc.premise),
+    mainCharacters: doc.mainCharacters.map((character) => ({
+      ...character,
+      description: sanitizePlannerDisplayText(character.description),
+    })),
+    storyArc: doc.storyArc.map((arc) => ({
+      ...arc,
+      summary: sanitizePlannerDisplayText(arc.summary),
+    })),
+    constraints: doc.constraints.map(sanitizePlannerDisplayText),
+    openQuestions: doc.openQuestions.map(sanitizePlannerDisplayText),
+  };
+}
+
+function clipHint(text: string, max: number) {
+  const normalized = sanitizePlannerDisplayText(text).trim();
+  if (normalized.length <= max) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+}
+
+function dedupeHints(items: string[], max: number) {
+  const seen = new Set<string>();
+  const next: string[] = [];
+
+  for (const item of items) {
+    const normalized = item.trim();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    next.push(normalized);
+    if (next.length >= max) {
+      break;
+    }
+  }
+
+  return next;
+}
+
+export function buildPlannerOutlineRefinementHints(value: unknown): PlannerOutlineRefinementHints | null {
+  const parsed = plannerOutlineDocSchema.safeParse(value);
+  if (!parsed.success) {
+    return null;
+  }
+
+  const doc = sanitizePlannerOutlineDoc(parsed.data);
+  const characterHints = dedupeHints(
+    doc.mainCharacters.map((character) => clipHint(`${character.name}：${character.role}，${character.description}`, 500)),
+    8,
+  );
+  const locationHints = dedupeHints(
+    doc.storyArc.map((arc) => clipHint(`${arc.title}：${arc.summary}`, 500)),
+    8,
+  );
+  const structureHints = dedupeHints(
+    [
+      doc.format === 'series' ? `叙事形式：系列，共 ${doc.episodeCount} 集` : `叙事形式：单集，共 ${doc.episodeCount} 集`,
+      `题材类型：${doc.genre}`,
+      `整体风格：${doc.toneStyle.join('、')}`,
+      `剧情结构：${doc.storyArc.map((arc) => arc.title).join(' -> ')}`,
+      ...doc.constraints.map((constraint) => `约束：${clipHint(constraint, 300)}`),
+    ],
+    8,
+  );
+
+  return {
+    characterHints,
+    locationHints,
+    structureHints,
+  };
+}
 
 function stripCodeFence(text: string) {
   const trimmed = text.trim();
@@ -43,12 +127,50 @@ function stripCodeFence(text: string) {
 function extractJsonCandidate(text: string) {
   const stripped = stripCodeFence(text);
   const start = stripped.indexOf('{');
-  const end = stripped.lastIndexOf('}');
-  if (start === -1 || end === -1 || end <= start) {
+  if (start === -1) {
     return null;
   }
 
-  return stripped.slice(start, end + 1);
+  let depth = 0;
+  let inString = false;
+  let escaping = false;
+
+  for (let index = start; index < stripped.length; index += 1) {
+    const char = stripped[index];
+
+    if (escaping) {
+      escaping = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaping = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) {
+      continue;
+    }
+
+    if (char === '{') {
+      depth += 1;
+      continue;
+    }
+
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return stripped.slice(start, index + 1);
+      }
+    }
+  }
+
+  return null;
 }
 
 function normalizeContentType(value: string) {
@@ -71,7 +193,9 @@ export function buildFallbackPlannerOutlineDoc(args: {
   contentMode?: string | null;
   rawText: string;
 }) {
-  return plannerOutlineDocSchema.parse({
+  const summarizedRawText = args.rawText ? sanitizePlannerDisplayText(args.rawText) : '';
+
+  return sanitizePlannerOutlineDoc(plannerOutlineDocSchema.parse({
     projectTitle: args.projectTitle,
     contentType: normalizeContentType(args.contentType),
     subtype: args.subtype,
@@ -79,7 +203,7 @@ export function buildFallbackPlannerOutlineDoc(args: {
     episodeCount: args.contentMode?.toLowerCase() === 'series' ? 6 : 1,
     genre: args.subtype || args.contentType,
     toneStyle: ['情绪明确', '结构清晰', '便于后续细化分镜'],
-    premise: args.rawText || `围绕“${args.userPrompt}”生成可确认的剧本大纲。`,
+    premise: summarizedRawText || `围绕“${args.userPrompt}”生成可确认的剧本大纲。`,
     mainCharacters: [
       {
         id: 'character-1',
@@ -92,12 +216,12 @@ export function buildFallbackPlannerOutlineDoc(args: {
       {
         episodeNo: 1,
         title: args.projectTitle,
-        summary: args.rawText || `围绕“${args.userPrompt}”展开主要剧情。`,
+        summary: summarizedRawText || `围绕“${args.userPrompt}”展开主要剧情。`,
       },
     ],
     constraints: ['当前输出应可确认并进入细化阶段。'],
     openQuestions: [],
-  });
+  }));
 }
 
 export function parsePlannerOutlineDoc(args: {
@@ -115,7 +239,7 @@ export function parsePlannerOutlineDoc(args: {
 
   try {
     const parsed = JSON.parse(candidate) as unknown;
-    return plannerOutlineDocSchema.parse(parsed);
+    return sanitizePlannerOutlineDoc(plannerOutlineDocSchema.parse(parsed));
   } catch {
     return buildFallbackPlannerOutlineDoc(args);
   }

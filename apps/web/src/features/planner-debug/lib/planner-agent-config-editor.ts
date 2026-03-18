@@ -82,7 +82,7 @@ export function normalizeInputSchema(value: unknown): PlannerInputSchemaEditorSt
     priorMessagesMaxLength: readNumberString(constraints.priorMessagesMaxLength, '12'),
     plannerAssetsMaxLength: readNumberString(constraints.plannerAssetsMaxLength, '48'),
     stages: toStringArray(constraints.stages, ['outline', 'refinement']),
-    partialRerunScopes: toStringArray(constraints.partialRerunScopes, ['none', 'subject_only', 'scene_only', 'shots_only']),
+    partialRerunScopes: toStringArray(constraints.partialRerunScopes, ['none', 'subject', 'scene', 'shot', 'act']),
   };
 }
 
@@ -144,7 +144,7 @@ export function normalizeToolPolicy(value: unknown): PlannerToolPolicyEditorStat
     mode: readString(policy.mode),
     emphasis: readString(policy.emphasis),
     allowedStages: toStringArray(policy.allowedStages, ['outline', 'refinement']),
-    partialRerunScopes: toStringArray(policy.partialRerunScopes, ['subject_only', 'scene_only', 'shots_only']),
+    partialRerunScopes: toStringArray(policy.partialRerunScopes, ['subject', 'scene', 'shot', 'act']),
     allowSubjectAssetPlanning: readBoolean(policy.allowSubjectAssetPlanning, true),
     allowSceneAssetPlanning: readBoolean(policy.allowSceneAssetPlanning, true),
     allowDocumentRewrite: readBoolean(policy.allowDocumentRewrite, true),

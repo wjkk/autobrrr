@@ -82,12 +82,16 @@ function mapPlannerDebugRunDetail(run: {
     }),
     diffSummary: deriveDiffSummary({
       targetStage: readObject(run.inputJson).targetStage === 'outline' ? 'outline' : 'refinement',
-      partialRerunScope:
-        readObject(run.inputJson).partialRerunScope === 'subject_only' ||
-        readObject(run.inputJson).partialRerunScope === 'scene_only' ||
-        readObject(run.inputJson).partialRerunScope === 'shots_only'
-          ? (readObject(run.inputJson).partialRerunScope as 'subject_only' | 'scene_only' | 'shots_only')
-          : 'none',
+      partialRerunScope: readString(readObject(run.inputJson).partialRerunScope) as
+        | 'none'
+        | 'subject'
+        | 'scene'
+        | 'shot'
+        | 'act'
+        | 'subject_only'
+        | 'scene_only'
+        | 'shots_only'
+        | undefined,
       currentStructuredDoc: readObject(run.inputJson).currentStructuredDoc as Record<string, unknown> | undefined,
       targetEntity: readObject(run.inputJson).targetEntity as Record<string, unknown> | undefined,
       assistantPackage: readObject(run.assistantPackageJson),

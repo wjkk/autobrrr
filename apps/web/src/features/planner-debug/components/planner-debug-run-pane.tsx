@@ -81,9 +81,10 @@ export function PlannerDebugRunPane(props: {
               <label className={styles.fieldLabel}>局部重跑范围</label>
               <select className={styles.select} value={props.debugForm.partialRerunScope} disabled={props.debugForm.targetStage !== 'refinement'} onChange={(event) => props.onDebugFormChange((current) => ({ ...current, partialRerunScope: event.target.value as DebugFormState['partialRerunScope'] }))}>
                 <option value="none">整体验证</option>
-                <option value="subject_only">仅主体</option>
-                <option value="scene_only">仅场景</option>
-                <option value="shots_only">仅分镜</option>
+                <option value="subject">仅主体</option>
+                <option value="scene">仅场景</option>
+                <option value="shot">仅分镜</option>
+                <option value="act">整幕范围</option>
               </select>
             </div>
           </div>

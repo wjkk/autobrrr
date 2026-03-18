@@ -2,7 +2,9 @@ import type { Run } from '@prisma/client';
 
 import { resolveModelSelection } from './model-registry.js';
 import { resolvePlannerAgentSelection } from './planner-agent-registry.js';
+import { buildPlannerOutlineRefinementHints } from './planner-outline-doc.js';
 import { buildPlannerGenerationPrompt, createPlannerUserMessage } from './planner-orchestrator.js';
+import { buildPlannerRerunPromptContext, type PlannerPartialRerunTarget } from './planner-rerun-context.js';
 import { getPlannerRerunScopeTriggerType, getPlannerRerunScopeUserLabel, type PlannerRerunScope } from './planner-rerun-scope.js';
 import { prisma } from './prisma.js';
 import { serializeRunInput } from './run-input.js';
@@ -47,9 +49,10 @@ export type QueuePlannerPartialRerunResult =
     };
 
 type PlannerPartialRerunSession = Awaited<ReturnType<typeof findOwnedPlannerSession>>;
-type PlannerPartialRerunTarget =
-  | Record<string, unknown>
-  | Array<Record<string, unknown>>;
+
+function readString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
 
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -245,6 +248,7 @@ async function buildActiveOutlineSnapshot(plannerSessionId: string, outlineConfi
     id: outline.id,
     versionNumber: outline.versionNumber,
     outlineDoc: outline.outlineDocJson,
+    refinementHints: buildPlannerOutlineRefinementHints(outline.outlineDocJson),
   };
 }
 
@@ -265,7 +269,7 @@ export async function queuePlannerPartialRerun(
     return { ok: false, error: 'REFINEMENT_LOCKED' };
   }
 
-  const [targetEntity, recentMessages] = await Promise.all([
+  const [targetEntity, recentMessages, activeOutline] = await Promise.all([
     findTargetEntity({
       refinementVersionId: activeRefinement.id,
       rerunScope: args.rerunScope,
@@ -277,6 +281,7 @@ export async function queuePlannerPartialRerun(
       orderBy: { createdAt: 'desc' },
       take: 8,
     }),
+    buildActiveOutlineSnapshot(plannerSession.id, plannerSession.outlineConfirmedAt),
   ]);
 
   if (!targetEntity) {
@@ -319,6 +324,12 @@ export async function queuePlannerPartialRerun(
     requestedFamilySlug: args.targetVideoModelFamilySlug,
     settingsJson: plannerSession.project.creationConfig?.settingsJson,
   });
+  const outlineRefinementHints = buildPlannerOutlineRefinementHints(activeOutline?.outlineDoc ?? null);
+  const rerunContext = buildPlannerRerunPromptContext({
+    scope: args.rerunScope,
+    targetEntity,
+    structuredDoc: activeRefinement.structuredDocJson,
+  });
 
   const promptPackage = buildPlannerGenerationPrompt({
     selection,
@@ -337,6 +348,7 @@ export async function queuePlannerPartialRerun(
     selectedImageModelLabel: plannerSession.project.creationConfig?.imageModelEndpoint?.label ?? null,
     targetVideoModelFamilySlug: targetVideoModel?.familySlug ?? null,
     targetVideoModelSummary: targetVideoModel?.summary ?? null,
+    currentOutlineDoc: activeOutline?.outlineDoc ?? null,
     priorMessages: recentMessages
       .reverse()
       .map((message) => {
@@ -350,6 +362,7 @@ export async function queuePlannerPartialRerun(
         };
       }),
     currentStructuredDoc: activeRefinement.structuredDocJson,
+    rerunContext,
   });
 
   const triggerType = getPlannerRerunScopeTriggerType(args.rerunScope);
@@ -369,8 +382,6 @@ export async function queuePlannerPartialRerun(
       userId: args.userId,
       prompt: rawPrompt,
     });
-
-    const activeOutline = await buildActiveOutlineSnapshot(plannerSession.id, plannerSession.outlineConfirmedAt);
 
     return tx.run.create({
       data: {
@@ -399,7 +410,8 @@ export async function queuePlannerPartialRerun(
           targetStage: 'refinement',
           triggerType,
           ...(targetVideoModel ? { targetVideoModelFamilySlug: targetVideoModel.familySlug } : {}),
-          scope: triggerType,
+          outlineRefinementHints: outlineRefinementHints as unknown as Record<string, unknown> | null,
+          scope: args.rerunScope.type,
           targetEntityId:
             args.rerunScope.type === 'subject'
               ? args.rerunScope.subjectId
@@ -410,6 +422,7 @@ export async function queuePlannerPartialRerun(
                   : args.rerunScope.actId,
           rerunScope: args.rerunScope,
           targetEntity,
+          rerunContext: rerunContext as unknown as Record<string, unknown>,
           stepDefinitions: promptPackage.stepDefinitions,
           promptSnapshot: promptPackage.promptSnapshot,
           agentProfile: selection.agentProfile,
@@ -428,6 +441,7 @@ export async function queuePlannerPartialRerun(
                 }
               : null,
             activeOutline,
+            outlineRefinementHints,
             activeRefinement: {
               id: activeRefinement.id,
               structuredDoc: activeRefinement.structuredDocJson,
@@ -469,5 +483,6 @@ export async function queuePlannerPartialRerun(
 export const __testables = {
   cloneJson,
   buildScopeInstruction,
+  buildRerunPromptContext: buildPlannerRerunPromptContext,
   findTargetEntity,
 };

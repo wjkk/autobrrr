@@ -65,6 +65,22 @@ function triggerLabel(trigger: string) {
     return '调试应用';
   }
 
+  if (trigger === 'subject') {
+    return '局部重写主体';
+  }
+
+  if (trigger === 'scene') {
+    return '局部重写场景';
+  }
+
+  if (trigger === 'shot') {
+    return '局部重写分镜';
+  }
+
+  if (trigger === 'act') {
+    return '局部重写幕';
+  }
+
   return '重新细化';
 }
 

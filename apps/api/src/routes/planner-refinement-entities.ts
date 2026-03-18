@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { requireUser } from '../lib/auth.js';
 import {
   deletePlannerShot,
+  getPlannerSceneRecommendations,
+  getPlannerSubjectRecommendations,
   PLANNER_REFINEMENT_LOCKED_ERROR,
   updatePlannerScene,
   updatePlannerSceneAssets,
@@ -258,6 +260,45 @@ export async function registerPlannerRefinementEntityRoutes(app: FastifyInstance
     });
   });
 
+  app.get('/api/projects/:projectId/planner/subjects/:subjectId/recommendations', async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) {
+      return;
+    }
+
+    const params = subjectParamsSchema.safeParse(request.params);
+    const payload = scopedPayloadSchema.safeParse(request.query);
+    if (!params.success || !payload.success) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'INVALID_ARGUMENT',
+          message: 'Invalid planner subject recommendation request.',
+          details: payload.success ? undefined : payload.error.flatten(),
+        },
+      });
+    }
+
+    const result = await getPlannerSubjectRecommendations({
+      projectId: params.data.projectId,
+      subjectId: params.data.subjectId,
+      episodeId: payload.data.episodeId,
+      userId: user.id,
+    });
+
+    if (!result.ok) {
+      return sendPlannerRefinementEntityError({
+        reply,
+        error: result.error,
+      });
+    }
+
+    return reply.send({
+      ok: true,
+      data: result.data,
+    });
+  });
+
   app.put('/api/projects/:projectId/planner/scenes/:sceneId/assets', async (request, reply) => {
     const user = await requireUser(request, reply);
     if (!user) {
@@ -291,6 +332,45 @@ export async function registerPlannerRefinementEntityRoutes(app: FastifyInstance
         reply,
         error: result.error,
         assetLabel: 'scene',
+      });
+    }
+
+    return reply.send({
+      ok: true,
+      data: result.data,
+    });
+  });
+
+  app.get('/api/projects/:projectId/planner/scenes/:sceneId/recommendations', async (request, reply) => {
+    const user = await requireUser(request, reply);
+    if (!user) {
+      return;
+    }
+
+    const params = sceneParamsSchema.safeParse(request.params);
+    const payload = scopedPayloadSchema.safeParse(request.query);
+    if (!params.success || !payload.success) {
+      return reply.code(400).send({
+        ok: false,
+        error: {
+          code: 'INVALID_ARGUMENT',
+          message: 'Invalid planner scene recommendation request.',
+          details: payload.success ? undefined : payload.error.flatten(),
+        },
+      });
+    }
+
+    const result = await getPlannerSceneRecommendations({
+      projectId: params.data.projectId,
+      sceneId: params.data.sceneId,
+      episodeId: payload.data.episodeId,
+      userId: user.id,
+    });
+
+    if (!result.ok) {
+      return sendPlannerRefinementEntityError({
+        reply,
+        error: result.error,
       });
     }
 

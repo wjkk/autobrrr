@@ -44,6 +44,17 @@ test('debugRunSchema rejects oversized prior messages and invalid planner assets
   assert.equal(invalidAsset.success, false);
 });
 
+test('debugRunSchema accepts typed partial rerun scopes for refinement debug runs', () => {
+  const parsed = debugRunSchema.parse({
+    contentType: '短剧漫剧',
+    subtype: '悬疑',
+    userPrompt: '细化第一幕',
+    partialRerunScope: 'act',
+  });
+
+  assert.equal(parsed.partialRerunScope, 'act');
+});
+
 test('debugCompareSchema inherits debug input defaults and requires both compare sides', () => {
   const parsed = debugCompareSchema.parse({
     contentType: '短剧漫剧',

@@ -40,7 +40,7 @@ test('mapPlannerDebugRunDetail exposes replay source, prompt snapshot, usage and
     inputJson: {
       replaySourceRunId: 'run-0',
       targetStage: 'refinement',
-      partialRerunScope: 'subject_only',
+      partialRerunScope: 'subject',
       promptSnapshot: {
         systemPromptFinal: 'system',
         developerPromptFinal: 'developer',
@@ -55,6 +55,13 @@ test('mapPlannerDebugRunDetail exposes replay source, prompt snapshot, usage and
         ],
         inputContextSnapshot: {
           projectTitle: '项目A',
+          outlineRefinementHints: {
+            characterHints: ['林夏：学生记者，执着追查失踪案。'],
+          },
+          rerunContext: {
+            scopeType: 'subject',
+            targetSummary: '主体：林夏',
+          },
         },
       },
       currentStructuredDoc: {
@@ -118,6 +125,9 @@ test('mapPlannerDebugRunDetail exposes replay source, prompt snapshot, usage and
   assert.equal(result.replaySourceRunId, 'run-0');
   assert.equal(result.promptSnapshot?.systemPromptFinal, 'system');
   assert.equal(result.promptSnapshot?.modelSelectionSnapshot?.requestedTextModelFamilySlug, 'doubao-text');
+  const inputContextSnapshot = (result.promptSnapshot?.inputContextSnapshot ?? {}) as Record<string, any>;
+  assert.equal(inputContextSnapshot.outlineRefinementHints?.characterHints?.[0], '林夏：学生记者，执着追查失踪案。');
+  assert.equal(inputContextSnapshot.rerunContext?.targetSummary, '主体：林夏');
   assert.equal(result.usage.promptTokens, 12);
   assert.equal(result.usage.completionTokens, 8);
   assert.equal(result.usage.totalTokens, 20);

@@ -89,13 +89,50 @@ test('buildPlannerGenerationPrompt injects target model guidance only for refine
       scenes: [],
       acts: [],
     },
+    currentOutlineDoc: {
+      projectTitle: '项目A',
+      contentType: 'drama',
+      subtype: '悬疑',
+      format: 'single',
+      episodeCount: 1,
+      genre: '校园悬疑',
+      toneStyle: ['紧张', '克制'],
+      premise: '学生记者重返档案室。',
+      mainCharacters: [
+        { id: 'c1', name: '林夏', role: '学生记者', description: '执着追查失踪案。' },
+      ],
+      storyArc: [
+        { episodeNo: 1, title: '夜探档案室', summary: '林夏深夜进入档案室寻找线索。' },
+      ],
+      constraints: ['保持单集强悬念'],
+      openQuestions: [],
+    },
+    rerunContext: {
+      scopeType: 'subject',
+      targetSummary: '主体：林夏',
+      entityContext: {
+        scopeType: 'subject',
+        targetSubject: { title: '林夏', prompt: '学生记者，冷静执着。' },
+      },
+    },
     targetVideoModelFamilySlug: 'seedance-2-0',
     targetVideoModelSummary: '支持多镜头叙事，并要求音效描述内联。',
   });
 
   assert.match(refinement.promptText, /当前目标视频模型：seedance-2-0/);
   assert.match(refinement.promptText, /目标视频模型能力摘要：支持多镜头叙事/);
+  assert.match(refinement.promptText, /大纲继承提示：/);
+  assert.match(refinement.promptText, /局部重跑目标：/);
+  assert.match(refinement.promptText, /局部重跑摘要：主体：林夏/);
   assert.match(refinement.promptSnapshot.developerPromptFinal, /必须显式适配目标视频模型能力摘要/);
+  assert.match(refinement.promptSnapshot.developerPromptFinal, /每一项都必须显式包含 entityType/);
+  assert.match(refinement.promptSnapshot.developerPromptFinal, /不要退化成“主角”“配角”/);
+  assert.match(refinement.promptSnapshot.developerPromptFinal, /场景地点绝不能出现在 subjects/);
+  assert.match(refinement.promptSnapshot.developerPromptFinal, /人物、动物、道具绝不能出现在 scenes/);
+  assert.match(refinement.promptSnapshot.developerPromptFinal, /局部重跑硬性要求/);
+  assert.match(refinement.promptSnapshot.developerPromptFinal, /如果需求明确是三幕结构，不要压缩成单幕/);
+  assert.match(refinement.promptSnapshot.developerPromptFinal, /不要只写“第一幕”“第1幕”“分镜01”/);
+  assert.match(refinement.promptSnapshot.developerPromptFinal, /不要直接复读用户原始需求/);
   assert.equal(refinement.promptArtifact.targetVideoModelFamilySlug, 'seedance-2-0');
   assert.equal(refinement.promptArtifact.targetVideoModelSummary, '支持多镜头叙事，并要求音效描述内联。');
   assert.deepEqual(refinement.stepDefinitions, [
@@ -123,4 +160,6 @@ test('buildPlannerGenerationPrompt injects target model guidance only for refine
 
   assert.doesNotMatch(outline.promptText, /目标视频模型能力摘要/);
   assert.doesNotMatch(outline.promptSnapshot.developerPromptFinal, /必须显式适配目标视频模型能力摘要/);
+  assert.match(outline.promptSnapshot.developerPromptFinal, /mainCharacters 只能放人物、动物或关键叙事实体/);
+  assert.match(outline.promptSnapshot.developerPromptFinal, /把空间信息写进 storyArc.summary/);
 });

@@ -23,7 +23,7 @@ test('planner agent config editor normalizes empty payloads to stable defaults',
     priorMessagesMaxLength: '12',
     plannerAssetsMaxLength: '48',
     stages: ['outline', 'refinement'],
-    partialRerunScopes: ['none', 'subject_only', 'scene_only', 'shots_only'],
+    partialRerunScopes: ['none', 'subject', 'scene', 'shot', 'act'],
   });
 
   assert.deepEqual(normalizeOutputSchema(null), {
@@ -38,7 +38,7 @@ test('planner agent config editor normalizes empty payloads to stable defaults',
     mode: '',
     emphasis: '',
     allowedStages: ['outline', 'refinement'],
-    partialRerunScopes: ['subject_only', 'scene_only', 'shots_only'],
+    partialRerunScopes: ['subject', 'scene', 'shot', 'act'],
     allowSubjectAssetPlanning: true,
     allowSceneAssetPlanning: true,
     allowDocumentRewrite: true,
@@ -79,7 +79,7 @@ test('planner agent config editor serializes numeric and boolean fields predicta
       priorMessagesMaxLength: '4',
       plannerAssetsMaxLength: '8',
       stages: ['outline', '', 'refinement'],
-      partialRerunScopes: ['subject_only', '', 'shots_only'],
+      partialRerunScopes: ['subject', '', 'act'],
     }),
     {
       required: ['projectTitle', 'userPrompt'],
@@ -90,7 +90,7 @@ test('planner agent config editor serializes numeric and boolean fields predicta
         priorMessagesMaxLength: 4,
         plannerAssetsMaxLength: 8,
         stages: ['outline', 'refinement'],
-        partialRerunScopes: ['subject_only', 'shots_only'],
+        partialRerunScopes: ['subject', 'act'],
       },
     },
   );

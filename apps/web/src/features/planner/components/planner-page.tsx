@@ -30,7 +30,7 @@ import type { PlannerStructuredDoc } from '../lib/planner-structured-doc';
 import {
   outlineToPreviewStructuredPlannerDoc,
 } from '../lib/planner-structured-doc';
-import { usePlannerRefinement } from '../hooks/use-planner-refinement';
+import { usePlannerRefinement, type PlannerRefinementTrigger } from '../hooks/use-planner-refinement';
 import { usePlannerAssetActions } from '../hooks/use-planner-asset-actions';
 import { usePlannerAssetDrafts } from '../hooks/use-planner-asset-drafts';
 import { usePlannerComposerActions } from '../hooks/use-planner-composer-actions';
@@ -65,6 +65,49 @@ interface PlannerPageProps {
   initialStructuredDoc?: PlannerStructuredDoc | null;
   initialPlannerReady?: boolean;
   initialWorkspace?: ApiPlannerWorkspace | null;
+}
+
+function isRefinementRunTrigger(trigger: string) {
+  return trigger === 'confirm_outline'
+    || trigger === 'rerun'
+    || trigger === 'subject'
+    || trigger === 'scene'
+    || trigger === 'shot'
+    || trigger === 'act';
+}
+
+function buildRunNotice(trigger: string, hasActiveRefinement: boolean) {
+  if (hasActiveRefinement) {
+    if (trigger === 'confirm_outline') {
+      return '已完成细化并更新策划文档。';
+    }
+    if (trigger === 'subject') {
+      return '已按要求局部重写主体并更新策划文档。';
+    }
+    if (trigger === 'scene') {
+      return '已按要求局部重写场景并更新策划文档。';
+    }
+    if (trigger === 'shot') {
+      return '已按要求局部重写分镜并更新策划文档。';
+    }
+    if (trigger === 'act') {
+      return '已按要求局部重写幕内内容并更新策划文档。';
+    }
+    if (trigger === 'subject_image') {
+      return '已生成主体图片并回写到策划文档。';
+    }
+    if (trigger === 'scene_image') {
+      return '已生成场景图片并回写到策划文档。';
+    }
+    if (trigger === 'shot_image') {
+      return '已生成分镜草图并回写到策划文档。';
+    }
+    return '已生成新的策划版本。';
+  }
+
+  return trigger === 'generate_outline' || trigger === 'update_outline'
+    ? '已生成新的剧本大纲版本。'
+    : '已生成剧本大纲，请确认后继续细化。';
 }
 
 export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialStructuredDoc, initialPlannerReady, initialWorkspace }: PlannerPageProps) {
@@ -231,9 +274,9 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
       if (!workspace) {
         setServerPlannerText(generatedText);
         setStructuredPlannerDoc(structuredDoc);
-        if (trigger === 'confirm_outline' || trigger === 'rerun') {
+        if (isRefinementRunTrigger(trigger)) {
           setOutlineConfirmed(true);
-          const nextId = hydrateReadyVersion({ trigger: trigger === 'confirm_outline' ? 'confirm_outline' : 'rerun', instruction });
+          const nextId = hydrateReadyVersion({ trigger: trigger as PlannerRefinementTrigger, instruction });
           selectVersion(nextId);
         } else {
           setOutlineConfirmed(false);
@@ -244,7 +287,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
             id: nextLocalId('msg'),
             role: 'user',
             messageType: 'user_input',
-            content: instruction || (trigger === 'rerun' ? '请重新细化剧情内容。' : sekoPlanThreadData.confirmPrompt),
+            content: instruction || (isRefinementRunTrigger(trigger) && trigger !== 'confirm_outline' ? '请重新细化剧情内容。' : sekoPlanThreadData.confirmPrompt),
           },
           {
             id: nextLocalId('msg'),
@@ -256,27 +299,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
       }
 
       setNotice(
-        `${executionMode === 'live' ? '已通过真实模型执行。' : executionMode === 'fallback' ? '当前结果来自回退生成。' : ''}${
-          workspace?.activeRefinement
-            ? trigger === 'confirm_outline'
-              ? '已完成细化并更新策划文档。'
-              : trigger === 'subject_only'
-                ? '已按要求局部重写主体并更新策划文档。'
-                : trigger === 'scene_only'
-                  ? '已按要求局部重写场景并更新策划文档。'
-                  : trigger === 'shots_only'
-                    ? '已按要求局部重写分镜并更新策划文档。'
-                    : trigger === 'subject_image'
-                      ? '已生成主体图片并回写到策划文档。'
-                      : trigger === 'scene_image'
-                        ? '已生成场景图片并回写到策划文档。'
-                        : trigger === 'shot_image'
-                          ? '已生成分镜草图并回写到策划文档。'
-                          : '已生成新的策划版本。'
-            : trigger === 'generate_outline' || trigger === 'update_outline'
-              ? '已生成新的剧本大纲版本。'
-              : '已生成剧本大纲，请确认后继续细化。'
-        }`,
+        `${executionMode === 'live' ? '已通过真实模型执行。' : executionMode === 'fallback' ? '当前结果来自回退生成。' : ''}${buildRunNotice(trigger, Boolean(workspace?.activeRefinement))}`,
       );
     },
     onRunFailed: (message) => {
@@ -381,12 +404,18 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
   const {
     handleSubjectUpload,
     applySubjectAdjust,
+    applySubjectRecommendation,
     handleSceneUpload,
     applySceneAdjust,
+    applySceneRecommendation,
     rerunSubjectAdjust,
     generateSubjectImage,
     rerunSceneAdjust,
     generateSceneImage,
+    subjectRecommendations,
+    subjectRecommendationsLoading,
+    sceneRecommendations,
+    sceneRecommendationsLoading,
   } = usePlannerAssetActions({
     runtimeApi,
     runtimeActiveRefinement,
@@ -401,6 +430,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
     subjectPromptDraft,
     subjectImageDraft,
     subjectAssetDraftId,
+    setSubjectPromptDraft,
     setSubjectImageDraft,
     setSubjectAssetDraftId,
     setSubjectAdjustMode,
@@ -410,6 +440,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
     scenePromptDraft,
     sceneImageDraft,
     sceneAssetDraftId,
+    setScenePromptDraft,
     setSceneImageDraft,
     setSceneAssetDraftId,
     setSceneAdjustMode,
@@ -548,6 +579,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
                 messages={messages}
                 requirement={requirement}
                 outlineConfirmed={outlineConfirmed}
+                showConfirmOutlinePrompt={Boolean(usingRuntimePlanner && runtimeActiveOutline && !outlineConfirmed)}
                 plannerSubmitting={plannerSubmitting}
                 serverPlannerText={serverPlannerText}
                 refinementDetailSteps={refinementDetailSteps}
@@ -647,6 +679,8 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
         subjectAssetLabel={activeSubjectAssetLabel}
         subjectThumbs={subjectAssetThumbs}
         subjectAssetDraftId={subjectAssetDraftId}
+        subjectRecommendations={subjectRecommendations}
+        subjectRecommendationsLoading={subjectRecommendationsLoading}
         subjectUploadInputRef={subjectUploadInputRef}
         onSubjectClose={closeSubjectAdjustDialog}
         onSubjectSelectThumb={(thumb) => {
@@ -655,6 +689,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
         }}
         onSubjectPromptChange={setSubjectPromptDraft}
         onSubjectPromptModeChange={setSubjectAdjustMode}
+        onSubjectApplyRecommendation={applySubjectRecommendation}
         onSubjectGenerate={() => void generateSubjectImage()}
         onSubjectRerun={() => void rerunSubjectAdjust()}
         onSubjectApply={() => void applySubjectAdjust()}
@@ -668,6 +703,8 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
         sceneAssetLabel={activeSceneAssetLabel}
         sceneThumbs={sceneAssetThumbs}
         sceneAssetDraftId={sceneAssetDraftId}
+        sceneRecommendations={sceneRecommendations}
+        sceneRecommendationsLoading={sceneRecommendationsLoading}
         sceneUploadInputRef={sceneUploadInputRef}
         onSceneClose={closeSceneAdjustDialog}
         onSceneSelectThumb={(thumb) => {
@@ -676,6 +713,7 @@ export function PlannerPage({ studio, runtimeApi, initialGeneratedText, initialS
         }}
         onScenePromptChange={setScenePromptDraft}
         onScenePromptModeChange={setSceneAdjustMode}
+        onSceneApplyRecommendation={applySceneRecommendation}
         onSceneGenerate={() => void generateSceneImage()}
         onSceneRerun={() => void rerunSceneAdjust()}
         onSceneApply={() => void applySceneAdjust()}

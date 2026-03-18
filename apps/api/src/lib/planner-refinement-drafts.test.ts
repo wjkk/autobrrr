@@ -49,7 +49,7 @@ test('remapStructuredDocEntityKeys remaps subject, scene and shot entity keys wh
               motion: '镜头运动',
               voice: '旁白',
               line: '台词内容',
-              subjectBindings: [],
+              subjectBindings: ['subject-1'],
             },
           ],
         },
@@ -63,6 +63,7 @@ test('remapStructuredDocEntityKeys remaps subject, scene and shot entity keys wh
   assert.equal((remapped as any).subjects[0].entityKey, 'subject-a');
   assert.equal((remapped as any).scenes[0].entityKey, 'scene-a');
   assert.equal((remapped as any).acts[0].shots[0].entityKey, 'shot-a');
+  assert.deepEqual((remapped as any).acts[0].shots[0].subjectBindings, ['subject-a']);
 });
 
 test('remapStructuredDocEntityKeys returns original payload when structured doc is invalid', () => {

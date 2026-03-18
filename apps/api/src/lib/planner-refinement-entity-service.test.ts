@@ -138,6 +138,85 @@ test('updatePlannerEntityAssetsWithDeps rejects missing entities and unowned ass
   assert.deepEqual(unownedAssets, { ok: false, error: 'ASSET_NOT_OWNED' });
 });
 
+test('getPlannerEntityRecommendationsWithDeps returns subject recommendations with linked assets first', async () => {
+  const result = await __testables.getPlannerEntityRecommendationsWithDeps(
+    {
+      projectId: 'project-1',
+      episodeId: 'episode-1',
+      userId: 'user-1',
+      entityKind: 'subject',
+      entityId: 'subject-1',
+    },
+    {
+      findOwnedActivePlannerRefinement: async () => buildActiveRefinement(false),
+      prisma: {
+        plannerSubject: {
+          findFirst: async () => ({
+            id: 'subject-1',
+            name: '主角',
+            role: '调查记者',
+            appearance: '风衣、短发',
+            personality: '冷静',
+            prompt: '电影感人物设定',
+            referenceAssetIdsJson: ['asset-linked'],
+            generatedAssetIdsJson: ['asset-generated'],
+          }),
+        },
+        plannerScene: { findFirst: async () => null },
+        asset: {
+          findMany: async ({ where }: { where?: { id?: { in?: string[] } } }) => {
+            if (where?.id?.in) {
+              return [
+                {
+                  id: 'asset-generated',
+                  sourceUrl: 'https://cdn.example.com/generated.png',
+                  fileName: 'generated.png',
+                  mediaKind: 'IMAGE',
+                  sourceKind: 'GENERATED',
+                  createdAt: new Date('2026-03-18T12:00:00.000Z'),
+                },
+                {
+                  id: 'asset-linked',
+                  sourceUrl: 'https://cdn.example.com/linked.png',
+                  fileName: 'linked.png',
+                  mediaKind: 'IMAGE',
+                  sourceKind: 'UPLOAD',
+                  createdAt: new Date('2026-03-18T11:00:00.000Z'),
+                },
+              ];
+            }
+
+            return [
+              {
+                id: 'asset-recent',
+                sourceUrl: 'https://cdn.example.com/recent.png',
+                fileName: 'recent.png',
+                mediaKind: 'IMAGE',
+                sourceKind: 'UPLOAD',
+                createdAt: new Date('2026-03-18T10:00:00.000Z'),
+              },
+            ];
+          },
+        },
+      } as never,
+    },
+  );
+
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+
+  assert.equal(result.data.entityName, '主角');
+  assert.equal(result.data.recommendations.length, 3);
+  assert.deepEqual(result.data.recommendations[0]?.referenceAssetIds, [
+    'asset-generated',
+    'asset-linked',
+    'asset-recent',
+  ]);
+  assert.match(result.data.recommendations[0]?.prompt ?? '', /调查记者/);
+});
+
 test('updatePlannerEntityAssetsWithDeps updates subject assets and normalizes returned ids', async () => {
   let syncedRefinementId: string | null = null;
   const result = await __testables.updatePlannerEntityAssetsWithDeps(

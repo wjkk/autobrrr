@@ -89,7 +89,7 @@ test('readPromptSnapshot returns normalized messages and drops invalid payloads'
 test('deriveDiffSummary only emits refinement partial rerun diffs', () => {
   const diff = deriveDiffSummary({
     targetStage: 'refinement',
-    partialRerunScope: 'shots_only',
+    partialRerunScope: 'shot',
     currentStructuredDoc: {
       acts: [
         {
@@ -116,7 +116,7 @@ test('deriveDiffSummary only emits refinement partial rerun diffs', () => {
   });
   const outline = deriveDiffSummary({
     targetStage: 'outline',
-    partialRerunScope: 'shots_only',
+    partialRerunScope: 'shot',
     assistantPackage: {},
   });
 

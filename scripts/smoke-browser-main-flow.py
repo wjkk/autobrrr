@@ -10,7 +10,6 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 REPO = Path('/Users/jiankunwu/project/aiv')
-WEB_BASE = 'http://127.0.0.1:3000'
 PASSWORD = 'password123'
 OUT_DIR = Path('/tmp/aiv-browser-regression')
 OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -23,18 +22,27 @@ def port_open(port: int) -> bool:
         return sock.connect_ex(('127.0.0.1', port)) == 0
 
 
-def wait_for_port(port: int, timeout: float = 60.0) -> None:
+def find_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(('127.0.0.1', 0))
+        sock.listen(1)
+        return int(sock.getsockname()[1])
+
+
+def wait_for_port(port: int, timeout: float = 60.0, process: subprocess.Popen[str] | None = None) -> None:
     started = time.time()
     while time.time() - started < timeout:
         if port_open(port):
             return
+        if process is not None and process.poll() is not None:
+            raise RuntimeError(f'Process exited before port {port} became ready. See logs for details.')
         time.sleep(0.5)
     raise RuntimeError(f'Port {port} did not open within {timeout} seconds')
 
 
-def start_server(cmd: list[str], port: int, log_name: str):
+def start_server(cmd: list[str], port: int, log_name: str, env: dict[str, str] | None = None):
     if port_open(port):
-        return None
+        raise RuntimeError(f'Port {port} is already in use before starting {" ".join(cmd)}')
 
     log_path = OUT_DIR / log_name
     log_handle = open(log_path, 'w', encoding='utf-8')
@@ -44,9 +52,11 @@ def start_server(cmd: list[str], port: int, log_name: str):
         stdout=log_handle,
         stderr=log_handle,
         preexec_fn=os.setsid,
+        env=env,
+        text=True,
     )
     process._aiv_log_handle = log_handle  # type: ignore[attr-defined]
-    wait_for_port(port)
+    wait_for_port(port, process=process)
     return process
 
 
@@ -63,15 +73,57 @@ def stop_server(process):
         log_handle.close()
 
 
-def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, cwd=REPO, check=True, text=True, capture_output=True)
+def run(cmd: list[str], env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(cmd, cwd=REPO, check=True, text=True, capture_output=True, env=env)
+
+
+def build_env(**overrides: str) -> dict[str, str]:
+    env = os.environ.copy()
+    env.update(overrides)
+    return env
+
+
+def disable_smoke_text_provider_config(email: str) -> None:
+    run([
+        'node',
+        '-e',
+        "const { PrismaClient } = require('./apps/api/node_modules/@prisma/client');"
+        "const prisma = new PrismaClient();"
+        "(async()=>{"
+        "const email = process.env.SMOKE_EMAIL;"
+        "const user = await prisma.user.findUnique({ where: { email } });"
+        "if (!user) throw new Error(`Smoke user not found: ${email}`);"
+        "const provider = await prisma.modelProvider.findUnique({ where: { code: 'smoke-text-provider' } });"
+        "if (!provider) throw new Error('Smoke text provider not found');"
+        "await prisma.userProviderConfig.upsert({"
+        "where: { userId_providerId: { userId: user.id, providerId: provider.id } },"
+        "update: { enabled: false, apiKey: null, baseUrlOverride: null, optionsJson: null },"
+        "create: { userId: user.id, providerId: provider.id, enabled: false, apiKey: null, baseUrlOverride: null, optionsJson: null }"
+        "});"
+        "await prisma.$disconnect();"
+        "})().catch(async (error)=>{ console.error(error); process.exit(1); });",
+    ], env=build_env(SMOKE_EMAIL=email))
 
 
 def main():
-    api_process = start_server(['pnpm', 'dev:api'], 8787, 'api-server.log')
-    web_process = start_server(['pnpm', 'dev:web'], 3000, 'web-server.log')
+    api_port = int(os.environ.get('AIV_SMOKE_API_PORT') or find_free_port())
+    web_port = int(os.environ.get('AIV_SMOKE_WEB_PORT') or find_free_port())
+    api_base = f'http://127.0.0.1:{api_port}'
+    web_base = f'http://127.0.0.1:{web_port}'
+    api_process = start_server(
+        ['pnpm', 'dev:api'],
+        api_port,
+        'api-server.log',
+        env=build_env(API_PORT=str(api_port)),
+    )
+    web_process = start_server(
+        ['pnpm', 'dev:web'],
+        web_port,
+        'web-server.log',
+        env=build_env(PORT=str(web_port), AIV_API_BASE_URL=api_base),
+    )
     try:
-        run(['pnpm', '--filter', '@aiv/api', 'smoke:planner-api-refactor'])
+        run(['pnpm', '--filter', '@aiv/api', 'smoke:planner-api-refactor'], env=build_env(API_BASE_URL=api_base))
 
         query = run([
             'node',
@@ -93,9 +145,9 @@ def main():
 
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
-            context = browser.new_context(base_url=WEB_BASE, viewport={'width': 1440, 'height': 1024})
+            context = browser.new_context(base_url=web_base, viewport={'width': 1440, 'height': 1024})
             login_response = context.request.post(
-                f'{WEB_BASE}/api/auth/login',
+                f'{web_base}/api/auth/login',
                 headers={'Accept': 'application/json', 'Content-Type': 'application/json'},
                 data=json.dumps({'email': info['email'], 'password': PASSWORD}),
             )
@@ -104,9 +156,9 @@ def main():
 
             page = context.new_page()
 
-            planner_url = f'{WEB_BASE}/projects/{info["projectId"]}/planner'
+            planner_url = f'{web_base}/projects/{info["projectId"]}/planner?episodeId={info["episodeId"]}'
             planner_workspace_response = context.request.get(
-                f'{WEB_BASE}/api/planner/projects/{info["projectId"]}/workspace?episodeId={info["episodeId"]}',
+                f'{web_base}/api/planner/projects/{info["projectId"]}/workspace?episodeId={info["episodeId"]}',
                 headers={'Accept': 'application/json'},
             )
             if not planner_workspace_response.ok:
@@ -128,7 +180,7 @@ def main():
                     ), None)
                     if debug_apply_version:
                         activate_response = context.request.post(
-                            f'{WEB_BASE}/api/planner/projects/{info["projectId"]}/refinement-versions/{debug_apply_version["id"]}/activate',
+                            f'{web_base}/api/planner/projects/{info["projectId"]}/refinement-versions/{debug_apply_version["id"]}/activate',
                             headers={'Accept': 'application/json', 'Content-Type': 'application/json'},
                             data=json.dumps({'episodeId': info['episodeId']}),
                         )
@@ -137,7 +189,7 @@ def main():
                                 f'Activating debug apply refinement failed: {activate_response.status} {activate_response.text()}'
                             )
                         planner_workspace_response = context.request.get(
-                            f'{WEB_BASE}/api/planner/projects/{info["projectId"]}/workspace?episodeId={info["episodeId"]}',
+                            f'{web_base}/api/planner/projects/{info["projectId"]}/workspace?episodeId={info["episodeId"]}',
                             headers={'Accept': 'application/json'},
                         )
                         if not planner_workspace_response.ok:
@@ -185,7 +237,7 @@ def main():
             page.wait_for_url(f'**/projects/{info["projectId"]}/creation', timeout=UI_TIMEOUT_MS)
 
             creation_workspace_response = context.request.get(
-                f'{WEB_BASE}/api/creation/projects/{info["projectId"]}/workspace?episodeId={info["episodeId"]}',
+                f'{web_base}/api/creation/projects/{info["projectId"]}/workspace?episodeId={info["episodeId"]}',
                 headers={'Accept': 'application/json'},
             )
             if not creation_workspace_response.ok:
@@ -212,7 +264,7 @@ def main():
             page.wait_for_url(f'**/projects/{info["projectId"]}/publish', timeout=UI_TIMEOUT_MS)
 
             publish_workspace_response = context.request.get(
-                f'{WEB_BASE}/api/publish/projects/{info["projectId"]}/workspace?episodeId={info["episodeId"]}',
+                f'{web_base}/api/publish/projects/{info["projectId"]}/workspace?episodeId={info["episodeId"]}',
                 headers={'Accept': 'application/json'},
             )
             if not publish_workspace_response.ok:
@@ -242,7 +294,18 @@ def main():
             page.get_by_text('发布作品').first.wait_for(timeout=UI_TIMEOUT_MS)
             page.screenshot(path=str(OUT_DIR / 'publish.png'), full_page=True)
 
-            page.goto(f'{WEB_BASE}/settings/providers', wait_until='domcontentloaded')
+            disable_smoke_text_provider_config(info['email'])
+            page.goto(planner_url, wait_until='domcontentloaded')
+            page.locator('textarea').first.fill('请继续改写故事节奏，验证 Provider 缺失时的前端引导。')
+            planner_submit_button = page.locator('form button[type="submit"]').first
+            planner_submit_button.wait_for(timeout=UI_TIMEOUT_MS)
+            planner_submit_button.click()
+            page.get_by_text('策划页 AI 主链路已关闭自动 mock 回退').wait_for(timeout=UI_TIMEOUT_MS)
+            provider_cta = page.get_by_role('link', name='前往 Provider 配置')
+            provider_cta.wait_for(timeout=UI_TIMEOUT_MS)
+            page.screenshot(path=str(OUT_DIR / 'planner-provider-required.png'), full_page=True)
+            provider_cta.click()
+            page.wait_for_url(f'{web_base}/settings/providers', timeout=UI_TIMEOUT_MS)
             page.get_by_role('heading', name='把模型权限交给用户自己配置').wait_for(timeout=UI_TIMEOUT_MS)
             ark_card = page.locator('section').filter(has=page.get_by_role('heading', name='Volcengine Ark')).first
             ark_card.wait_for(timeout=UI_TIMEOUT_MS)
@@ -260,11 +323,16 @@ def main():
                 'planner': str(OUT_DIR / 'planner.png'),
                 'creation': str(OUT_DIR / 'creation.png'),
                 'publish': str(OUT_DIR / 'publish.png'),
+                'plannerProviderRequired': str(OUT_DIR / 'planner-provider-required.png'),
                 'settingsProviders': str(OUT_DIR / 'settings-providers.png'),
             },
             'logs': {
                 'api': str(OUT_DIR / 'api-server.log'),
                 'web': str(OUT_DIR / 'web-server.log'),
+            },
+            'ports': {
+                'api': api_port,
+                'web': web_port,
             },
         }, ensure_ascii=False, indent=2))
     finally:

@@ -2,6 +2,7 @@
 
 import type { RefObject } from 'react';
 
+import type { ApiPlannerEntityRecommendation } from '../lib/planner-api';
 import { SUBJECT_TONE_LABEL, SUBJECT_TONE_META } from '../lib/planner-page-helpers';
 import { PlannerAssetDialog } from './planner-asset-dialog';
 import { PlannerCreationBootDialog } from './planner-creation-boot-dialog';
@@ -31,11 +32,14 @@ interface PlannerPageDialogsProps {
   subjectAssetLabel: string;
   subjectThumbs: DialogThumb[];
   subjectAssetDraftId: string | null;
+  subjectRecommendations: ApiPlannerEntityRecommendation[];
+  subjectRecommendationsLoading: boolean;
   subjectUploadInputRef: RefObject<HTMLInputElement | null>;
   onSubjectClose: () => void;
   onSubjectSelectThumb: (thumb: DialogThumb) => void;
   onSubjectPromptChange: (value: string) => void;
   onSubjectPromptModeChange: (value: 'upload' | 'ai') => void;
+  onSubjectApplyRecommendation: (recommendation: ApiPlannerEntityRecommendation) => void;
   onSubjectGenerate: () => void;
   onSubjectRerun: () => void;
   onSubjectApply: () => void;
@@ -49,11 +53,14 @@ interface PlannerPageDialogsProps {
   sceneAssetLabel: string;
   sceneThumbs: DialogThumb[];
   sceneAssetDraftId: string | null;
+  sceneRecommendations: ApiPlannerEntityRecommendation[];
+  sceneRecommendationsLoading: boolean;
   sceneUploadInputRef: RefObject<HTMLInputElement | null>;
   onSceneClose: () => void;
   onSceneSelectThumb: (thumb: DialogThumb) => void;
   onScenePromptChange: (value: string) => void;
   onScenePromptModeChange: (value: 'upload' | 'ai') => void;
+  onSceneApplyRecommendation: (recommendation: ApiPlannerEntityRecommendation) => void;
   onSceneGenerate: () => void;
   onSceneRerun: () => void;
   onSceneApply: () => void;
@@ -86,6 +93,8 @@ export function PlannerPageDialogs(props: PlannerPageDialogsProps) {
         thumbs={props.subjectThumbs}
         selectedAssetId={props.subjectAssetDraftId}
         selectedImage={props.subjectImage}
+        recommendations={props.subjectRecommendations}
+        recommendationsLoading={props.subjectRecommendationsLoading}
         extraField={(
           <div className={styles.assetField}>
             <span>音色</span>
@@ -122,6 +131,7 @@ export function PlannerPageDialogs(props: PlannerPageDialogsProps) {
         onSelectThumb={props.onSubjectSelectThumb}
         onPromptChange={props.onSubjectPromptChange}
         onPromptModeChange={props.onSubjectPromptModeChange}
+        onApplyRecommendation={props.onSubjectApplyRecommendation}
         onGenerate={props.onSubjectGenerate}
         onRerun={props.onSubjectRerun}
         onApply={props.onSubjectApply}
@@ -146,6 +156,8 @@ export function PlannerPageDialogs(props: PlannerPageDialogsProps) {
         thumbs={props.sceneThumbs}
         selectedAssetId={props.sceneAssetDraftId}
         selectedImage={props.sceneImage}
+        recommendations={props.sceneRecommendations}
+        recommendationsLoading={props.sceneRecommendationsLoading}
         uploadSlot={(
           <div className={styles.assetUploadBox}>
             <input
@@ -173,6 +185,7 @@ export function PlannerPageDialogs(props: PlannerPageDialogsProps) {
         onSelectThumb={props.onSceneSelectThumb}
         onPromptChange={props.onScenePromptChange}
         onPromptModeChange={props.onScenePromptModeChange}
+        onApplyRecommendation={props.onSceneApplyRecommendation}
         onGenerate={props.onSceneGenerate}
         onRerun={props.onSceneRerun}
         onApply={props.onSceneApply}

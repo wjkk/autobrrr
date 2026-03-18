@@ -8,6 +8,12 @@ on:
       - master
   merge_group:
   workflow_dispatch:
+    inputs:
+      include_real_provider:
+        description: Run the real-provider planner smoke after the normal gate
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -152,3 +158,174 @@ jobs:
         run: |
           test "${{ needs.planner-api-smoke.result }}" = "success"
           test "${{ needs.planner-browser-smoke.result }}" = "success"
+
+  planner-real-provider-smoke:
+    name: Planner Real Provider Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.include_real_provider }}
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: aiv
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ppassword --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:password@127.0.0.1:3306/aiv
+      API_PORT: 8787
+      AIV_API_BASE_URL: http://127.0.0.1:8787
+      API_BASE_URL: http://127.0.0.1:8787
+      SMOKE_EMAIL: smoke-ark-image-gha@example.com
+      SMOKE_PASSWORD: password123
+      AIV_REAL_PROVIDER_EMAIL: smoke-ark-image-gha@example.com
+      AIV_REAL_PROVIDER_PASSWORD: password123
+      SMOKE_ARK_API_KEY: ${{ secrets.SMOKE_ARK_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.25.0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @aiv/api prisma:generate
+
+      - name: Push database schema
+        run: pnpm --filter @aiv/api prisma:push
+
+      - name: Seed model registry
+        run: pnpm --filter @aiv/api seed:model-registry
+
+      - name: Seed planner agents
+        run: pnpm --filter @aiv/api seed:planner-agents
+
+      - name: Install Python Playwright
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Configure real provider account
+        run: |
+          pnpm --filter @aiv/api dev > /tmp/aiv-real-provider-config-api.log 2>&1 &
+          API_PID=$!
+          trap 'kill $API_PID' EXIT
+          for _ in $(seq 1 60); do
+            if curl -fsS "http://127.0.0.1:8787/api/model-registry" >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          pnpm --filter @aiv/api smoke:provider-ark-sync
+          kill $API_PID
+          wait $API_PID || true
+
+      - name: Run planner real provider smoke
+        run: pnpm test:planner:real-provider
+
+      - name: Write real provider summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          out_dir = Path('/tmp/aiv-real-provider-full-planner-e2e')
+          cli_summary = out_dir / 'cli-summary.json'
+          failure_summary = out_dir / 'failure-summary.json'
+          summary_path = Path(os.environ['GITHUB_STEP_SUMMARY'])
+
+          lines = ['# Planner Real Provider Smoke']
+
+          if cli_summary.exists():
+            payload = json.loads(cli_summary.read_text())
+            lines.append('')
+            lines.append('## Result')
+            lines.append(f"- status: success")
+            for key in ['projectId', 'episodeId', 'outlineRunId', 'refinementRunId', 'actCount', 'shotCount']:
+              if payload.get(key) is not None:
+                lines.append(f"- {key}: `{payload[key]}`")
+            if payload.get('subjectTitles'):
+              joined = ', '.join(f"`{item}`" for item in payload['subjectTitles'])
+              lines.append(f"- subjectTitles: {joined}")
+            if payload.get('summaryBullet'):
+              lines.append(f"- summaryBullet: {payload['summaryBullet']}")
+          elif failure_summary.exists():
+            payload = json.loads(failure_summary.read_text())
+            lines.append('')
+            lines.append('## Result')
+            lines.append(f"- status: failed")
+            for key in ['stage', 'projectId', 'episodeId', 'outlineRunId', 'refinementRunId']:
+              if payload.get(key):
+                lines.append(f"- {key}: `{payload[key]}`")
+            if payload.get('error'):
+              lines.append(f"- error: {payload['error']}")
+          else:
+            lines.append('')
+            lines.append('No summary json was produced.')
+
+          lines.append('')
+          lines.append('## Artifact Paths')
+          for path in [
+            out_dir / 'cli-summary.json',
+            out_dir / 'failure-summary.json',
+            out_dir / 'result.json',
+            out_dir / 'partial-result.json',
+            out_dir / 'outline-live.png',
+            out_dir / 'refinement-live.png',
+            out_dir / 'real-provider-api.log',
+            out_dir / 'real-provider-web.log',
+            Path('/tmp/aiv-real-provider-config-api.log'),
+          ]:
+            if path.exists():
+              lines.append(f"- `{path}`")
+
+          summary_path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+
+      - name: Upload real provider artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: planner-real-provider-artifacts
+          path: |
+            /tmp/aiv-real-provider-full-planner-e2e
+            /tmp/aiv-real-provider-config-api.log
+          if-no-files-found: ignore
+
+  planner-real-provider-gate:
+    name: Planner Real Provider Gate
+    runs-on: ubuntu-latest
+    needs:
+      - planner-regression-gate
+      - planner-real-provider-smoke
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.include_real_provider }}
+    steps:
+      - name: Enforce real provider gate
+        run: |
+          test "${{ needs.planner-regression-gate.result }}" = "success"
+          test "${{ needs.planner-real-provider-smoke.result }}" = "success"

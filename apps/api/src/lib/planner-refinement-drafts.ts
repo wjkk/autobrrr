@@ -54,6 +54,9 @@ function remapStructuredDocEntityKeys(args: {
       shots: act.shots.map((shot) => ({
         ...shot,
         entityKey: shot.entityKey ? args.shotIdMap.get(shot.entityKey) ?? shot.entityKey : shot.entityKey,
+        subjectBindings: Array.isArray(shot.subjectBindings)
+          ? shot.subjectBindings.map((binding) => args.subjectIdMap.get(binding) ?? binding)
+          : shot.subjectBindings,
       })),
     })),
   } satisfies Prisma.InputJsonValue;

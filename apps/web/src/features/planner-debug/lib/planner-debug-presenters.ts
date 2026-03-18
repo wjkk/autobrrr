@@ -21,6 +21,26 @@ export interface PlannerResultPreview {
   shots: PlannerPreviewCardItem[];
 }
 
+export interface PlannerEntityDebugItem {
+  key: string;
+  title: string;
+  prompt: string;
+  bindings: string[];
+}
+
+export interface PlannerEntityDebugLayer {
+  subjects: PlannerEntityDebugItem[];
+  scenes: PlannerEntityDebugItem[];
+  shots: PlannerEntityDebugItem[];
+}
+
+export interface PlannerEntityDebugView {
+  raw: PlannerEntityDebugLayer;
+  normalized: PlannerEntityDebugLayer;
+  final: PlannerEntityDebugLayer;
+  corrections: string[];
+}
+
 export interface PlannerResultSummary {
   stage: string;
   documentTitle: string;
@@ -142,6 +162,114 @@ export function buildPlannerResultPreview(input: unknown, assistantPackage: unkn
     : [];
 
   return { subjects, scenes, shots };
+}
+
+function emptyEntityLayer(): PlannerEntityDebugLayer {
+  return {
+    subjects: [],
+    scenes: [],
+    shots: [],
+  };
+}
+
+function readStructuredEntityLayer(value: unknown): PlannerEntityDebugLayer {
+  const root = readObject(value);
+  const structuredDoc = readObject(root.structuredDoc);
+  const source = Object.keys(structuredDoc).length > 0 ? structuredDoc : root;
+
+  const subjects = Array.isArray(source.subjects)
+    ? source.subjects.map((subject, index) => {
+        const record = readObject(subject);
+        return {
+          key: typeof record.entityKey === 'string' ? record.entityKey : `subject-${index + 1}`,
+          title: typeof record.title === 'string' ? record.title : `主体 ${index + 1}`,
+          prompt: typeof record.prompt === 'string' ? record.prompt : '',
+          bindings: [],
+        } satisfies PlannerEntityDebugItem;
+      })
+    : [];
+
+  const scenes = Array.isArray(source.scenes)
+    ? source.scenes.map((scene, index) => {
+        const record = readObject(scene);
+        return {
+          key: typeof record.entityKey === 'string' ? record.entityKey : `scene-${index + 1}`,
+          title: typeof record.title === 'string' ? record.title : `场景 ${index + 1}`,
+          prompt: typeof record.prompt === 'string' ? record.prompt : '',
+          bindings: [],
+        } satisfies PlannerEntityDebugItem;
+      })
+    : [];
+
+  const shots = Array.isArray(source.acts)
+    ? source.acts.flatMap((act, actIndex) => {
+        const actRecord = readObject(act);
+        const actTitle = typeof actRecord.title === 'string' ? actRecord.title : `幕 ${actIndex + 1}`;
+        const rawShots = Array.isArray(actRecord.shots) ? actRecord.shots : [];
+        return rawShots.map((shot, shotIndex) => {
+          const record = readObject(shot);
+          return {
+            key: typeof record.entityKey === 'string' ? record.entityKey : `${actTitle}-shot-${shotIndex + 1}`,
+            title: typeof record.title === 'string' ? record.title : `分镜 ${shotIndex + 1}`,
+            prompt: typeof record.visual === 'string' ? record.visual : '',
+            bindings: readStringArray(record.subjectBindings),
+          } satisfies PlannerEntityDebugItem;
+        });
+      })
+    : [];
+
+  return {
+    subjects,
+    scenes,
+    shots,
+  };
+}
+
+function compareLayerCounts(label: string, rawCount: number, normalizedCount: number, finalCount: number) {
+  return rawCount !== normalizedCount || normalizedCount !== finalCount
+    ? `${label}数量：raw ${rawCount} -> normalized ${normalizedCount} -> final ${finalCount}`
+    : `${label}数量稳定：${finalCount}`;
+}
+
+function countBindingChanges(left: PlannerEntityDebugLayer, right: PlannerEntityDebugLayer) {
+  const total = Math.max(left.shots.length, right.shots.length);
+  let changed = 0;
+
+  for (let index = 0; index < total; index += 1) {
+    const leftBindings = left.shots[index]?.bindings ?? [];
+    const rightBindings = right.shots[index]?.bindings ?? [];
+    if (leftBindings.join('|') !== rightBindings.join('|')) {
+      changed += 1;
+    }
+  }
+
+  return changed;
+}
+
+export function buildPlannerEntityDebugView(input: unknown, assistantPackage: unknown): PlannerEntityDebugView {
+  const inspection = readObject(readObject(input).assistantPackageInspection);
+  const raw = inspection.rawCandidate ? readStructuredEntityLayer(inspection.rawCandidate) : emptyEntityLayer();
+  const normalized = inspection.normalizedCandidate ? readStructuredEntityLayer(inspection.normalizedCandidate) : emptyEntityLayer();
+  const final = readStructuredEntityLayer(assistantPackage);
+
+  return {
+    raw,
+    normalized,
+    final,
+    corrections: [
+      compareLayerCounts('主体', raw.subjects.length, normalized.subjects.length, final.subjects.length),
+      compareLayerCounts('场景', raw.scenes.length, normalized.scenes.length, final.scenes.length),
+      compareLayerCounts('分镜', raw.shots.length, normalized.shots.length, final.shots.length),
+      `shot 绑定调整：raw -> normalized ${countBindingChanges(raw, normalized)} 处，normalized -> final ${countBindingChanges(normalized, final)} 处。`,
+    ],
+  };
+}
+
+export function summarizePlannerEntityLayerDiff(leftInput: unknown, leftAssistantPackage: unknown, rightInput: unknown, rightAssistantPackage: unknown) {
+  const left = buildPlannerEntityDebugView(leftInput, leftAssistantPackage);
+  const right = buildPlannerEntityDebugView(rightInput, rightAssistantPackage);
+
+  return `实体纠偏：A 主体 ${left.raw.subjects.length}/${left.normalized.subjects.length}/${left.final.subjects.length}，场景 ${left.raw.scenes.length}/${left.normalized.scenes.length}/${left.final.scenes.length}；B 主体 ${right.raw.subjects.length}/${right.normalized.subjects.length}/${right.final.subjects.length}，场景 ${right.raw.scenes.length}/${right.normalized.scenes.length}/${right.final.scenes.length}。`;
 }
 
 export function buildPlannerResultSummary(assistantPackage: unknown): PlannerResultSummary {

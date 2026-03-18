@@ -97,6 +97,7 @@ test('rebuildPlannerStructuredDocFromProjection rebuilds entities, acts and scri
         cameraMotion: '轻推',
         voiceRole: '配角',
         dialogue: '你终于来了',
+        subjectBindingsJson: ['subject-b'] as Prisma.JsonValue,
         referenceAssetIdsJson: ['shot-ref-2'] as Prisma.JsonValue,
         generatedAssetIdsJson: ['shot-gen-2'] as Prisma.JsonValue,
         sortOrder: 2,
@@ -114,6 +115,7 @@ test('rebuildPlannerStructuredDocFromProjection rebuilds entities, acts and scri
         cameraMotion: '推进',
         voiceRole: '旁白',
         dialogue: '夜幕降临',
+        subjectBindingsJson: ['subject-a'] as Prisma.JsonValue,
         referenceAssetIdsJson: ['shot-ref-1'] as Prisma.JsonValue,
         generatedAssetIdsJson: ['shot-gen-1'] as Prisma.JsonValue,
         sortOrder: 1,
@@ -124,12 +126,16 @@ test('rebuildPlannerStructuredDocFromProjection rebuilds entities, acts and scri
   assert.equal(doc.projectTitle, '旧项目');
   assert.deepEqual(doc.subjectBullets, ['主角：蓝色风衣', '配角：红色斗篷']);
   assert.equal(doc.subjects[0]?.entityKey, 'subject-a');
+  assert.ok((doc.subjects[0]?.semanticFingerprint ?? '').length > 0);
   assert.equal(doc.scenes[0]?.entityKey, 'scene-a');
+  assert.ok((doc.scenes[0]?.semanticFingerprint ?? '').length > 0);
   assert.deepEqual(doc.scriptSummary, ['分镜数量：2', '场景数量：1', '主体数量：2']);
   assert.equal(doc.acts[0]?.time, '夜晚');
   assert.equal(doc.acts[0]?.location, '屋顶');
   assert.equal(doc.acts[0]?.shots[0]?.title, '01');
   assert.equal(doc.acts[0]?.shots[0]?.targetModelFamilySlug, 'seedance-2.0');
+  assert.deepEqual(doc.acts[0]?.shots[0]?.subjectBindings, ['subject-a']);
+  assert.deepEqual(doc.acts[0]?.shots[1]?.subjectBindings, ['subject-b']);
   assert.deepEqual(doc.acts[0]?.shots[1]?.generatedAssetIds, ['shot-gen-2']);
 });
 
@@ -189,6 +195,7 @@ test('syncPlannerRefinementProjection updates refinement doc and source run outp
           cameraMotion: '跟拍',
           voiceRole: '旁白',
           dialogue: '冲突开始',
+          subjectBindingsJson: ['subject-1'] as Prisma.JsonValue,
           referenceAssetIdsJson: ['shot-ref'] as Prisma.JsonValue,
           generatedAssetIdsJson: ['shot-gen'] as Prisma.JsonValue,
           sortOrder: 1,

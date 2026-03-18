@@ -12,6 +12,10 @@ const email = process.env.SMOKE_EMAIL ?? `planner-refactor-${Date.now()}@example
 const password = process.env.SMOKE_PASSWORD ?? 'password123';
 const tinyPngDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4k0AAAAASUVORK5CYII=';
 
+function apiUrl(path: string) {
+  return `${apiBaseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
 interface ApiSuccess<T> {
   ok: true;
   data: T;
@@ -192,14 +196,14 @@ async function seedPlannerState(args: {
       update: {
         name: 'Smoke Text Provider',
         providerType: 'PROXY',
-        baseUrl: 'http://127.0.0.1:8787/mock/text',
+        baseUrl: apiUrl('/mock/text'),
         enabled: true,
       },
       create: {
         code: 'smoke-text-provider',
         name: 'Smoke Text Provider',
         providerType: 'PROXY',
-        baseUrl: 'http://127.0.0.1:8787/mock/text',
+        baseUrl: apiUrl('/mock/text'),
         enabled: true,
       },
     });
@@ -320,14 +324,14 @@ async function seedPlannerState(args: {
       update: {
         name: 'Smoke Image Provider',
         providerType: 'PROXY',
-        baseUrl: 'http://127.0.0.1:8787/mock/image',
+        baseUrl: apiUrl('/mock/image'),
         enabled: true,
       },
       create: {
         code: 'smoke-image-provider',
         name: 'Smoke Image Provider',
         providerType: 'PROXY',
-        baseUrl: 'http://127.0.0.1:8787/mock/image',
+        baseUrl: apiUrl('/mock/image'),
         enabled: true,
       },
     });
@@ -503,7 +507,7 @@ async function seedPlannerState(args: {
         mediaKind: 'IMAGE',
         sourceKind: 'GENERATED',
         fileName: 'subject-seed.png',
-        sourceUrl: 'http://127.0.0.1:8787/uploads/generated/subject-seed.png',
+        sourceUrl: apiUrl('/uploads/generated/subject-seed.png'),
       },
     });
     const sceneAsset = await tx.asset.create({
@@ -514,7 +518,7 @@ async function seedPlannerState(args: {
         mediaKind: 'IMAGE',
         sourceKind: 'GENERATED',
         fileName: 'scene-seed.png',
-        sourceUrl: 'http://127.0.0.1:8787/uploads/generated/scene-seed.png',
+        sourceUrl: apiUrl('/uploads/generated/scene-seed.png'),
       },
     });
     const shotAsset = await tx.asset.create({
@@ -525,7 +529,7 @@ async function seedPlannerState(args: {
         mediaKind: 'IMAGE',
         sourceKind: 'GENERATED',
         fileName: 'shot-seed.png',
-        sourceUrl: 'http://127.0.0.1:8787/uploads/generated/shot-seed.png',
+        sourceUrl: apiUrl('/uploads/generated/shot-seed.png'),
       },
     });
     const replacementSubjectAsset = await tx.asset.create({
@@ -536,7 +540,7 @@ async function seedPlannerState(args: {
         mediaKind: 'IMAGE',
         sourceKind: 'GENERATED',
         fileName: 'subject-replacement.png',
-        sourceUrl: 'http://127.0.0.1:8787/uploads/generated/subject-replacement.png',
+        sourceUrl: apiUrl('/uploads/generated/subject-replacement.png'),
       },
     });
 

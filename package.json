@@ -3,9 +3,10 @@
   "private": true,
   "packageManager": "pnpm@10.25.0",
   "scripts": {
-    "dev": "sh -c 'trap \"kill 0\" EXIT; pnpm --filter @aiv/api dev & pnpm --filter @aiv/web dev & wait'",
+    "dev": "sh -c 'trap \"kill 0\" EXIT; pnpm --filter @aiv/api dev & pnpm --filter @aiv/api worker & pnpm --filter @aiv/web dev & wait'",
     "dev:web": "pnpm --filter @aiv/web dev",
     "dev:api": "pnpm --filter @aiv/api dev",
+    "dev:worker": "pnpm --filter @aiv/api worker",
     "build": "pnpm --filter @aiv/web build",
     "build:api": "pnpm --filter @aiv/api build",
     "typecheck": "pnpm --filter @aiv/web typecheck",
@@ -15,7 +16,9 @@
     "test:ai:regression": "pnpm --filter @aiv/api test:ai:regression",
     "test:planner:api-smoke": "bash scripts/run-planner-api-smoke.sh",
     "test:planner:browser-smoke": "python scripts/smoke-browser-main-flow.py",
+    "test:planner:real-provider": "python scripts/smoke-browser-real-provider-planner.py",
     "test:planner:gate": "pnpm test:planner:api-smoke && pnpm test:planner:browser-smoke",
+    "test:planner:gate:full": "pnpm test:planner:gate && pnpm test:planner:real-provider",
     "test:web:regression": "python scripts/smoke-browser-main-flow.py",
     "test:quality": "pnpm test:unit:api && pnpm test:web:unit && pnpm test:ai:regression && pnpm test:web:regression"
   }

@@ -1,4 +1,5 @@
 import type { ApiPlannerDebugApplySource, ApiPlannerWorkspace } from './planner-api';
+import { summarizePlannerDisplayText } from './planner-display-normalization';
 import type { PlannerThreadMessage } from './planner-thread';
 import { sekoPlanData } from './seko-plan-data';
 import { findPlannerVideoModelOption, PLANNER_VIDEO_MODEL_OPTIONS } from './planner-video-model-options';
@@ -223,7 +224,7 @@ function readOutlineSummary(content: Record<string, unknown> | null | undefined)
   }
 
   if (typeof content.text === 'string' && content.text.trim()) {
-    return content.text;
+    return summarizePlannerDisplayText(content.text, content.text);
   }
 
   const documentTitle = typeof content.documentTitle === 'string' ? content.documentTitle : '';

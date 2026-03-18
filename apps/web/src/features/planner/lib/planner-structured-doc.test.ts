@@ -65,18 +65,30 @@ test('outlineToPreviewStructuredPlannerDoc builds preview doc from outline data'
   assert.equal(result.projectTitle, '赛博追凶');
   assert.equal(result.episodeTitle, '失控的线索');
   assert.deepEqual(result.summaryBullets, ['一枚神秘芯片引发连环失踪案。']);
+  assert.deepEqual(result.sceneBullets, [
+    '失控的线索：主角卷入第一起离奇失踪案。',
+    '黑市回声：追查芯片来源，线索指向地下交易。',
+  ]);
   assert.deepEqual(result.subjects, [
     {
+      entityType: 'subject',
       title: '林修',
       prompt: '主角，前刑警，擅长数据追踪',
       referenceAssetIds: [],
       generatedAssetIds: [],
     },
   ]);
+  assert.equal(result.scenes[0]?.entityType, 'scene');
   assert.equal(result.scenes[0]?.title, '失控的线索');
+  assert.deepEqual(result.scriptSummary, [
+    '叙事形式：系列，共 12 集',
+    '题材类型：悬疑',
+    '整体风格：冷色霓虹、压迫节奏',
+    '剧情结构：失控的线索 -> 黑市回声',
+  ]);
 });
 
-test('toStructuredPlannerDoc preserves inherited entity keys and target model family slug', () => {
+test('toStructuredPlannerDoc preserves inherited entity keys, subject bindings and target model family slug', () => {
   const result = toStructuredPlannerDoc(
     {
       projectTitle: '项目A',
@@ -138,6 +150,8 @@ test('toStructuredPlannerDoc preserves inherited entity keys and target model fa
       subjects: [
         {
           entityKey: 'planner-subject-1',
+          entityType: 'subject',
+          semanticFingerprint: 'subject|linye',
           title: '旧主体',
           prompt: '旧 prompt',
         },
@@ -146,6 +160,8 @@ test('toStructuredPlannerDoc preserves inherited entity keys and target model fa
       scenes: [
         {
           entityKey: 'planner-scene-1',
+          entityType: 'scene',
+          semanticFingerprint: 'scene|tiantai',
           title: '旧场景',
           prompt: '旧场景 prompt',
         },
@@ -165,6 +181,7 @@ test('toStructuredPlannerDoc preserves inherited entity keys and target model fa
               motion: '旧 motion',
               voice: '旧 voice',
               line: '旧台词',
+              subjectBindings: ['planner-subject-1'],
               targetModelFamilySlug: 'ark-seedance-2-video',
             },
           ],
@@ -174,7 +191,12 @@ test('toStructuredPlannerDoc preserves inherited entity keys and target model fa
   );
 
   assert.equal(result.subjects[0]?.entityKey, 'planner-subject-1');
+  assert.equal(result.subjects[0]?.entityType, 'subject');
+  assert.equal(result.subjects[0]?.semanticFingerprint, 'subject|linye');
   assert.equal(result.scenes[0]?.entityKey, 'planner-scene-1');
+  assert.equal(result.scenes[0]?.entityType, 'scene');
+  assert.equal(result.scenes[0]?.semanticFingerprint, 'scene|tiantai');
   assert.equal(result.acts[0]?.shots[0]?.entityKey, 'planner-shot-1');
+  assert.deepEqual(result.acts[0]?.shots[0]?.subjectBindings, ['planner-subject-1']);
   assert.equal(result.acts[0]?.shots[0]?.targetModelFamilySlug, 'ark-seedance-2-video');
 });

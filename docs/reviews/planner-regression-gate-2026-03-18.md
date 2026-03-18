@@ -17,6 +17,9 @@ If any step regresses, pull requests should fail before merge.
 - Upstream jobs:
   - `Planner API Smoke`
   - `Planner Browser Smoke`
+- Manual optional jobs:
+  - `Planner Real Provider Smoke`
+  - `Planner Real Provider Gate`
 
 Branch protection should require the single final check:
 
@@ -64,6 +67,18 @@ Artifacts:
 pnpm test:planner:gate
 ```
 
+### Full local gate + real provider
+
+```bash
+pnpm test:planner:gate:full
+```
+
+说明：
+
+- 先跑普通 API / Browser gate
+- 再跑 `pnpm test:planner:real-provider`
+- 仅适用于本地已有真实 provider 配置的环境
+
 ## CI Runtime Contract
 
 The workflow provisions:
@@ -81,6 +96,26 @@ Required environment values are injected in workflow:
 - `DATABASE_URL=mysql://root:password@127.0.0.1:3306/aiv`
 - `API_PORT=8787`
 - `AIV_API_BASE_URL=http://127.0.0.1:8787`
+
+### Manual real-provider dispatch
+
+`workflow_dispatch` 下可额外打开：
+
+- `include_real_provider=true`
+
+此时 workflow 会追加：
+
+1. `seed:model-registry`
+2. `seed:planner-agents`
+3. `smoke:provider-ark-sync`
+4. `pnpm test:planner:real-provider`
+5. GitHub Step Summary 中写入 real-provider 成功/失败摘要
+6. 上传 `/tmp/aiv-real-provider-full-planner-e2e` 与 `/tmp/aiv-real-provider-config-api.log`
+
+前提：
+
+- GitHub Actions secret `SMOKE_ARK_API_KEY` 已配置
+- 仅建议人工触发，不作为普通 PR 必选门禁
 
 ## Why The Final Gate Matters
 

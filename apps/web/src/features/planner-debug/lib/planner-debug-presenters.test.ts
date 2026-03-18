@@ -2,10 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  buildPlannerEntityDebugView,
   buildPlannerResultPreview,
   buildPlannerResultSummary,
   readObject,
   readStringArray,
+  summarizePlannerEntityLayerDiff,
   summarizePrompt,
 } from './planner-debug-presenters';
 
@@ -76,6 +78,62 @@ test('buildPlannerResultSummary computes completeness and missing fields for ref
   assert.ok(summary.completenessScore < 100);
   assert.ok(summary.missingFields.includes('acts[0].shots[0].composition'));
   assert.ok(summary.missingFields.includes('acts[0].shots[0].line'));
+});
+
+test('buildPlannerEntityDebugView exposes raw, normalized and final entity layers', () => {
+  const view = buildPlannerEntityDebugView(
+    {
+      assistantPackageInspection: {
+        rawCandidate: {
+          structuredDoc: {
+            subjects: [{ title: '主角', prompt: '旧角色提示词' }],
+            scenes: [{ title: '办公室', prompt: '旧场景提示词' }],
+            acts: [{ shots: [{ title: '01', visual: '旧画面', subjectBindings: ['subject-old'] }] }],
+          },
+        },
+        normalizedCandidate: {
+          structuredDoc: {
+            subjects: [{ title: '主角', prompt: '规范化角色提示词' }],
+            scenes: [{ title: '办公室', prompt: '规范化场景提示词' }],
+            acts: [{ shots: [{ title: '01', visual: '规范化画面', subjectBindings: ['subject-1'] }] }],
+          },
+        },
+      },
+    },
+    {
+      structuredDoc: {
+        subjects: [{ title: '主角', prompt: '最终角色提示词' }],
+        scenes: [{ title: '办公室', prompt: '最终场景提示词' }],
+        acts: [{ shots: [{ title: '01', visual: '最终画面', subjectBindings: ['subject-1'] }] }],
+      },
+    },
+  );
+
+  assert.equal(view.raw.subjects[0]?.prompt, '旧角色提示词');
+  assert.equal(view.normalized.shots[0]?.bindings[0], 'subject-1');
+  assert.equal(view.final.scenes[0]?.prompt, '最终场景提示词');
+  assert.equal(view.corrections.length, 4);
+});
+
+test('summarizePlannerEntityLayerDiff aggregates raw/normalized/final entity counts for A/B compare', () => {
+  const summary = summarizePlannerEntityLayerDiff(
+    {
+      assistantPackageInspection: {
+        rawCandidate: { structuredDoc: { subjects: [{ title: 'A', prompt: 'a' }] } },
+        normalizedCandidate: { structuredDoc: { subjects: [{ title: 'A', prompt: 'a' }], scenes: [{ title: '场景', prompt: 'x' }] } },
+      },
+    },
+    { structuredDoc: { subjects: [{ title: 'A', prompt: 'a' }], scenes: [{ title: '场景', prompt: 'x' }] } },
+    {
+      assistantPackageInspection: {
+        rawCandidate: { structuredDoc: { subjects: [{ title: 'B', prompt: 'b' }], scenes: [] } },
+        normalizedCandidate: { structuredDoc: { subjects: [{ title: 'B', prompt: 'b' }], scenes: [] } },
+      },
+    },
+    { structuredDoc: { subjects: [{ title: 'B', prompt: 'b' }], scenes: [] } },
+  );
+
+  assert.match(summary, /实体纠偏：A 主体 1\/1\/1，场景 0\/1\/1；B 主体 1\/1\/1，场景 0\/0\/0。/);
 });
 
 test('summarizePrompt returns stable char and line counts', () => {

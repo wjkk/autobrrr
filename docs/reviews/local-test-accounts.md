@@ -20,6 +20,16 @@
 - 显示名：`QA Local`
 - 本地用户 ID：`cmmqi5vmg0000z52tiuguqmpg`
 
+### Planner Real Provider
+
+- 用途：真实 provider 的 Planner 浏览器端到端回归
+- 邮箱：`smoke-ark-image-1773673889902@example.com`
+- 密码：`password123`
+- 说明：
+  - 当前默认用于 `pnpm test:planner:real-provider`
+  - 该账号需要在本地数据库中保留可用文本模型 provider 配置
+  - 当前默认验证使用的文本 endpoint 需具备真实可调用权限
+
 ## 2. 创建与验证结果
 
 本账号已通过本地接口创建并验证：
@@ -71,3 +81,4 @@ curl -b /tmp/aiv-test.cookies http://localhost:3000/api/auth/me
 1. 该账号仅用于本地开发与测试，不用于生产或共享外部环境。
 2. 如果本地数据库被重建，账号可能丢失；此时可使用同一邮箱和密码重新创建。
 3. 若后续新增更多测试账号，继续追加在本文件中，不另起零散记录。
+4. 若真实 provider 回归账号变更，需同步更新 `docs/reviews/planner-real-provider-e2e.md` 与 `scripts/smoke-browser-real-provider-planner.py`。

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SekoActDraft, SekoImageCard } from '../lib/seko-plan-data';
 
 export type PlannerRefinementStatus = 'running' | 'ready' | 'failed';
-export type PlannerRefinementTrigger = 'confirm_outline' | 'rerun';
+export type PlannerRefinementTrigger = 'confirm_outline' | 'rerun' | 'subject' | 'scene' | 'shot' | 'act';
 
 export interface PlannerSectionVisibility {
   summary: boolean;

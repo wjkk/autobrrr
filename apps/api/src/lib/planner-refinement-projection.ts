@@ -1,6 +1,7 @@
 import type { PlannerRefinementVersion, PlannerScene, PlannerShotScript, PlannerSubject, Prisma } from '@prisma/client';
 
 import { buildFallbackPlannerStructuredDoc, plannerStructuredDocSchema, type PlannerStructuredDoc } from './planner-doc.js';
+import { buildPlannerEntityFingerprint } from './planner-entity-fingerprint.js';
 
 type PlannerDbClient = Prisma.TransactionClient;
 
@@ -26,6 +27,7 @@ interface ProjectionInput {
       'id' | 'sceneId' | 'actKey' | 'actTitle' | 'shotNo' | 'title' | 'targetModelFamilySlug' | 'visualDescription' | 'composition' | 'cameraMotion' | 'voiceRole' | 'dialogue' | 'sortOrder'
     >
     & {
+      subjectBindingsJson?: Prisma.JsonValue | null;
       referenceAssetIdsJson?: Prisma.JsonValue | null;
       generatedAssetIdsJson?: Prisma.JsonValue | null;
     }
@@ -93,6 +95,7 @@ export function rebuildPlannerStructuredDocFromProjection(input: ProjectionInput
       voice: shot.voiceRole,
       line: shot.dialogue,
       targetModelFamilySlug: shot.targetModelFamilySlug ?? undefined,
+      subjectBindings: readAssetIds(shot.subjectBindingsJson),
       referenceAssetIds: readAssetIds(shot.referenceAssetIdsJson),
       generatedAssetIds: readAssetIds(shot.generatedAssetIdsJson),
     });
@@ -104,6 +107,11 @@ export function rebuildPlannerStructuredDocFromProjection(input: ProjectionInput
     subjectBullets: subjects.map((subject) => `${subject.name}：${subject.appearance || subject.prompt}`),
     subjects: subjects.map((subject) => ({
       entityKey: subject.id,
+      entityType: 'subject',
+      semanticFingerprint: buildPlannerEntityFingerprint({
+        title: subject.name,
+        prompt: subject.prompt,
+      }),
       title: subject.name,
       prompt: subject.prompt,
       referenceAssetIds: readAssetIds(subject.referenceAssetIdsJson),
@@ -112,6 +120,11 @@ export function rebuildPlannerStructuredDocFromProjection(input: ProjectionInput
     sceneBullets: scenes.map((scene) => scene.description || scene.prompt),
     scenes: scenes.map((scene) => ({
       entityKey: scene.id,
+      entityType: 'scene',
+      semanticFingerprint: buildPlannerEntityFingerprint({
+        title: scene.name,
+        prompt: scene.prompt,
+      }),
       title: scene.name,
       prompt: scene.prompt,
       referenceAssetIds: readAssetIds(scene.referenceAssetIdsJson),
@@ -188,6 +201,7 @@ export async function syncPlannerRefinementProjection(args: {
         cameraMotion: true,
         voiceRole: true,
         dialogue: true,
+        subjectBindingsJson: true,
         referenceAssetIdsJson: true,
         generatedAssetIdsJson: true,
         sortOrder: true,

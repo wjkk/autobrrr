@@ -327,10 +327,75 @@ test('queuePlannerGenerateDocRunWithDeps builds outline and refinement trigger t
 
   const refinementResult = await __testables.queuePlannerGenerateDocRunWithDeps(
     { projectId: 'project-1', episodeId: 'episode-1', userId: 'user-1' },
-    makeDeps(new Date('2026-03-17T00:00:00.000Z'), { id: 'outline-1', versionNumber: 1, outlineDocJson: { summary: 'outline' } }, { id: 'ref-1', versionNumber: 2, structuredDocJson: { summary: 'refinement' } }),
+    makeDeps(new Date('2026-03-17T00:00:00.000Z'), {
+      id: 'outline-1',
+      versionNumber: 1,
+      outlineDocJson: {
+        projectTitle: '项目A',
+        contentType: 'drama',
+        subtype: '悬疑',
+        format: 'single',
+        episodeCount: 1,
+        genre: '校园悬疑',
+        toneStyle: ['紧张', '克制'],
+        premise: '学生记者深夜回到旧校舍。',
+        mainCharacters: [
+          { id: 'c1', name: '林夏', role: '学生记者', description: '执着追查失踪案。' },
+        ],
+        storyArc: [
+          { episodeNo: 1, title: '夜探档案室', summary: '林夏深夜进入档案室寻找线索。' },
+        ],
+        constraints: ['保持单集强悬念'],
+        openQuestions: [],
+      },
+    }, { id: 'ref-1', versionNumber: 2, structuredDocJson: { summary: 'refinement' } }),
   );
   assert.equal(refinementResult.ok, true);
   assert.equal(refinementResult.ok && refinementResult.targetStage, 'refinement');
   assert.equal(recordedInput[1]?.['triggerType'], 'follow_up');
   assert.equal(recordedInput[1]?.['targetVideoModelFamilySlug'], 'seedance-2-0');
+  assert.deepEqual(recordedInput[1]?.['outlineRefinementHints'], {
+    characterHints: ['林夏：学生记者，执着追查失踪案。'],
+    locationHints: ['夜探档案室：林夏深夜进入档案室寻找线索。'],
+    structureHints: [
+      '叙事形式：单集，共 1 集',
+      '题材类型：校园悬疑',
+      '整体风格：紧张、克制',
+      '剧情结构：夜探档案室',
+      '约束：保持单集强悬念',
+    ],
+  });
+  assert.deepEqual((recordedInput[1]?.['contextSnapshot'] as Record<string, unknown>)?.['activeOutline'], {
+    id: 'outline-1',
+    versionNumber: 1,
+    outlineDoc: {
+      projectTitle: '项目A',
+      contentType: 'drama',
+      subtype: '悬疑',
+      format: 'single',
+      episodeCount: 1,
+      genre: '校园悬疑',
+      toneStyle: ['紧张', '克制'],
+      premise: '学生记者深夜回到旧校舍。',
+      mainCharacters: [
+        { id: 'c1', name: '林夏', role: '学生记者', description: '执着追查失踪案。' },
+      ],
+      storyArc: [
+        { episodeNo: 1, title: '夜探档案室', summary: '林夏深夜进入档案室寻找线索。' },
+      ],
+      constraints: ['保持单集强悬念'],
+      openQuestions: [],
+    },
+    refinementHints: {
+      characterHints: ['林夏：学生记者，执着追查失踪案。'],
+      locationHints: ['夜探档案室：林夏深夜进入档案室寻找线索。'],
+      structureHints: [
+        '叙事形式：单集，共 1 集',
+        '题材类型：校园悬疑',
+        '整体风格：紧张、克制',
+        '剧情结构：夜探档案室',
+        '约束：保持单集强悬念',
+      ],
+    },
+  });
 });

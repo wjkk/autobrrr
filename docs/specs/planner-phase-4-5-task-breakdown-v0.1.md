@@ -17,6 +17,8 @@
 9. `planner/finalize` 已落地；active refinement 可正式写入 Creation `Shot`，并携带 prompt、目标模型、草稿图绑定和来源追踪
 10. Planner SSE 已落地；queued/running 阶段会先基于 run input 的 `stepDefinitions` 输出实时步骤，refinement 落库后切到真实 `stepAnalysis`
 11. Planner partial rerun 已在前后端统一到 typed `rerunScope`；页面已支持单 shot 精细重跑与 act 级局部重排入口
+12. Planner refinement `subjects / scenes` 已新增显式 `entityType`，并由后端收敛为“模型声明 + 语义校验”双保险；相关 parser / projection / web structured-doc adapter 已同步
+13. Outline 阶段已前推轻量实体约束：`mainCharacters` 不再承载地点语义，关键空间信息要求进入 `storyArc.summary`
 
 状态收口结论：
 
@@ -30,6 +32,7 @@
 8. `工作流 H：shot 级精细化重跑` 已完成当前阶段实现
 9. `工作流 J：前端 Planner 页整合` 已完成当前阶段实现
 10. `planner-page.tsx` 当前已拆出 `planner-page-header.tsx`、`planner-episode-rail.tsx`、`planner-script-acts.tsx`、`planner-thread-panel.tsx`、`planner-asset-dialog.tsx`、`planner-document-panel.tsx`、`planner-result-header.tsx`、`planner-delete-shot-dialog.tsx`、`planner-creation-boot-dialog.tsx`，并新增 `use-planner-runtime-workspace.ts`、`use-planner-run-submission.ts`、`use-planner-asset-drafts.ts`、`use-planner-asset-actions.ts`、`use-planner-document-persistence.ts`、`use-planner-composer-actions.ts`、`use-planner-shot-editor.ts`、`use-planner-shot-actions.ts`、`use-planner-shot-prompt-preview.ts`、`use-planner-creation-flow.ts`、`use-planner-display-state.ts`、`use-planner-dialog-display-state.ts`，以及 `planner-page-helpers.ts`、`planner-page-dialogs.tsx` 等收口文件；`planner-page.tsx` 已降到约 658 行，Planner 页“进入创作”已通过真实浏览器回归，覆盖“同模型直接进入创作”和“切模型重新 finalize 后进入创作”
+11. Planner 文档实体语义已完成第一轮收敛：refinement 产物具备显式 `entityType`，outline 也已补前置约束，适合开始基于稳定实体类型推进新功能
 
 ## 1. 文档目的
 
@@ -575,3 +578,79 @@ interface ShotPromptOutput {
 
 4. 先做 SSE，再补 `finalize`。  
    错。SSE 是体验层，`finalize` 是业务闭环，优先级更高。
+
+## 19. 下一阶段开发优先级与任务表（2026-03-18）
+
+### 19.1 背景
+
+在进入下一阶段功能开发前，以下基础约束已完成：
+
+1. Planner refinement `subjects / scenes` 已支持显式 `entityType`
+2. 后端已将实体分类收敛为“模型声明 + 语义校验”双保险
+3. Outline 阶段已补轻量实体约束，减少 refinement 首次生成时的纠偏成本
+4. API parser / projection / Web structured-doc adapter / 聚焦单测 / typecheck 已完成对齐
+
+因此，当前已适合从“修协议”转入“基于稳定实体语义的新功能开发”。
+
+### 19.2 推荐推进顺序
+
+1. 实体级局部重跑主路径化
+2. outline -> refinement 结构继承加强
+3. 基于实体类型的素材推荐 / 自动补全
+4. shot `subjectBindings` 精细化
+5. planner debug 实体约束可视化
+6. 实体稳定键策略
+
+### 19.3 可执行任务表
+
+| ID | 优先级 | 任务 | 主要改动点 | 完成标准 |
+| --- | --- | --- | --- | --- |
+| R1 | P0 | 收敛 partial rerun scope，统一以 `subject / scene / shot / act` 为主语义 | `apps/api/src/lib/planner-rerun-scope.ts` `apps/api/src/lib/planner-rerun-service.ts` | 新入口默认走实体级 scope；旧 `*_only` 仅保留兼容层 |
+| R2 | P0 | 统一目标实体解析与 clone 逻辑 | `apps/api/src/lib/planner-rerun-service.ts` | 对 `subject / scene / shot / act` 的目标解析走单一路径，无重复分支 |
+| R3 | P0 | scoped rerun prompt 注入实体上下文，而不是整包重跑语境 | `apps/api/src/lib/planner-prompt-builder.ts` `apps/api/src/lib/planner-rerun-service.ts` | 改一个主体时，只重写该主体相关内容；无关内容不漂移 |
+| R4 | P0 | 前端把局部重跑升级为主交互路径 | `apps/web/src/features/planner/hooks/use-planner-refinement.ts` `apps/web/src/features/planner/components/planner-page.tsx` | 用户可从主体/场景/分镜直接触发局部重跑 |
+| R5 | P0 | 补 API / Web 单测与 focused smoke | `apps/api/src/lib/planner-rerun-service.test.ts` `apps/api/src/lib/planner-refinement-partial.test.ts` | 覆盖实体级 scope、target miss、diff merge、不误改无关区域 |
+| O1 | P0 | 定义 outline -> refinement 的中间提示结构，不扩主 schema | `apps/api/src/lib/planner-outline-doc.ts` `apps/api/src/lib/planner-prompt-builder.ts` | 有稳定 adapter，输出角色 / 空间 / 结构 hints |
+| O2 | P0 | 从 outline 提取 `characterHints / locationHints / structureHints` | `apps/api/src/lib/planner-prompt-builder.ts` | refinement 首次生成可显式继承大纲信息 |
+| O3 | P1 | 将 outline hints 注入 refinement prompt 与 run snapshot | `apps/api/src/lib/planner-run-service.ts` | debug / run input 可看到 outline-derived hints |
+| O4 | P1 | 前端 outline preview 与 refinement seed 对齐 | `apps/web/src/features/planner/lib/planner-structured-doc.ts` | outline 确认进入 refinement 后，角色 / 空间漂移明显下降 |
+| O5 | P1 | 补 adapter 单测 | `apps/api/src/lib/planner-orchestrator.test.ts` `apps/web/src/features/planner/lib/planner-structured-doc.test.ts` | 锁住三类 hints 的提取与注入 |
+| M1 | P1 | 定义实体素材推荐 contract | `apps/api/src/lib/planner-refinement-entity-service.ts` `apps/api/src/lib/planner-media-generation-service.ts` | `subject / scene` 推荐接口 shape 稳定 |
+| M2 | P1 | 主体素材推荐 | 同上 | 可为 `subject` 返回候选参考素材或 prompt seed |
+| M3 | P1 | 场景素材推荐 | 同上 | 可为 `scene` 返回候选空间素材或 prompt seed |
+| M4 | P1 | 前端推荐入口与一键应用 | `apps/web/src/features/planner/hooks/use-planner-asset-actions.ts` `apps/web/src/features/planner/components/planner-asset-dialog.tsx` | 推荐结果可应用到当前实体，不污染其他实体 |
+| M5 | P1 | 推荐链路测试 | API service tests + Web hook tests | 覆盖 `subject / scene` 类型分流、空结果、重复去重 |
+| B1 | P1 | 定义 shot 级主体绑定推断规则 | `apps/api/src/lib/planner-refinement-sync.ts` | 不再默认把全部 subjects 绑定到每个 shot |
+| B2 | P1 | 基于 shot 文本和实体名推断 `subjectBindings` | `apps/api/src/lib/planner-refinement-sync.ts` | 每个 shot 绑定更接近真实出现主体 |
+| B3 | P1 | projection 回建保留绑定一致性 | `apps/api/src/lib/planner-refinement-projection.ts` | save -> projection -> workspace 不丢绑定 |
+| B4 | P1 | 为局部编辑补绑定回归测试 | `apps/api/src/lib/planner-refinement-sync.test.ts` | 改一个 shot 不会把绑定全部重置 |
+| D1 | P2 | debug payload 暴露 `raw / normalized / final` 三层视图 | `apps/api/src/lib/planner-debug-shared.ts` `apps/api/src/lib/planner-debug-execution-service.ts` | 能看见模型原始声明、归一化结果、最终结构 |
+| D2 | P2 | debug UI 展示实体纠偏结果 | `apps/web/src/features/planner-debug/components/planner-debug-result-view.tsx` | 一眼能看出 `subject / scene` 被如何纠偏 |
+| D3 | P2 | debug compare 增加实体差异聚合 | `apps/web/src/features/planner-debug/lib/planner-debug-presenters.ts` | compare 页面可聚合展示实体变化 |
+| K1 | P2 | 定义实体稳定键策略，优先 ID，其次语义指纹 | `apps/api/src/lib/planner-refinement-sync.ts` `apps/api/src/lib/planner-refinement-drafts.ts` | 改标题不轻易丢资产继承 |
+| K2 | P2 | 引入 subject / scene 语义 fingerprint | 同上 | 同名改写、轻微文案变更仍能继承旧资产 |
+| K3 | P2 | draft copy / projection / sync 三处统一策略 | `apps/api/src/lib/planner-refinement-drafts.ts` `apps/api/src/lib/planner-refinement-projection.ts` | 三条链路口径一致 |
+| K4 | P2 | 补稳定键回归测试 | 对应 test 文件 | 锁住标题改写、轻微 prompt 变更、draft copy 三类场景 |
+
+### 19.4 建议的开发批次
+
+1. Batch A：`R1 R2 R3 O1 O2`
+2. Batch B：`R4 R5 O3 O4 O5`
+3. Batch C：`M1 M2 M3 M4 M5`
+4. Batch D：`B1 B2 B3 B4`
+5. Batch E：`D1 D2 D3 K1 K2 K3 K4`
+
+### 19.5 今日最小可交付
+
+若按“今天开工”的节奏推进，建议先完成：
+
+1. `R1-R3`：实体级局部重跑的后端主路径
+2. `O1-O2`：outline -> refinement hints adapter
+3. `R4-R5`：前端入口、聚焦单测与 focused smoke
+
+最小验收口径：
+
+1. 用户可对单个 `subject / scene / shot / act` 发起局部重跑
+2. 后端 prompt 只注入目标实体上下文
+3. outline 确认进入 refinement 时，角色 / 关键空间 / 结构 hints 能稳定传递
+4. API / Web 单测通过，`pnpm typecheck:api` 与 `pnpm typecheck` 通过

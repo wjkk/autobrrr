@@ -1,5 +1,6 @@
 import type { SekoActDraft, SekoImageCard, SekoPlanData } from './seko-plan-data';
 import type { PlannerOutlineDoc } from './planner-outline-doc';
+import { sanitizePlannerOutlineDoc, sanitizePlannerStructuredDoc } from './planner-display-normalization';
 
 interface RuntimePlannerSubject {
   id: string;
@@ -85,6 +86,8 @@ export interface PlannerStructuredDoc {
   subjectBullets: string[];
   subjects: Array<{
     entityKey?: string;
+    entityType?: 'subject' | 'scene';
+    semanticFingerprint?: string;
     title: string;
     prompt: string;
     referenceAssetIds?: string[];
@@ -93,6 +96,8 @@ export interface PlannerStructuredDoc {
   sceneBullets: string[];
   scenes: Array<{
     entityKey?: string;
+    entityType?: 'subject' | 'scene';
+    semanticFingerprint?: string;
     title: string;
     prompt: string;
     referenceAssetIds?: string[];
@@ -112,6 +117,7 @@ export interface PlannerStructuredDoc {
       voice: string;
       line: string;
       targetModelFamilySlug?: string;
+      subjectBindings?: string[];
       referenceAssetIds?: string[];
       generatedAssetIds?: string[];
     }>;
@@ -120,6 +126,20 @@ export interface PlannerStructuredDoc {
 
 function inheritEntityKey(value: string | undefined) {
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function buildOutlineStructureHints(outline: PlannerOutlineDoc) {
+  return [
+    outline.format === 'series' ? `叙事形式：系列，共 ${outline.episodeCount} 集` : `叙事形式：单集，共 ${outline.episodeCount} 集`,
+    `题材类型：${outline.genre}`,
+    `整体风格：${outline.toneStyle.join('、')}`,
+    `剧情结构：${outline.storyArc.map((item) => item.title).join(' -> ')}`,
+    ...outline.constraints.map((constraint) => `约束：${constraint}`),
+  ].filter((item) => item.trim().length > 0);
+}
+
+function buildOutlineLocationHints(outline: PlannerOutlineDoc) {
+  return outline.storyArc.map((item) => `${item.title}：${item.summary}`);
 }
 
 function normalizeImageCards(items: Array<{ title: string; prompt: string }>, pool: string[], prefix: string): SekoImageCard[] {
@@ -151,20 +171,22 @@ function normalizeActs(items: PlannerStructuredDoc['acts']): SekoActDraft[] {
 }
 
 export function toPlannerSeedData(doc: PlannerStructuredDoc, fallback: SekoPlanData): SekoPlanData {
+  const displayDoc = sanitizePlannerStructuredDoc(doc);
+
   return {
-    projectTitle: doc.projectTitle || fallback.projectTitle,
-    episodeTitle: doc.episodeTitle || fallback.episodeTitle,
-    episodeCount: doc.episodeCount || fallback.episodeCount,
-    pointCost: doc.pointCost || fallback.pointCost,
-    summaryBullets: doc.summaryBullets.length ? doc.summaryBullets : fallback.summaryBullets,
-    highlights: doc.highlights.length ? doc.highlights : fallback.highlights,
-    styleBullets: doc.styleBullets.length ? doc.styleBullets : fallback.styleBullets,
-    subjectBullets: doc.subjectBullets.length ? doc.subjectBullets : fallback.subjectBullets,
-    subjects: normalizeImageCards(doc.subjects.length ? doc.subjects : fallback.subjects, fallback.subjects.map((item) => item.image), 'subject'),
-    sceneBullets: doc.sceneBullets.length ? doc.sceneBullets : fallback.sceneBullets,
-    scenes: normalizeImageCards(doc.scenes.length ? doc.scenes : fallback.scenes, fallback.scenes.map((item) => item.image), 'scene'),
-    scriptSummary: doc.scriptSummary.length ? doc.scriptSummary : fallback.scriptSummary,
-    acts: normalizeActs(doc.acts.length ? doc.acts : fallback.acts),
+    projectTitle: displayDoc.projectTitle || fallback.projectTitle,
+    episodeTitle: displayDoc.episodeTitle || fallback.episodeTitle,
+    episodeCount: displayDoc.episodeCount || fallback.episodeCount,
+    pointCost: displayDoc.pointCost || fallback.pointCost,
+    summaryBullets: displayDoc.summaryBullets.length ? displayDoc.summaryBullets : fallback.summaryBullets,
+    highlights: displayDoc.highlights.length ? displayDoc.highlights : fallback.highlights,
+    styleBullets: displayDoc.styleBullets.length ? displayDoc.styleBullets : fallback.styleBullets,
+    subjectBullets: displayDoc.subjectBullets.length ? displayDoc.subjectBullets : fallback.subjectBullets,
+    subjects: normalizeImageCards(displayDoc.subjects.length ? displayDoc.subjects : fallback.subjects, fallback.subjects.map((item) => item.image), 'subject'),
+    sceneBullets: displayDoc.sceneBullets.length ? displayDoc.sceneBullets : fallback.sceneBullets,
+    scenes: normalizeImageCards(displayDoc.scenes.length ? displayDoc.scenes : fallback.scenes, fallback.scenes.map((item) => item.image), 'scene'),
+    scriptSummary: displayDoc.scriptSummary.length ? displayDoc.scriptSummary : fallback.scriptSummary,
+    acts: normalizeActs(displayDoc.acts.length ? displayDoc.acts : fallback.acts),
   };
 }
 
@@ -180,6 +202,8 @@ export function toStructuredPlannerDoc(seed: SekoPlanData, previousDoc?: Planner
     subjectBullets: seed.subjectBullets,
     subjects: seed.subjects.map((item, index) => ({
       entityKey: inheritEntityKey(previousDoc?.subjects[index]?.entityKey),
+      entityType: previousDoc?.subjects[index]?.entityType ?? 'subject',
+      semanticFingerprint: previousDoc?.subjects[index]?.semanticFingerprint,
       title: item.title,
       prompt: item.prompt,
       referenceAssetIds: [],
@@ -188,6 +212,8 @@ export function toStructuredPlannerDoc(seed: SekoPlanData, previousDoc?: Planner
     sceneBullets: seed.sceneBullets,
     scenes: seed.scenes.map((item, index) => ({
       entityKey: inheritEntityKey(previousDoc?.scenes[index]?.entityKey),
+      entityType: previousDoc?.scenes[index]?.entityType ?? 'scene',
+      semanticFingerprint: previousDoc?.scenes[index]?.semanticFingerprint,
       title: item.title,
       prompt: item.prompt,
       referenceAssetIds: [],
@@ -207,6 +233,7 @@ export function toStructuredPlannerDoc(seed: SekoPlanData, previousDoc?: Planner
         voice: shot.voice,
         line: shot.line,
         targetModelFamilySlug: previousDoc?.acts[actIndex]?.shots[shotIndex]?.targetModelFamilySlug,
+        subjectBindings: previousDoc?.acts[actIndex]?.shots[shotIndex]?.subjectBindings ?? [],
         referenceAssetIds: [],
         generatedAssetIds: [],
       })),
@@ -215,32 +242,38 @@ export function toStructuredPlannerDoc(seed: SekoPlanData, previousDoc?: Planner
 }
 
 export function outlineToPreviewStructuredPlannerDoc(outline: PlannerOutlineDoc): PlannerStructuredDoc {
+  const displayOutline = sanitizePlannerOutlineDoc(outline);
+  const locationHints = buildOutlineLocationHints(displayOutline);
+  const structureHints = buildOutlineStructureHints(displayOutline);
+
   return {
-    projectTitle: outline.projectTitle,
-    episodeTitle: outline.storyArc[0]?.title ?? `${outline.projectTitle}·大纲`,
+    projectTitle: displayOutline.projectTitle,
+    episodeTitle: displayOutline.storyArc[0]?.title ?? `${displayOutline.projectTitle}·大纲`,
     episodeCount: outline.episodeCount,
     pointCost: 38,
-    summaryBullets: [outline.premise],
-    highlights: outline.storyArc.slice(0, 3).map((item) => ({
+    summaryBullets: [displayOutline.premise],
+    highlights: displayOutline.storyArc.slice(0, 3).map((item) => ({
       title: item.title,
       description: item.summary,
     })),
-    styleBullets: outline.toneStyle,
-    subjectBullets: outline.mainCharacters.map((item) => `${item.name}：${item.description}`),
-    subjects: outline.mainCharacters.map((item) => ({
+    styleBullets: displayOutline.toneStyle,
+    subjectBullets: displayOutline.mainCharacters.map((item) => `${item.name}：${item.description}`),
+    subjects: displayOutline.mainCharacters.map((item) => ({
+      entityType: 'subject',
       title: item.name,
       prompt: `${item.role}，${item.description}`,
       referenceAssetIds: [],
       generatedAssetIds: [],
     })),
-    sceneBullets: outline.storyArc.map((item) => item.summary),
-    scenes: outline.storyArc.slice(0, 4).map((item) => ({
+    sceneBullets: locationHints,
+    scenes: displayOutline.storyArc.slice(0, 4).map((item) => ({
+      entityType: 'scene',
       title: item.title,
       prompt: item.summary,
       referenceAssetIds: [],
       generatedAssetIds: [],
     })),
-    scriptSummary: outline.storyArc.map((item) => item.summary),
+    scriptSummary: structureHints,
     acts: [],
   };
 }

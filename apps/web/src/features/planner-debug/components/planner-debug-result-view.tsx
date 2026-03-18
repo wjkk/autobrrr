@@ -6,7 +6,7 @@ import { useMemo } from 'react';
 import styles from './planner-agent-debug-page.module.css';
 
 import type { PlannerDebugRunResponse } from '../lib/planner-agent-debug-types';
-import { buildPlannerResultPreview } from '../lib/planner-debug-presenters';
+import { buildPlannerEntityDebugView, buildPlannerResultPreview } from '../lib/planner-debug-presenters';
 
 function renderPreviewSection(title: string, items: Array<{ key: string; title: string; prompt: string; imageUrl: string | null }>) {
   if (!items.length) {
@@ -31,6 +31,27 @@ function renderPreviewSection(title: string, items: Array<{ key: string; title: 
   );
 }
 
+function renderEntityLayer(title: string, items: Array<{ key: string; title: string; prompt: string; bindings: string[] }>) {
+  return (
+    <section>
+      <div className={styles.previewSectionTitle}>{title}</div>
+      {items.length ? (
+        <div className={styles.compareStack}>
+          {items.map((item) => (
+            <div key={item.key} className={styles.summaryCard}>
+              <span>{item.title}</span>
+              <strong>{item.prompt || '无描述'}</strong>
+              {item.bindings.length ? <span>绑定主体：{item.bindings.join(', ')}</span> : null}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className={styles.fieldHint}>当前层没有相关实体。</div>
+      )}
+    </section>
+  );
+}
+
 export function PlannerDebugResultView(props: {
   debugResult: PlannerDebugRunResponse;
   replayHref?: string | null;
@@ -43,6 +64,10 @@ export function PlannerDebugResultView(props: {
   const compareHref = `${props.chrome === 'admin' ? '/admin/planner-debug/compare' : '/internal/planner-debug/compare'}${props.debugRouteSearch ?? ''}`;
   const preview = useMemo(
     () => buildPlannerResultPreview(props.debugResult.input, props.debugResult.assistantPackage),
+    [props.debugResult.assistantPackage, props.debugResult.input],
+  );
+  const entityView = useMemo(
+    () => buildPlannerEntityDebugView(props.debugResult.input, props.debugResult.assistantPackage),
     [props.debugResult.assistantPackage, props.debugResult.input],
   );
 
@@ -82,6 +107,58 @@ export function PlannerDebugResultView(props: {
           </ul>
         </div>
       ) : null}
+
+      <div className={styles.resultBlock}>
+        <h3 className={styles.resultTitle}>实体纠偏视图</h3>
+        <ul className={styles.diffList}>
+          {entityView.corrections.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+        <div className={styles.compareBoard}>
+          <div className={styles.compareColumn}>
+            <div className={styles.compareColumnHeader}>
+              <div>
+                <div className={styles.compareLabel}>Raw</div>
+                <h4 className={styles.compareTitle}>模型原始候选</h4>
+              </div>
+            </div>
+            <div className={styles.compareBlock}>
+              {renderEntityLayer('主体', entityView.raw.subjects)}
+              {renderEntityLayer('场景', entityView.raw.scenes)}
+              {renderEntityLayer('分镜', entityView.raw.shots)}
+            </div>
+          </div>
+
+          <div className={styles.compareColumn}>
+            <div className={styles.compareColumnHeader}>
+              <div>
+                <div className={styles.compareLabel}>Normalized</div>
+                <h4 className={styles.compareTitle}>归一化结果</h4>
+              </div>
+            </div>
+            <div className={styles.compareBlock}>
+              {renderEntityLayer('主体', entityView.normalized.subjects)}
+              {renderEntityLayer('场景', entityView.normalized.scenes)}
+              {renderEntityLayer('分镜', entityView.normalized.shots)}
+            </div>
+          </div>
+
+          <div className={styles.compareColumn}>
+            <div className={styles.compareColumnHeader}>
+              <div>
+                <div className={styles.compareLabel}>Final</div>
+                <h4 className={styles.compareTitle}>最终应用结果</h4>
+              </div>
+            </div>
+            <div className={styles.compareBlock}>
+              {renderEntityLayer('主体', entityView.final.subjects)}
+              {renderEntityLayer('场景', entityView.final.scenes)}
+              {renderEntityLayer('分镜', entityView.final.shots)}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {props.debugResult.usage ? (
         <div className={styles.resultBlock}>

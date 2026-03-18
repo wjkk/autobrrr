@@ -7,8 +7,10 @@ import styles from './planner-agent-debug-page.module.css';
 
 import type { PlannerDebugCompareResponse, PlannerDebugRunResponse } from '../lib/planner-agent-debug-types';
 import {
+  buildPlannerEntityDebugView,
   buildPlannerResultPreview,
   buildPlannerResultSummary,
+  summarizePlannerEntityLayerDiff,
   summarizePrompt,
   type PlannerPreviewCardItem,
 } from '../lib/planner-debug-presenters';
@@ -129,6 +131,7 @@ function ResultColumn({
   const preview = useMemo(() => buildPlannerResultPreview(result.input, result.assistantPackage), [result.assistantPackage, result.input]);
   const promptStats = useMemo(() => summarizePrompt(result.finalPrompt), [result.finalPrompt]);
   const steps = useMemo(() => readStepAnalysis(result.assistantPackage), [result.assistantPackage]);
+  const entityView = useMemo(() => buildPlannerEntityDebugView(result.input, result.assistantPackage), [result.assistantPackage, result.input]);
 
   return (
     <div className={styles.compareColumn}>
@@ -185,6 +188,15 @@ function ResultColumn({
       </div>
 
       <div className={styles.compareBlock}>
+        <h5 className={styles.resultTitle}>实体纠偏摘要</h5>
+        <ul className={styles.diffList}>
+          {entityView.corrections.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </div>
+
+      <div className={styles.compareBlock}>
         <h5 className={styles.resultTitle}>主图预览</h5>
         <div className={styles.previewSections}>
           {renderPreviewSection('主体', preview.subjects)}
@@ -220,6 +232,7 @@ export function PlannerDebugCompareView({
     `步骤标题：A ${leftSummary.stepTitles.join(' / ') || '-'}；B ${rightSummary.stepTitles.join(' / ') || '-'}.`,
     stepDiffLabel(leftSteps, rightSteps),
     `结构化结果：A ${leftSummary.subjectCount}/${leftSummary.sceneCount}/${leftSummary.shotCount}，B ${rightSummary.subjectCount}/${rightSummary.sceneCount}/${rightSummary.shotCount}。`,
+    summarizePlannerEntityLayerDiff(compareResult.left.input, compareResult.left.assistantPackage, compareResult.right.input, compareResult.right.assistantPackage),
     `字段完整度：A ${leftSummary.completenessScore}%（缺 ${leftSummary.missingFields.length} 项），B ${rightSummary.completenessScore}%（缺 ${rightSummary.missingFields.length} 项）。`,
     `Token / Cost：A ${usageLabel(compareResult.left)}，B ${usageLabel(compareResult.right)}。`,
     `主图覆盖：A ${previewCoverage(leftPreview.subjects) + previewCoverage(leftPreview.scenes) + previewCoverage(leftPreview.shots)} 张，B ${previewCoverage(rightPreview.subjects) + previewCoverage(rightPreview.scenes) + previewCoverage(rightPreview.shots)} 张。`,

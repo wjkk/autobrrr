@@ -568,11 +568,15 @@ export function PlannerAgentDebugPage({
           configSource: input.configSource === 'published' ? 'published' : 'draft',
           targetStage: input.targetStage === 'outline' ? 'outline' : 'refinement',
           partialRerunScope:
-            input.partialRerunScope === 'subject_only' ||
-            input.partialRerunScope === 'scene_only' ||
-            input.partialRerunScope === 'shots_only'
-              ? input.partialRerunScope
-              : 'none',
+            input.partialRerunScope === 'subject' || input.partialRerunScope === 'subject_only'
+              ? 'subject'
+              : input.partialRerunScope === 'scene' || input.partialRerunScope === 'scene_only'
+                ? 'scene'
+                : input.partialRerunScope === 'shot' || input.partialRerunScope === 'shots_only'
+                  ? 'shot'
+                  : input.partialRerunScope === 'act'
+                    ? 'act'
+                    : 'none',
           projectId: typeof input.projectId === 'string' ? input.projectId : '',
           episodeId: typeof input.episodeId === 'string' ? input.episodeId : '',
           projectTitle: typeof input.projectTitle === 'string' ? input.projectTitle : current.projectTitle,

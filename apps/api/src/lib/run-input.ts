@@ -91,6 +91,8 @@ export const plannerDocUpdateRunInputSchema = z.object({
   targetEntityId: z.string().min(1).optional(),
   rerunScope: plannerRerunScopeSchema.optional(),
   targetEntity: objectSnapshotOrArraySchema.optional(),
+  outlineRefinementHints: objectSnapshotSchema.nullable().optional(),
+  rerunContext: objectSnapshotSchema.nullable().optional(),
   stepDefinitions: z.array(objectSnapshotSchema).default([]),
   promptSnapshot: objectSnapshotSchema,
   agentProfile: objectSnapshotSchema.nullable().optional(),

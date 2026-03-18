@@ -21,6 +21,19 @@ test('normalizePlannerRerunScope maps legacy scope to typed scope', () => {
   );
 });
 
+test('normalizePlannerRerunScope accepts typed legacy scope strings for debug and stored payloads', () => {
+  assert.deepEqual(
+    normalizePlannerRerunScope({
+      scope: 'act',
+      targetId: 'act-2',
+    }),
+    {
+      type: 'act',
+      actId: 'act-2',
+    },
+  );
+});
+
 test('parseStoredPlannerRerunScope prefers typed rerunScope payload', () => {
   const parsed = parseStoredPlannerRerunScope({
     rerunScope: {

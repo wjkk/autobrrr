@@ -1,75 +1,26 @@
-import { z } from 'zod';
-
-import { buildFallbackPlannerOutlineDoc, plannerOutlineDocSchema } from './planner-outline-doc.js';
-import { buildFallbackPlannerStructuredDoc, plannerStructuredDocSchema } from './planner-doc.js';
-
-const plannerOperationSchema = z.object({
-  replaceDocument: z.boolean().default(true),
-  generateStoryboard: z.boolean().default(false),
-  confirmOutline: z.boolean().default(false),
-});
-
-const plannerStepAnalysisItemSchema = z.object({
-  id: z.string().trim().min(1).max(120),
-  title: z.string().trim().min(1).max(255),
-  status: z.enum(['pending', 'running', 'done', 'failed']).default('done'),
-  details: z.array(z.string().trim().min(1).max(500)).max(8).default([]),
-});
-
-export const plannerOutlineAssistantPackageSchema = z.object({
-  stage: z.literal('outline').default('outline'),
-  assistantMessage: z.string().trim().min(1).max(4000),
-  documentTitle: z.string().trim().min(1).max(255).optional(),
-  outlineDoc: plannerOutlineDocSchema,
-  operations: plannerOperationSchema.default({
-    replaceDocument: false,
-    generateStoryboard: false,
-    confirmOutline: true,
-  }),
-});
-
-export const plannerRefinementAssistantPackageSchema = z.object({
-  stage: z.literal('refinement').default('refinement'),
-  assistantMessage: z.string().trim().min(1).max(4000),
-  stepAnalysis: z.array(plannerStepAnalysisItemSchema).min(1).max(12),
-  documentTitle: z.string().trim().min(1).max(255).optional(),
-  structuredDoc: plannerStructuredDocSchema,
-  operations: plannerOperationSchema.default({
-    replaceDocument: true,
-    generateStoryboard: false,
-    confirmOutline: false,
-  }),
-});
-
-export const plannerAssistantPackageSchema = z.union([
+import {
+  plannerAssistantPackageSchema,
   plannerOutlineAssistantPackageSchema,
   plannerRefinementAssistantPackageSchema,
-]);
+  type PlannerAssistantPackage,
+  type PlannerOutlineAssistantPackage,
+  type PlannerRefinementAssistantPackage,
+  type PlannerStepAnalysisItem,
+} from './planner-agent-package-schemas.js';
+import { normalizePlannerAssistantPackageCandidate } from './planner-agent-normalizers.js';
+import { extractJsonCandidate } from './planner-json-candidate.js';
+import { buildFallbackPlannerOutlineDoc } from './planner-outline-doc.js';
+import { buildFallbackPlannerStructuredDoc } from './planner-doc.js';
 
-export type PlannerOutlineAssistantPackage = z.infer<typeof plannerOutlineAssistantPackageSchema>;
-export type PlannerRefinementAssistantPackage = z.infer<typeof plannerRefinementAssistantPackageSchema>;
-export type PlannerAssistantPackage = z.infer<typeof plannerAssistantPackageSchema>;
-export type PlannerStepAnalysisItem = z.infer<typeof plannerStepAnalysisItemSchema>;
-
-function stripCodeFence(text: string) {
-  const trimmed = text.trim();
-  if (!trimmed.startsWith('```')) {
-    return trimmed;
-  }
-
-  return trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-}
-
-function extractJsonCandidate(text: string) {
-  const stripped = stripCodeFence(text);
-  const start = stripped.indexOf('{');
-  const end = stripped.lastIndexOf('}');
-  if (start === -1 || end === -1 || end <= start) {
-    return null;
-  }
-
-  return stripped.slice(start, end + 1);
-}
+export {
+  plannerAssistantPackageSchema,
+  plannerOutlineAssistantPackageSchema,
+  plannerRefinementAssistantPackageSchema,
+  type PlannerAssistantPackage,
+  type PlannerOutlineAssistantPackage,
+  type PlannerRefinementAssistantPackage,
+  type PlannerStepAnalysisItem,
+};
 
 export function buildFallbackPlannerOutlineAssistantPackage(args: {
   userPrompt: string;
@@ -90,7 +41,7 @@ export function buildFallbackPlannerOutlineAssistantPackage(args: {
 
   return plannerOutlineAssistantPackageSchema.parse({
     stage: 'outline',
-    assistantMessage: `已根据当前需求生成可确认的大纲版本。请确认故事走向、角色设定和集数结构，再进入细化剧情内容。`,
+    assistantMessage: '已根据当前需求生成可确认的大纲版本。请确认故事走向、角色设定和集数结构，再进入细化剧情内容。',
     documentTitle: outlineDoc.projectTitle,
     outlineDoc,
     operations: {
@@ -142,9 +93,23 @@ export function parsePlannerAssistantPackage(args: {
   subtype: string;
   contentMode?: string | null;
 }) {
+  return inspectPlannerAssistantPackage(args).assistantPackage;
+}
+
+export function inspectPlannerAssistantPackage(args: {
+  targetStage: 'outline' | 'refinement';
+  rawText: string;
+  userPrompt: string;
+  projectTitle: string;
+  episodeTitle: string;
+  defaultSteps: PlannerStepAnalysisItem[];
+  contentType: string;
+  subtype: string;
+  contentMode?: string | null;
+}) {
   const candidate = extractJsonCandidate(args.rawText);
-  if (!candidate) {
-    return args.targetStage === 'outline'
+  const buildFallbackPackage = () =>
+    args.targetStage === 'outline'
       ? buildFallbackPlannerOutlineAssistantPackage({
           userPrompt: args.userPrompt,
           projectTitle: args.projectTitle,
@@ -162,34 +127,43 @@ export function parsePlannerAssistantPackage(args: {
           contentType: args.contentType,
           subtype: args.subtype,
         });
+
+  if (!candidate) {
+    return {
+      rawCandidate: null,
+      normalizedCandidate: null,
+      assistantPackage: buildFallbackPackage(),
+    };
   }
 
   try {
     const parsed = JSON.parse(candidate) as unknown;
-    const packageCandidate = plannerAssistantPackageSchema.parse(parsed);
+    const normalized = normalizePlannerAssistantPackageCandidate({
+      parsed,
+      userPrompt: args.userPrompt,
+      projectTitle: args.projectTitle,
+      episodeTitle: args.episodeTitle,
+      defaultSteps: args.defaultSteps,
+      contentType: args.contentType,
+      subtype: args.subtype,
+      contentMode: args.contentMode,
+      rawText: args.rawText,
+    });
+    const packageCandidate = plannerAssistantPackageSchema.parse(normalized);
     if (packageCandidate.stage === args.targetStage) {
-      return packageCandidate;
+      return {
+        rawCandidate: parsed,
+        normalizedCandidate: normalized,
+        assistantPackage: packageCandidate,
+      };
     }
   } catch {
     // fall through to stage-specific fallback
   }
 
-  return args.targetStage === 'outline'
-    ? buildFallbackPlannerOutlineAssistantPackage({
-        userPrompt: args.userPrompt,
-        projectTitle: args.projectTitle,
-        contentType: args.contentType,
-        subtype: args.subtype,
-        contentMode: args.contentMode,
-        generatedText: args.rawText,
-      })
-    : buildFallbackPlannerRefinementAssistantPackage({
-        userPrompt: args.userPrompt,
-        projectTitle: args.projectTitle,
-        episodeTitle: args.episodeTitle,
-        generatedText: args.rawText,
-        defaultSteps: args.defaultSteps,
-        contentType: args.contentType,
-        subtype: args.subtype,
-      });
+  return {
+    rawCandidate: null,
+    normalizedCandidate: null,
+    assistantPackage: buildFallbackPackage(),
+  };
 }

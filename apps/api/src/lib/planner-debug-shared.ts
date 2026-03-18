@@ -1,5 +1,6 @@
 import type { PlannerStructuredDoc } from './planner-doc.js';
 import { buildPartialDiffSummary } from './planner-refinement-partial.js';
+import { parseStoredPlannerRerunScope } from './planner-rerun-scope.js';
 
 export function readObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -17,10 +18,11 @@ function readStructuredDoc(value: unknown): PlannerStructuredDoc | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as PlannerStructuredDoc) : null;
 }
 
-function readTargetEntityId(value: unknown) {
+export function readTargetEntityId(value: unknown) {
   const record = readObject(value);
   return (
     readString(record.id)
+    ?? readString(record.actKey)
     ?? readString(record.subjectId)
     ?? readString(record.sceneId)
     ?? readString(record.shotId)
@@ -173,7 +175,7 @@ export function readPromptSnapshot(value: unknown) {
 
 export function deriveDiffSummary(args: {
   targetStage: 'outline' | 'refinement';
-  partialRerunScope?: 'none' | 'subject_only' | 'scene_only' | 'shots_only';
+  partialRerunScope?: 'none' | 'subject' | 'scene' | 'shot' | 'act' | 'subject_only' | 'scene_only' | 'shots_only';
   currentStructuredDoc?: Record<string, unknown>;
   targetEntity?: Record<string, unknown>;
   assistantPackage: Record<string, unknown>;
@@ -187,11 +189,19 @@ export function deriveDiffSummary(args: {
     return [];
   }
 
+  const rerunScope = parseStoredPlannerRerunScope({
+    scope: args.partialRerunScope,
+    targetEntityId: readTargetEntityId(args.targetEntity),
+  });
+  if (!rerunScope) {
+    return [];
+  }
+
   return buildPartialDiffSummary({
     previousDoc: readStructuredDoc(args.currentStructuredDoc),
     nextDoc,
     input: {
-      scope: args.partialRerunScope,
+      rerunScope,
       targetEntityId: readTargetEntityId(args.targetEntity),
       targetEntity: args.targetEntity ?? {},
     },

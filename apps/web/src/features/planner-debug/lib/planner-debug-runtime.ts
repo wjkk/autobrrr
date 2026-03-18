@@ -1,7 +1,7 @@
 export interface DebugFormState {
   configSource: 'draft' | 'published';
   targetStage: 'outline' | 'refinement';
-  partialRerunScope: 'none' | 'subject_only' | 'scene_only' | 'shots_only';
+  partialRerunScope: 'none' | 'subject' | 'scene' | 'shot' | 'act';
   projectId: string;
   episodeId: string;
   projectTitle: string;

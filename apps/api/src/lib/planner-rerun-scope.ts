@@ -9,7 +9,7 @@ function readString(value: unknown) {
 }
 
 export const plannerLegacyRerunScopeSchema = z.object({
-  scope: z.enum(['subject_only', 'scene_only', 'shots_only']),
+  scope: z.enum(['subject_only', 'scene_only', 'shots_only', 'subject', 'scene', 'shot', 'act']),
   targetId: z.string().min(1),
 });
 
@@ -40,17 +40,24 @@ export function normalizePlannerRerunScope(input: PlannerRerunScope | PlannerLeg
     return input;
   }
 
-  if (input.scope === 'subject_only') {
+  if (input.scope === 'subject_only' || input.scope === 'subject') {
     return {
       type: 'subject',
       subjectId: input.targetId,
     };
   }
 
-  if (input.scope === 'scene_only') {
+  if (input.scope === 'scene_only' || input.scope === 'scene') {
     return {
       type: 'scene',
       sceneId: input.targetId,
+    };
+  }
+
+  if (input.scope === 'act') {
+    return {
+      type: 'act',
+      actId: input.targetId,
     };
   }
 

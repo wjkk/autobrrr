@@ -3,8 +3,8 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { requireUser } from '../lib/auth.js';
-import { finalizePlannerRefinementToCreation } from '../lib/planner-finalize.js';
-import { resolvePlannerTargetVideoModel } from '../lib/planner-target-video-model.js';
+import { finalizePlannerRefinementToCreation } from '../lib/planner/orchestration/finalize.js';
+import { resolvePlannerTargetVideoModel } from '../lib/planner/target-video-model.js';
 import { findOwnedEpisode } from '../lib/ownership.js';
 import { prisma } from '../lib/prisma.js';
 

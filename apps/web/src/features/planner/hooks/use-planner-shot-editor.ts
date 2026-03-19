@@ -7,7 +7,7 @@ import {
   type PlannerShotDraftState,
   type PlannerShotPointer,
 } from '../lib/planner-shot-editor';
-import type { SekoActDraft } from '../lib/seko-plan-data';
+import type { SekoActDraft } from '@aiv/mock-data';
 
 interface UsePlannerShotEditorOptions {
   displayScriptActs: SekoActDraft[];

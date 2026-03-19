@@ -16,8 +16,8 @@ import {
   runtimeShotScriptsToActs,
   runtimeSubjectsToImageCards,
 } from '../lib/planner-structured-doc';
-import type { SekoActDraft, SekoImageCard, SekoPlanData } from '../lib/seko-plan-data';
-import { sekoPlanThreadData } from '../lib/seko-plan-thread-data';
+import type { SekoActDraft, SekoImageCard, SekoPlanData } from '@aiv/mock-data';
+import { sekoPlanThreadData } from '@aiv/mock-data';
 import { findPlannerVideoModelOption } from '../lib/planner-video-model-options';
 
 interface UsePlannerDisplayStateOptions {

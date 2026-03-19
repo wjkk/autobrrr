@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 
 import { requireUser } from '../lib/auth.js';
-import { debugCompareSchema, debugRunListQuerySchema, debugRunSchema } from '../lib/planner-debug-contract.js';
+import { debugCompareSchema, debugRunListQuerySchema, debugRunSchema } from '../lib/planner/debug/contract.js';
 import {
   applyPlannerDebugRunToMainFlow,
   comparePlannerDebugRuns,
@@ -13,7 +13,7 @@ import {
   listPlannerDebugRuns,
   replayPlannerDebugRun,
   toPrismaJsonInput,
-} from '../lib/planner-debug-service.js';
+} from '../lib/planner/debug/service.js';
 import { prisma } from '../lib/prisma.js';
 
 const subAgentPatchSchema = z.object({

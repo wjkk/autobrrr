@@ -9,7 +9,7 @@ import {
   SUBJECT_IMAGE_POOL,
   type PlannerRuntimeAssetOption,
 } from '../lib/planner-page-helpers';
-import type { SekoImageCard } from '../lib/seko-plan-data';
+import type { SekoImageCard } from '@aiv/mock-data';
 
 interface UsePlannerDialogDisplayStateOptions {
   runtimeWorkspace: ApiPlannerWorkspace | null;

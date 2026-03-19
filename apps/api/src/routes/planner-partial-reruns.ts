@@ -3,9 +3,9 @@ import { z } from 'zod';
 
 import { mapRun } from '../lib/api-mappers.js';
 import { requireUser } from '../lib/auth.js';
-import { PLANNER_REFINEMENT_LOCKED_ERROR } from '../lib/planner-refinement-drafts.js';
-import { normalizePlannerRerunScope, plannerLegacyRerunScopeSchema, plannerRerunScopeSchema } from '../lib/planner-rerun-scope.js';
-import { queuePlannerPartialRerun } from '../lib/planner-rerun-service.js';
+import { PLANNER_REFINEMENT_LOCKED_ERROR } from '../lib/planner/refinement/drafts.js';
+import { normalizePlannerRerunScope, plannerLegacyRerunScopeSchema, plannerRerunScopeSchema } from '../lib/planner/rerun/scope.js';
+import { queuePlannerPartialRerun } from '../lib/planner/rerun/service.js';
 
 const paramsSchema = z.object({
   projectId: z.string().min(1),

@@ -6,7 +6,7 @@ import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.
 import { finalizePlannerRefinement, type ApiPlannerWorkspace, type PlannerRuntimeApiContext } from '../lib/planner-api';
 import { resolvePlannerCreationActionState } from '../lib/planner-creation-flow-logic';
 import { buildPlannerNoticeFromError, type PlannerNoticeInput } from '../lib/planner-notice';
-import type { SekoActDraft } from '../lib/seko-plan-data';
+import type { SekoActDraft } from '@aiv/mock-data';
 
 const BOOT_PROGRESS_STEPS = [28, 49, 67, 85, 100];
 

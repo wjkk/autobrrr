@@ -6,7 +6,7 @@ import { deletePlannerEntity, patchPlannerEntity, type ApiPlannerWorkspace, type
 import { buildPlannerNoticeFromError, type PlannerNoticeInput } from '../lib/planner-notice';
 import { toStructuredPlannerDoc, type PlannerStructuredDoc } from '../lib/planner-structured-doc';
 import type { PlannerShotDraftState, PlannerShotPointer } from '../lib/planner-shot-editor';
-import type { SekoActDraft, SekoPlanData } from '../lib/seko-plan-data';
+import type { SekoActDraft, SekoPlanData } from '@aiv/mock-data';
 
 interface UsePlannerShotActionsOptions {
   runtimeApi?: PlannerRuntimeApiContext;

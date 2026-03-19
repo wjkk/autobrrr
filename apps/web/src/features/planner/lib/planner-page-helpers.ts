@@ -1,7 +1,7 @@
 import type { ApiPlannerDebugApplySource, ApiPlannerWorkspace } from './planner-api';
 import { summarizePlannerDisplayText } from './planner-display-normalization';
 import type { PlannerThreadMessage } from './planner-thread';
-import { sekoPlanData } from './seko-plan-data';
+import { sekoPlanData } from '@aiv/mock-data';
 import { findPlannerVideoModelOption, PLANNER_VIDEO_MODEL_OPTIONS } from './planner-video-model-options';
 
 export type PlannerMode = 'single' | 'series';

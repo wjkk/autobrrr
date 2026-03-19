@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { mapRun } from '../lib/api-mappers.js';
 import { requireUser } from '../lib/auth.js';
-import { PLANNER_REFINEMENT_LOCKED_ERROR, queuePlannerImageGeneration } from '../lib/planner-media-generation-service.js';
+import { PLANNER_REFINEMENT_LOCKED_ERROR, queuePlannerImageGeneration } from '../lib/planner/media/generation-service.js';
 
 const scopedPayloadSchema = z.object({
   episodeId: z.string().min(1),

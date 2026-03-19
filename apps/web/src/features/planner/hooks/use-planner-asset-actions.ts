@@ -16,7 +16,7 @@ import { applyPlannerRecommendationDraft } from '../lib/planner-asset-recommenda
 import { buildPlannerNoticeFromError, type PlannerNoticeInput } from '../lib/planner-notice';
 import type { PlannerStructuredDoc } from '../lib/planner-structured-doc';
 import { toStructuredPlannerDoc } from '../lib/planner-structured-doc';
-import type { SekoImageCard, SekoPlanData } from '../lib/seko-plan-data';
+import type { SekoImageCard, SekoPlanData } from '@aiv/mock-data';
 
 type RuntimePlannerSubject = NonNullable<ApiPlannerWorkspace['subjects']>[number];
 type RuntimePlannerScene = NonNullable<ApiPlannerWorkspace['scenes']>[number];

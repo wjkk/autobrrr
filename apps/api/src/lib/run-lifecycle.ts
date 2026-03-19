@@ -2,9 +2,9 @@ import { Prisma } from '@prisma/client';
 import type { Run } from '@prisma/client';
 
 import { downloadGeneratedAssetToLocal } from './asset-storage.js';
-import { finalizePlannerConversation } from './planner-orchestrator.js';
-import { extractPlannerText, findStringDeep } from './planner-text-extraction.js';
-import { syncPlannerRefinementProjection } from './planner-refinement-projection.js';
+import { finalizePlannerConversation } from './planner/orchestration/orchestrator.js';
+import { extractPlannerText, findStringDeep } from './planner/text-extraction.js';
+import { syncPlannerRefinementProjection } from './planner/refinement/projection.js';
 import { prisma } from './prisma.js';
 
 interface RunLifecycleDeps {
@@ -48,9 +48,7 @@ function buildGeneratedFileName(runId: string, mediaKind: SupportedMediaKind) {
   return `generated-${runId}.${extension}`;
 }
 
-function readObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
+import { readObject } from './json-helpers.js';
 
 function resolveProviderSourceUrl(run: Run) {
   const providerData = readObject(run.outputJson).providerData;

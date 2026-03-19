@@ -3,7 +3,7 @@
 import { cx } from '@aiv/ui';
 
 import type { PlannerShotDraftState, PlannerShotPointer } from '../lib/planner-shot-editor';
-import type { SekoActDraft } from '../lib/seko-plan-data';
+import type { SekoActDraft } from '@aiv/mock-data';
 import styles from './planner-page.module.css';
 
 interface PlannerScriptActsProps {

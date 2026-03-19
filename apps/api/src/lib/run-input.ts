@@ -1,9 +1,7 @@
 import type { Prisma, Run, RunType } from '@prisma/client';
 import { z } from 'zod';
 
-function readObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
+import { readObject } from './json-helpers.js';
 
 const modelFamilySchema = z.object({
   id: z.string().min(1),

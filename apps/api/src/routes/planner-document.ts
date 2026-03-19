@@ -3,10 +3,10 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { requireUser } from '../lib/auth.js';
-import { plannerStructuredDocSchema } from '../lib/planner-doc.js';
+import { plannerStructuredDocSchema } from '../lib/planner/doc/planner-doc.js';
 import { findOwnedEpisode } from '../lib/ownership.js';
-import { PLANNER_REFINEMENT_LOCKED_ERROR } from '../lib/planner-refinement-drafts.js';
-import { syncPlannerRefinementDerivedData } from '../lib/planner-refinement-sync.js';
+import { PLANNER_REFINEMENT_LOCKED_ERROR } from '../lib/planner/refinement/drafts.js';
+import { syncPlannerRefinementDerivedData } from '../lib/planner/refinement/sync.js';
 import { prisma } from '../lib/prisma.js';
 
 const paramsSchema = z.object({

@@ -1,5 +1,5 @@
-import type { SekoActDraft, SekoImageCard, SekoPlanData } from './seko-plan-data';
-import type { PlannerOutlineDoc } from './planner-outline-doc';
+import type { PlannerOutlineDoc, PlannerStructuredDoc } from '@aiv/domain';
+import type { SekoActDraft, SekoImageCard, SekoPlanData } from '@aiv/mock-data';
 import { sanitizePlannerOutlineDoc, sanitizePlannerStructuredDoc } from './planner-display-normalization';
 
 interface RuntimePlannerSubject {
@@ -75,54 +75,7 @@ export function choosePlannerAssetUrl(
     })[0]?.sourceUrl;
 }
 
-export interface PlannerStructuredDoc {
-  projectTitle: string;
-  episodeTitle: string;
-  episodeCount: number;
-  pointCost: number;
-  summaryBullets: string[];
-  highlights: Array<{ title: string; description: string }>;
-  styleBullets: string[];
-  subjectBullets: string[];
-  subjects: Array<{
-    entityKey?: string;
-    entityType?: 'subject' | 'scene';
-    semanticFingerprint?: string;
-    title: string;
-    prompt: string;
-    referenceAssetIds?: string[];
-    generatedAssetIds?: string[];
-  }>;
-  sceneBullets: string[];
-  scenes: Array<{
-    entityKey?: string;
-    entityType?: 'subject' | 'scene';
-    semanticFingerprint?: string;
-    title: string;
-    prompt: string;
-    referenceAssetIds?: string[];
-    generatedAssetIds?: string[];
-  }>;
-  scriptSummary: string[];
-  acts: Array<{
-    title: string;
-    time: string;
-    location: string;
-    shots: Array<{
-      entityKey?: string;
-      title: string;
-      visual: string;
-      composition: string;
-      motion: string;
-      voice: string;
-      line: string;
-      targetModelFamilySlug?: string;
-      subjectBindings?: string[];
-      referenceAssetIds?: string[];
-      generatedAssetIds?: string[];
-    }>;
-  }>;
-}
+export type { PlannerStructuredDoc } from '@aiv/domain';
 
 function inheritEntityKey(value: string | undefined) {
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined;

@@ -16,6 +16,10 @@ function readString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+function readObject(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
 function findStringDeep(value: unknown, keys: string[]): string | null {
   if (!value || typeof value !== 'object') {
     return null;
@@ -205,7 +209,8 @@ async function runProviderConnectivityTest(args: {
       prompt: args.providerCode === 'ark' ? '请只读出：ok。' : 'Say ok.',
       hookMetadata,
     });
-    if (!audio.buffer.byteLength) {
+    const audioBuffer = readObject(audio).buffer;
+    if (!(audioBuffer instanceof Uint8Array) || audioBuffer.byteLength === 0) {
       throw new Error(`${args.providerCode} audio test returned empty audio content.`);
     }
     return;

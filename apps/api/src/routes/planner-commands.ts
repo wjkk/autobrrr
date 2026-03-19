@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { mapRun } from '../lib/api-mappers.js';
 import { requireUser } from '../lib/auth.js';
-import { queuePlannerGenerateDocRun } from '../lib/planner-run-service.js';
+import { queuePlannerGenerateDocRun } from '../lib/planner/orchestration/run-service.js';
 
 const paramsSchema = z.object({
   projectId: z.string().min(1),

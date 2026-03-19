@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { requireUser } from '../lib/auth.js';
 import { getCreationWorkspace } from '../lib/creation-workspace-service.js';
-import { getPlannerWorkspace } from '../lib/planner-workspace-service.js';
+import { getPlannerWorkspace } from '../lib/planner/workspace-service.js';
 import { getPublishWorkspace } from '../lib/publish-workspace-service.js';
 
 const workspaceParamsSchema = z.object({

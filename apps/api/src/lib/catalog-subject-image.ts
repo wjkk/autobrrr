@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { resolveModelSelection } from './model-registry.js';
-import { findStringDeep } from './planner-text-extraction.js';
+import { findStringDeep } from './planner/text-extraction.js';
 import { submitImageGeneration } from './provider-gateway.js';
 import { resolveProviderRuntimeConfigForUser } from './provider-runtime-config.js';
 import { resolveUserDefaultModelSelection } from './user-model-defaults.js';

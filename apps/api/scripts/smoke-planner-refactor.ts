@@ -1,8 +1,7 @@
 import { strict as assert } from 'node:assert';
 
-import { buildPlannerGenerationPrompt } from '../src/lib/planner-orchestrator.js';
 import { readVideoModelCapabilityFromFamily, summarizeVideoModelCapabilityForPlanner } from '../src/lib/model-capability.js';
-import { rebuildPlannerStructuredDocFromProjection } from '../src/lib/planner-refinement-projection.js';
+import { buildPlannerGenerationPrompt, rebuildPlannerStructuredDocFromProjection } from '../src/lib/planner/index.js';
 import { generateShotPrompts } from '../src/lib/shot-prompt-generator.js';
 
 async function main() {

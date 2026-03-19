@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react';
 
 import type { ApiPlannerWorkspace } from '../lib/planner-api';
-import type { SekoImageCard } from '../lib/seko-plan-data';
+import type { SekoImageCard } from '@aiv/mock-data';
 
 interface UsePlannerAssetDraftsOptions {
   displaySubjectCards: SekoImageCard[];

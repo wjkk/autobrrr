@@ -1,7 +1,7 @@
 import type { PlannerStepStatus } from '@aiv/domain';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { SekoActDraft, SekoImageCard } from '../lib/seko-plan-data';
+import type { SekoActDraft, SekoImageCard } from '@aiv/mock-data';
 
 export type PlannerRefinementStatus = 'running' | 'ready' | 'failed';
 export type PlannerRefinementTrigger = 'confirm_outline' | 'rerun' | 'subject' | 'scene' | 'shot' | 'act';

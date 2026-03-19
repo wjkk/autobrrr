@@ -2,13 +2,7 @@ import type { ModelKind } from '@prisma/client';
 
 import { prisma } from './prisma.js';
 
-function readObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
-
-function readString(value: unknown) {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
+import { readObject, readString } from './json-helpers.js';
 
 function defaultKeyForModelKind(modelKind: 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO') {
   if (modelKind === 'IMAGE') {

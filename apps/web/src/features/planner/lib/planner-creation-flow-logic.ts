@@ -1,5 +1,5 @@
 import type { ApiPlannerWorkspace } from './planner-api';
-import type { SekoActDraft } from './seko-plan-data';
+import type { SekoActDraft } from '@aiv/mock-data';
 
 const READY_CREATION_STATUSES = new Set(['ready_for_storyboard', 'export_ready']);
 

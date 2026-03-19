@@ -7,7 +7,7 @@ import { plannerCopy } from '@/lib/copy';
 import { confirmPlannerOutlineVersion, type PlannerRuntimeApiContext } from '../lib/planner-api';
 import { buildPlannerNoticeFromError, type PlannerNoticeInput } from '../lib/planner-notice';
 import type { PlannerThreadMessage } from '../lib/planner-thread';
-import { sekoPlanThreadData } from '../lib/seko-plan-thread-data';
+import { sekoPlanThreadData } from '@aiv/mock-data';
 import type { PlannerRefinementTrigger } from './use-planner-refinement';
 
 type SubmitPlannerRunViaApi = (

@@ -62,13 +62,7 @@ export interface PlatouCatalogModel {
   label: string;
 }
 
-function readObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
-
-function readString(value: unknown) {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-}
+import { readObject, readString } from './json-helpers.js';
 
 function normalizeModelId(value: string) {
   return value.trim();

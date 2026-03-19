@@ -3,8 +3,7 @@ import { strict as assert } from 'node:assert';
 import type { Prisma } from '@prisma/client';
 
 import { finalizeGeneratedRun } from '../src/lib/run-lifecycle.js';
-import { syncPlannerRefinementDerivedData } from '../src/lib/planner-refinement-sync.js';
-import { syncPlannerRefinementProjection } from '../src/lib/planner-refinement-projection.js';
+import { syncPlannerRefinementDerivedData, syncPlannerRefinementProjection } from '../src/lib/planner/index.js';
 import { prisma } from '../src/lib/prisma.js';
 
 const apiBaseUrl = (process.env.API_BASE_URL ?? 'http://127.0.0.1:8787').replace(/\/$/, '');

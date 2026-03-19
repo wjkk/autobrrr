@@ -1,6 +1,6 @@
 'use client';
 
-import type { SekoActDraft } from './seko-plan-data';
+import type { SekoActDraft } from '@aiv/mock-data';
 
 export interface PlannerShotPointer {
   actId: string;

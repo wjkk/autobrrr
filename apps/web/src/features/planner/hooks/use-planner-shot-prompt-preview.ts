@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { fetchPlannerShotPromptPreview, type ApiPlannerShotPromptPreview, type PlannerRuntimeApiContext } from '../lib/planner-api';
-import type { SekoActDraft } from '../lib/seko-plan-data';
+import type { SekoActDraft } from '@aiv/mock-data';
 
 interface UsePlannerShotPromptPreviewOptions {
   runtimeApi?: PlannerRuntimeApiContext;

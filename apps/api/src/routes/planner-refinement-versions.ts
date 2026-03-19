@@ -7,7 +7,7 @@ import { findOwnedEpisode } from '../lib/ownership.js';
 import {
   createPlannerRefinementDraftCopy,
   isPlannerRefinementConfirmed,
-} from '../lib/planner-refinement-drafts.js';
+} from '../lib/planner/refinement/drafts.js';
 import { prisma } from '../lib/prisma.js';
 
 const paramsSchema = z.object({

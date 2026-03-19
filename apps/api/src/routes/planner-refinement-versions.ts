@@ -1,14 +1,11 @@
 import type { FastifyInstance } from 'fastify';
-import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { requireUser } from '../lib/auth.js';
-import { findOwnedEpisode } from '../lib/ownership.js';
 import {
-  createPlannerRefinementDraftCopy,
-  isPlannerRefinementConfirmed,
-} from '../lib/planner/refinement/drafts.js';
-import { prisma } from '../lib/prisma.js';
+  activatePlannerRefinementVersion,
+  createPlannerRefinementDraft,
+} from '../lib/planner/orchestration/refinement-version-service.js';
 
 const paramsSchema = z.object({
   projectId: z.string().min(1),
@@ -39,8 +36,14 @@ export async function registerPlannerRefinementVersionRoutes(app: FastifyInstanc
       });
     }
 
-    const episode = await findOwnedEpisode(params.data.projectId, payload.data.episodeId, user.id);
-    if (!episode) {
+    const result = await activatePlannerRefinementVersion({
+      projectId: params.data.projectId,
+      episodeId: payload.data.episodeId,
+      userId: user.id,
+      versionId: params.data.versionId,
+    });
+
+    if (!result.ok && result.error === 'NOT_FOUND') {
       return reply.code(404).send({
         ok: false,
         error: {
@@ -50,19 +53,7 @@ export async function registerPlannerRefinementVersionRoutes(app: FastifyInstanc
       });
     }
 
-    const plannerSession = await prisma.plannerSession.findFirst({
-      where: {
-        projectId: episode.project.id,
-        episodeId: episode.id,
-        isActive: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-      },
-    });
-
-    if (!plannerSession) {
+    if (!result.ok && result.error === 'PLANNER_SESSION_REQUIRED') {
       return reply.code(409).send({
         ok: false,
         error: {
@@ -72,19 +63,7 @@ export async function registerPlannerRefinementVersionRoutes(app: FastifyInstanc
       });
     }
 
-    const targetVersion = await prisma.plannerRefinementVersion.findFirst({
-      where: {
-        id: params.data.versionId,
-        plannerSessionId: plannerSession.id,
-      },
-      select: {
-        id: true,
-        plannerSessionId: true,
-        structuredDocJson: true,
-      },
-    });
-
-    if (!targetVersion) {
+    if (!result.ok) {
       return reply.code(404).send({
         ok: false,
         error: {
@@ -94,91 +73,10 @@ export async function registerPlannerRefinementVersionRoutes(app: FastifyInstanc
       });
     }
 
-    const structuredDoc =
-      targetVersion.structuredDocJson && typeof targetVersion.structuredDocJson === 'object' && !Array.isArray(targetVersion.structuredDocJson)
-        ? (targetVersion.structuredDocJson as Record<string, unknown>)
-        : null;
-
-    await prisma.$transaction(async (tx) => {
-      await tx.plannerRefinementVersion.updateMany({
-        where: {
-          plannerSessionId: plannerSession.id,
-          isActive: true,
-        },
-        data: {
-          isActive: false,
-        },
-      });
-
-      await tx.plannerRefinementVersion.update({
-        where: { id: targetVersion.id },
-        data: {
-          isActive: true,
-          updatedAt: new Date(),
-        },
-      });
-
-      if (structuredDoc) {
-        const projectTitle = typeof structuredDoc.projectTitle === 'string' ? structuredDoc.projectTitle : null;
-        const episodeTitle = typeof structuredDoc.episodeTitle === 'string' ? structuredDoc.episodeTitle : null;
-        const summaryBullets = Array.isArray(structuredDoc.summaryBullets)
-          ? structuredDoc.summaryBullets.filter((item): item is string => typeof item === 'string')
-          : [];
-
-        await tx.project.update({
-          where: { id: episode.project.id },
-          data: {
-            ...(projectTitle ? { title: projectTitle } : {}),
-            ...(summaryBullets[0] ? { brief: summaryBullets[0] } : {}),
-          },
-        });
-
-        await tx.episode.update({
-          where: { id: episode.id },
-          data: {
-            ...(episodeTitle ? { title: episodeTitle } : {}),
-            ...(summaryBullets[0] ? { summary: summaryBullets[0] } : {}),
-          },
-        });
-
-        const latestRun = await tx.run.findFirst({
-          where: {
-            projectId: episode.project.id,
-            episodeId: episode.id,
-            resourceType: 'planner_session',
-            resourceId: plannerSession.id,
-            runType: 'PLANNER_DOC_UPDATE',
-          },
-          orderBy: { createdAt: 'desc' },
-          select: {
-            id: true,
-            outputJson: true,
-          },
-        });
-
-        if (latestRun) {
-          const currentOutput =
-            latestRun.outputJson && typeof latestRun.outputJson === 'object' && !Array.isArray(latestRun.outputJson)
-              ? (latestRun.outputJson as Record<string, unknown>)
-              : {};
-
-          await tx.run.update({
-            where: { id: latestRun.id },
-            data: {
-              outputJson: {
-                ...currentOutput,
-                structuredDoc: structuredDoc as Prisma.InputJsonValue,
-              } as Prisma.InputJsonValue,
-            },
-          });
-        }
-      }
-    });
-
     return reply.send({
       ok: true,
       data: {
-        refinementVersionId: targetVersion.id,
+        refinementVersionId: result.refinementVersionId,
       },
     });
   });
@@ -202,8 +100,14 @@ export async function registerPlannerRefinementVersionRoutes(app: FastifyInstanc
       });
     }
 
-    const episode = await findOwnedEpisode(params.data.projectId, payload.data.episodeId, user.id);
-    if (!episode) {
+    const result = await createPlannerRefinementDraft({
+      projectId: params.data.projectId,
+      episodeId: payload.data.episodeId,
+      userId: user.id,
+      versionId: params.data.versionId,
+    });
+
+    if (!result.ok && result.error === 'NOT_FOUND') {
       return reply.code(404).send({
         ok: false,
         error: {
@@ -213,19 +117,7 @@ export async function registerPlannerRefinementVersionRoutes(app: FastifyInstanc
       });
     }
 
-    const plannerSession = await prisma.plannerSession.findFirst({
-      where: {
-        projectId: episode.project.id,
-        episodeId: episode.id,
-        isActive: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-      },
-    });
-
-    if (!plannerSession) {
+    if (!result.ok && result.error === 'PLANNER_SESSION_REQUIRED') {
       return reply.code(409).send({
         ok: false,
         error: {
@@ -235,99 +127,7 @@ export async function registerPlannerRefinementVersionRoutes(app: FastifyInstanc
       });
     }
 
-    const sourceVersion = await prisma.plannerRefinementVersion.findFirst({
-      where: {
-        id: params.data.versionId,
-        plannerSessionId: plannerSession.id,
-      },
-      select: {
-        id: true,
-        plannerSessionId: true,
-        agentProfileId: true,
-        subAgentProfileId: true,
-        sourceRunId: true,
-        sourceOutlineVersionId: true,
-        versionNumber: true,
-        triggerType: true,
-        status: true,
-        instruction: true,
-        assistantMessage: true,
-        documentTitle: true,
-        generatedText: true,
-        structuredDocJson: true,
-        inputSnapshotJson: true,
-        modelSnapshotJson: true,
-        operationsJson: true,
-        isConfirmed: true,
-        createdById: true,
-        subjects: {
-          orderBy: { sortOrder: 'asc' },
-          select: {
-            id: true,
-            name: true,
-            role: true,
-            appearance: true,
-            personality: true,
-            prompt: true,
-            negativePrompt: true,
-            referenceAssetIdsJson: true,
-            generatedAssetIdsJson: true,
-            sortOrder: true,
-            editable: true,
-          },
-        },
-        scenes: {
-          orderBy: { sortOrder: 'asc' },
-          select: {
-            id: true,
-            name: true,
-            time: true,
-            locationType: true,
-            description: true,
-            prompt: true,
-            negativePrompt: true,
-            referenceAssetIdsJson: true,
-            generatedAssetIdsJson: true,
-            sortOrder: true,
-            editable: true,
-          },
-        },
-        shotScripts: {
-          orderBy: { sortOrder: 'asc' },
-          select: {
-            id: true,
-            sceneId: true,
-            actKey: true,
-            actTitle: true,
-            shotNo: true,
-            title: true,
-            durationSeconds: true,
-            targetModelFamilySlug: true,
-            visualDescription: true,
-            composition: true,
-            cameraMotion: true,
-            voiceRole: true,
-            dialogue: true,
-            subjectBindingsJson: true,
-            referenceAssetIdsJson: true,
-            generatedAssetIdsJson: true,
-            sortOrder: true,
-          },
-        },
-        stepAnalysis: {
-          orderBy: { sortOrder: 'asc' },
-          select: {
-            stepKey: true,
-            title: true,
-            status: true,
-            detailJson: true,
-            sortOrder: true,
-          },
-        },
-      },
-    });
-
-    if (!sourceVersion) {
+    if (!result.ok && result.error === 'PLANNER_REFINEMENT_NOT_FOUND') {
       return reply.code(404).send({
         ok: false,
         error: {
@@ -337,7 +137,7 @@ export async function registerPlannerRefinementVersionRoutes(app: FastifyInstanc
       });
     }
 
-    if (!isPlannerRefinementConfirmed(sourceVersion)) {
+    if (!result.ok) {
       return reply.code(409).send({
         ok: false,
         error: {
@@ -347,19 +147,11 @@ export async function registerPlannerRefinementVersionRoutes(app: FastifyInstanc
       });
     }
 
-    const draftVersion = await prisma.$transaction(async (tx) =>
-      createPlannerRefinementDraftCopy({
-        db: tx,
-        sourceVersion,
-        createdById: user.id,
-      }),
-    );
-
     return reply.send({
       ok: true,
       data: {
-        refinementVersionId: draftVersion.id,
-        sourceRefinementVersionId: sourceVersion.id,
+        refinementVersionId: result.refinementVersionId,
+        sourceRefinementVersionId: result.sourceRefinementVersionId,
       },
     });
   });

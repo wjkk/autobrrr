@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import type { Prisma } from '@prisma/client';
 
-import { __testables } from './planner-stream.js';
+import { __testables } from './snapshot-service.js';
 
 function createPlannerRunInput(stepDefinitions: Prisma.JsonObject[]): Prisma.JsonValue {
   return {

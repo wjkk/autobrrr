@@ -1,230 +1,203 @@
-# 重构续推计划（v0.1）
+# 重构续推计划（v0.1 完成版）
 
-版本：v0.1
+版本：v0.1 完成版
 日期：2026-03-19
-状态：现行执行计划
+状态：本轮计划内代码重构已完成
 
 ---
 
-## 1. 当前状态总结
+## 1. 完成状态总结
 
-截至 2026-03-19，已完成的重构工作：
+截至 2026-03-19，本轮计划内重构工作已完成：
 
 | 已完成 | 说明 |
 |--------|------|
-| Planner 后端目录重组 | `lib/planner/` 下 9 个子目录（agent/debug/doc/entity/media/orchestration/refinement/rerun + 根级工具），68 个文件 |
-| Route 层瘦身 | planner-debug 从 41KB → 468 行；explore-catalogs / planner-refinement-entities 改为聚合器模式 |
-| 测试补齐 | 104 个测试文件 / 11,660 行，planner 子模块几乎每个 service 都有对应测试 |
-| 外部调用审计 | `ExternalApiCallLog` 模型完整落地，transport hook 在 server/worker 双端自动安装 |
-| Provider 接入 | ARK text/image/video 已接入统一 gateway；provider-adapters 定义了 ProviderAdapter 接口 |
-| 前端 Planner 页拆分 | planner-page.tsx 从 God Component 收敛到约 658 行，拆出 14 个 hook + 多个子组件 |
-| Domain 包建立 | `@aiv/domain` 含 planner-api/planner-doc/creation/project/studio/publish/shared，631 行 |
-| Mock 数据迁移 | seko-plan-data / seko-plan-thread-data 已迁入 `packages/mock-data` |
-| json-helpers 工具层 | 统一 JSON 安全读取，含完整测试 |
+| Phase A：清理 re-export 桩文件 | `apps/api/src/lib/` 根目录 37 个 `planner-*` re-export 桩文件已删除 |
+| Phase B：继续瘦身厚入口 | `planner-refinement-versions`、`planner-stream`、`planner-finalize`、`planner-media-generation`、`planner-debug` 相关职责已进一步下沉和收口 |
+| Phase C：Provider 执行边界收口 | 已建立统一 execution registry，并为 catalog 同步补统一入口 |
+| Phase D：Asset 存储回归补测 | 已补 `run-lifecycle.ts` 成功路径与失败路径回归测试 |
+| Phase E：前端 Planner 热点拆分 | 已将 `use-planner-page-state.ts` 中的本地状态 ownership 抽到独立 base-state hook |
 
-**当前中间态问题：**
+**本轮已解决的问题：**
 
-1. 37 个 re-export 桩文件仍留在 `lib/` 根目录（向后兼容层，未清理）
-2. 部分路由仍然较厚（planner-refinement-versions 366 行、planner-stream 302 行 等）
-3. Provider 层缺乏统一 Capability 抽象（ark/platou 各自独立，无共享 capability 接口）
-4. `run-lifecycle.ts` Asset URL 仍为 `https://generated.local/` 占位符
-5. ARK AUDIO 接入搁置（等待官方确认可用接口）
+1. `apps/api/src/lib/` 根目录 37 个 re-export 桩文件已清理
+2. Planner 仍偏厚的入口已进一步收口，重逻辑更多下沉到 service 层
+3. Provider 边界已从“多处分散声明”收口到统一 execution registry + 统一 catalog 入口
+4. Asset 本地存储链路已补代码级回归测试，不再只覆盖失败路径
+5. 前端 Planner 的状态管理已开始按状态 ownership 拆分，而不是继续堆在单个 hook 中
 
----
+**仍未实际执行的人工/真实环境验收项：**
 
-## 2. 续推阶段划分
+1. 未手动跑一次真实生成任务验证 `Asset.sourceUrl` 在线可访问
+2. 未做浏览器中的 Planner 页面手动 smoke
 
-### Phase A：清理 re-export 桩文件（低风险，高收益）
-
-**目标：** 消除 `lib/` 根目录 37 个一行 re-export 桩，统一 import 路径指向新位置。
-
-**为什么先做：**
-- 纯机械操作，无业务逻辑变更
-- 消除目录噪音，新开发者不再困惑"该 import 哪个"
-- 为后续 Phase B 的路由瘦身扫清 import 路径混乱
-
-**执行步骤：**
-
-1. 用 grep 找出所有消费 `lib/planner-*.ts` 桩文件的 import（routes/ 和 lib/ 内部）
-2. 批量将 import 路径改为新路径（`./planner/agent/...`、`./planner/debug/...` 等）
-3. 删除 37 个桩文件
-4. 验证：`pnpm typecheck:api`
-
-**涉及文件：**
-- `apps/api/src/routes/*.ts`（所有 import planner-* 的路由文件）
-- `apps/api/src/lib/planner-*.ts`（37 个桩文件，删除）
-
-**验收：**
-- `pnpm typecheck:api` 通过
-- `pnpm --filter @aiv/api test:unit` 通过
+上面两项不影响本轮代码重构完成状态，但仍属于人工验收范围，而非“已实际走通”的真实环境证明。
 
 ---
 
-### Phase B：继续瘦身剩余厚路由
+## 2. 各 Phase 完成记录
 
-**���标：** 将仍然较厚的路由文件收敛到"认证 + 校验 + 调 service + 返回"模式。
+### Phase A：清理 re-export 桩文件
 
-**优先级排序（按行数和复杂度）：**
+**状态：** 已完成
 
-| 路由文件 | 当前行数 | 目标行数 | 主要问题 |
-|---------|---------|---------|---------|
-| planner-refinement-versions.ts | 366 | ~120 | 查询逻辑混在路由层 |
-| planner-stream.ts | 302 | ~100 | SSE 逻辑未下沉 |
-| planner-media-generation.ts | 258 | ~100 | 媒体生成编排在路由层 |
-| planner-finalize.ts | 240 | ~100 | finalize 逻辑未完全下沉 |
-| planner-debug.ts | 468 | ~150 | schema 定义和业务逻辑仍混杂 |
+**完成结果：**
+- 删除了 `apps/api/src/lib/` 根目录下 37 个 `planner-*` re-export 桩文件
+- 校验后确认源码已不再依赖这批兼容入口
+- 通过类型检查和 API 单测验证，未引入 import 漏改
 
-**执行原则：**
-- 每个路由文件单独一个提交
-- 提取的 service 放入对应的 `lib/planner/` 子目录
-- 每次提交后运行 `pnpm typecheck:api` + 对应 smoke
-
-**执行步骤（以 planner-refinement-versions.ts 为例）：**
-
-1. 新建 `lib/planner/orchestration/refinement-version-service.ts`
-2. 将查询/聚合逻辑迁入 service
-3. 路由层只保留 schema 定义 + 参数解析 + service 调用 + 响应
-4. 补 service 单测
-5. 验证：`pnpm typecheck:api` + `pnpm --filter @aiv/api test:unit`
+**结果说明：**
+- 该目录层噪音已清除
+- 后续 Planner import 路径以真实模块位置为准
 
 ---
 
-### Phase C：Provider 层统一 Capability 抽象
+### Phase B：继续瘦身剩余厚入口与重逻辑 service
 
-**目标：** 建立统一的 provider capability 接口，消除 ark/platou 各自独立的现状。
+**状态：** 已完成
 
-**当前问题：**
-```
-provider-adapters.ts (657行) — submit/poll/handleCallback 混在一起
-provider-gateway.ts (236行) — ark/platou facade，无 capability 分层
-ark-client.ts (464行) — Ark 直连，无共享接口
-platou-client.ts (227行) — Platou 直连，无共享接口
-ark-model-catalog.ts (331行) — 独立
-platou-model-catalog.ts (318行) — 独立
-```
+**完成结果：**
 
-**目标结构：**
-```
-lib/
-  provider/
-    capability.ts          — ProviderCapability 接口（text/image/video/audio）
-    registry.ts            — provider 注册表，capability → client 映射
-    adapters/
-      ark-adapter.ts       — Ark 实现 ProviderCapability
-      platou-adapter.ts    — Platou 实现 ProviderCapability
-    catalog/
-      model-catalog.ts     — 统一模型能力查询入口（合并 ark/platou catalog）
-```
+1. `planner-refinement-versions.ts`
+   - 新增 `lib/planner/orchestration/refinement-version-service.ts`
+   - 将 activate / create-draft 的查询、事务和同步更新逻辑下沉
 
-**执行步骤：**
+2. `planner-stream.ts`
+   - 新增 `lib/planner/stream/snapshot-service.ts`
+   - 将 stepDefinitions 读取、synthetic step 推导、snapshot 组装下沉
 
-1. 定义 `ProviderCapability` 接口（text/image/video/audio 四种能力的统一签名）
-2. 建立 provider registry，capability → adapter 映射
-3. 将 ark-client / platou-client 包装为各自的 adapter 实现
-4. 合并 ark-model-catalog / platou-model-catalog 为统一查询入口
-5. 更新 provider-gateway.ts 使用新 registry（或逐步废弃 gateway）
-6. 验证：`pnpm typecheck:api` + provider 相关 smoke
+3. `planner-debug`
+   - 新增 `lib/planner/debug/selection-service.ts`
+   - 将 debug selection / selection snapshot 相关职责从 execution service 中拆出
 
-**注意：**
-- ARK AUDIO（R-05D）仍搁���，新结构需为其预留接口但不强制实现
-- 此 Phase 风险最高，需要最充分的测试覆盖后再合并
+4. `planner-media-generation.ts`
+   - 收口为统一 route 注册器
+   - 消除了 subject / scene / shot 三套重复包装逻辑
+
+5. `planner-finalize.ts`
+   - 新增 `lib/planner/orchestration/finalize-service.ts`
+   - 将 active refinement 查询、模型解析、事务准备逻辑下沉
+
+**结果说明：**
+- 这轮并没有机械追求所有 route 压到某个固定行数
+- 收口目标是“入口只做认证、校验、调 service、返回”，这点已经达到
 
 ---
 
-### Phase D：Asset 存储真实对接
+### Phase C：Provider 层统一执行边界
 
-**目标：** 消除 `run-lifecycle.ts` 中 `https://generated.local/` 占位符，接入真实文件存储。
+**状态：** 已完成
 
-**当前状态：**
-- `run-lifecycle.ts` 480 行，Asset URL 写死为占位符
-- `apps/api/uploads/generated/` 目录已存在（本地文件上传已有基础）
+**完成结果：**
+- 新增 `lib/provider/registry.ts`
+  - 统一 provider capability 声明
+  - 统一 provider dispatch handlers
+- 新增 `lib/provider/catalog/model-catalog.ts`
+  - 统一 provider catalog 拉取、模型提取和同步入口
+- `provider-gateway.ts` 已改为基于 execution registry 工作
+- `provider-config-catalog-service.ts` 已改为基于统一 catalog 入口工作
 
-**执行步骤：**
-
-1. 确认本地文件存储路径策略（`uploads/generated/{year}/{month}/{day}/`）
-2. 在 `run-lifecycle.ts` 中将生成结果写入本地存储，返回真实可访问 URL
-3. 确认 `assets.ts` 路由的静态文件服务已覆盖该路径
-4. 补回归测试
-5. 验证：真实生成一个 run，检查 Asset.sourceUrl 可访问
-
----
-
-### Phase E：前端 Planner 模块评估与拆分
-
-**目标：** 评估 12,958 行的 planner 模块是否需要进一步拆分，降低维护复杂度。
-
-**当���状态：**
-```
-planner/ — 12,958 行（占前端总量 52%）
-  components/ — 多个大文件
-  hooks/ — 14 个 hook 文件
-  lib/ — 12 个 lib 文件
-```
-
-**评估维度：**
-1. hooks 之间的依赖关系是否形成循环或过深的调用链
-2. 是否存在可以独立为子功能模块的区域（如 planner-debug 已独立）
-3. 组件文件是否有超过 500 行的单文件
-
-**可能的拆分方向：**
-- `planner-outline/` — outline 阶段相关组件和 hooks
-- `planner-refinement/` — refinement 阶段相关组件和 hooks
-- `planner-debug/` — 已独立，保持现状
-
-**执行原则：**
-- 先做评估，再决定是否拆分
-- 不为拆分而拆分，只有当某个子域有清晰边界时才拆
+**结果说明：**
+- 本轮没有再叠第四套抽象壳
+- Planner 的 `VideoModelCapability` 仍保留在产品/模型能力层，没有混进 transport/execution registry
+- 这次是“边界收口”，不是“推倒重写 provider-adapters”
 
 ---
 
-## 3. 执行顺序与依赖关系
+### Phase D：Asset 存储回归验收与补测
 
-```
-Phase A（清理桩文件）
-    ↓
-Phase B（路由瘦身）    Phase D（Asset 存储）
-    ↓
-Phase C（Provider 抽象）
-    ↓
-Phase E（前端评估）
-```
+**状态：** 代码级完成，人工验收未执行
 
-- Phase A 是前置，清理 import 路径后 Phase B 的改动更干净
-- Phase B 和 Phase D 可并行
-- Phase C 依赖 Phase B 完成（路由已瘦身，provider 调用点清晰）
-- Phase E 最后做，不阻塞其他 Phase
+**完成结果：**
+- `asset-storage.ts` 既有 helper 测试保留
+- `run-lifecycle.ts` 新增成功路径回归测试，覆盖：
+  - planner entity 图片落盘后 `Asset.sourceUrl` 写回
+  - shot 视频落盘后 `Asset` / `ShotVersion` 关系写回
+  - refinement projection 同步触发
+
+**结果说明：**
+- 代码层已具备较完整回归护栏
+- 但“真实 run 后 `Asset.sourceUrl` 可直接访问”这一项尚未实际人工验证
 
 ---
 
-## 4. 每个 Phase 的验收口径
+### Phase E：前端 Planner 模块评估与按状态边界拆分
 
-| Phase | 验收命令 | 额外验证 |
-|-------|---------|---------|
-| A | `pnpm typecheck:api` + `pnpm --filter @aiv/api test:unit` | 无 |
-| B | `pnpm typecheck:api` + `pnpm --filter @aiv/api test:unit` | 对应路由的 smoke |
-| C | `pnpm typecheck:api` + `pnpm --filter @aiv/api test:unit` | provider smoke（image/video） |
-| D | `pnpm typecheck:api` | 真实 run 生成后 Asset URL 可访问 |
-| E | `pnpm typecheck` + `pnpm build` | planner 页面手动 smoke |
+**状态：** 第一轮完成
+
+**完成结果：**
+- 新增 `apps/web/src/features/planner/hooks/use-planner-page-base-state.ts`
+- 将 `use-planner-page-state.ts` 中的本地状态 ownership 抽出
+- 主 hook 继续保留 orchestration 角色，降低了“本地状态 + orchestration + side effect”混杂程度
+
+**结果说明：**
+- 本轮完成的是“按状态 ownership 拆第一刀”
+- 没有继续做目录级大迁移，也没有为了拆分而拆分
+- 如果后续还要继续拆，优先方向仍应是 runtime / editor / generation 等状态边界，而不是单纯按文件大小拆
 
 ---
 
-## 5. 不在本计划范围内的事项
+## 3. 执行顺序回顾
 
-以下事项当前不推进，原因已注明：
+实际执行顺序如下：
+
+```text
+Phase A
+  ↓
+Phase B
+  ↓
+Phase D
+  ↓
+Phase C
+  ↓
+Phase E
+```
+
+说明：
+- 实施中优先完成了主链路后端收口，再补 Asset 成功路径回归
+- Provider 边界收口放在主链路稳定之后执行
+- 前端拆分作为最后一步，仅做第一轮低风险状态拆分
+
+---
+
+## 4. 验证结果
+
+本轮已完成的验证：
+
+| 范围 | 结果 |
+|------|------|
+| `pnpm typecheck:api` | 通过 |
+| `pnpm --filter @aiv/api test:unit` | 通过 |
+| `pnpm typecheck` | 通过 |
+| `pnpm build` | 通过 |
+
+**备注：**
+- `pnpm build` 过程中出现 `baseline-browser-mapping` 版本过期提示，但不影响构建成功
+- 未实际执行浏览器端手动 smoke
+- 未实际执行真实 provider 生成任务回归
+
+---
+
+## 5. 不在本轮范围内的事项
+
+以下事项仍不在本轮完成范围内：
 
 | 事项 | 原因 |
 |------|------|
-| ARK AUDIO 接入（R-05D） | 等待官方确认可用接口，不阻塞主链路 |
+| ARK AUDIO 接入（R-05D） | 仍等待官方确认可用接口，不作为本轮阻塞项 |
 | subShot / shotSegments 新数据模型 | 需求未稳定，不提前设计 |
-| Admin 后台迁移 | 功能性需求，重构完成后再推进 |
-| 新功能开发 | 重构完成前暂停 |
+| Admin 后台迁移 | 属于功能性扩展，不在本轮结构收口范围内 |
+| 大范围前端视觉重做 | 本轮聚焦结构、边界和维护性 |
+| 浏览器手动 smoke | 未在本轮实际执行 |
+| 真实 provider run 验收 | 未在本轮实际执行 |
 
 ---
 
 ## 6. 参考文档
 
-- `docs/specs/refactor-todo-flat-table-v0.1.md` — 历史任务总表（R-01 到 R-23 均已完成）
-- `docs/specs/planner-structural-refactor-rescue-plan-v0.1.md` — 救援计划（Phase 0-5 已执行）
-- `docs/specs/refactor-execution-sequence-v0.1.md` — 历史执行序列
-- `docs/specs/phase-2-ai-refactor-task-breakdown-v0.1.md` — Phase 2 AI 层拆解
-- `docs/specs/planner-phase-4-5-task-breakdown-v0.1.md` — Planner Phase 4/5 拆解
+- `docs/specs/refactor-todo-flat-table-v0.1.md`：历史任务总表
+- `docs/specs/planner-structural-refactor-rescue-plan-v0.1.md`：Planner 结构救援计划
+- `docs/specs/refactor-execution-sequence-v0.1.md`：历史执行序列
+- `docs/specs/phase-2-ai-refactor-task-breakdown-v0.1.md`：Phase 2 AI 层拆解
+- `docs/specs/planner-phase-4-5-task-breakdown-v0.1.md`：Planner Phase 4/5 拆解
+- `docs/specs/backend-implementation-checklist-v0.3.md`：当前后端实现基线与回归清单

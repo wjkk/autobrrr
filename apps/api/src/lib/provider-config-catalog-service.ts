@@ -1,8 +1,11 @@
-import { extractArkCatalogModels, listArkModels, syncArkModelCatalog } from './ark-model-catalog.js';
 import { fetchProviderConfigItem } from './provider-config-query-service.js';
 import { mergeProviderConfigOptions } from './provider-config-options.js';
-import { extractPlatouCatalogModels, syncPlatouModelCatalog } from './platou-model-catalog.js';
-import { listPlatouModels } from './platou-client.js';
+import {
+  extractProviderCatalogModels,
+  listProviderCatalogModels,
+  syncProviderModelCatalog,
+  type ProviderCatalogCode,
+} from './provider/catalog/model-catalog.js';
 import { prisma } from './prisma.js';
 import type { ProviderConfigServiceResult } from './provider-config-service-types.js';
 
@@ -130,50 +133,35 @@ export async function syncProviderModelsForUser(args: {
   const { config, baseUrl } = precheck.data;
 
   try {
-    const payload = checkedProvider.code === 'ark'
-      ? await listArkModels({
-          baseUrl,
-          apiKey: config.apiKey,
-        })
-      : await listPlatouModels({
-          baseUrl,
-          apiKey: config.apiKey,
-        });
+    const providerCode = checkedProvider.code as ProviderCatalogCode;
+    const payload = await listProviderCatalogModels({
+      providerCode,
+      baseUrl,
+      apiKey: config.apiKey,
+    });
 
     let syncMessage = '';
     let totalCount = 0;
-
-    if (checkedProvider.code === 'ark') {
-      const discoveredModels = extractArkCatalogModels(payload);
-      if (discoveredModels.length === 0) {
-        throw new Error('Volcengine Ark model catalog returned no supported text/image/video/audio models.');
-      }
-      const syncResult = await syncArkModelCatalog({
-        providerId: checkedProvider.id,
-        discoveredModels,
-      });
-      totalCount = syncResult.totalCount;
-      syncMessage = buildCatalogSyncMessage({
-        providerCode: 'ark',
-        totalCount: syncResult.totalCount,
-        byKind: syncResult.byKind,
-      });
-    } else {
-      const discoveredModels = extractPlatouCatalogModels(payload);
-      if (discoveredModels.length === 0) {
-        throw new Error('Platou model catalog returned no supported text/image/video models.');
-      }
-      const syncResult = await syncPlatouModelCatalog({
-        providerId: checkedProvider.id,
-        discoveredModels,
-      });
-      totalCount = syncResult.totalCount;
-      syncMessage = buildCatalogSyncMessage({
-        providerCode: 'platou',
-        totalCount: syncResult.totalCount,
-        byKind: syncResult.byKind,
-      });
+    const discoveredModels = extractProviderCatalogModels(providerCode, payload);
+    if (discoveredModels.length === 0) {
+      throw new Error(
+        providerCode === 'ark'
+          ? 'Volcengine Ark model catalog returned no supported text/image/video/audio models.'
+          : 'Platou model catalog returned no supported text/image/video models.',
+      );
     }
+
+    const syncResult = await syncProviderModelCatalog({
+      providerCode,
+      providerId: checkedProvider.id,
+      discoveredModels,
+    });
+    totalCount = syncResult.totalCount;
+    syncMessage = buildCatalogSyncMessage({
+      providerCode,
+      totalCount: syncResult.totalCount,
+      byKind: syncResult.byKind,
+    });
 
     await prisma.userProviderConfig.update({
       where: {

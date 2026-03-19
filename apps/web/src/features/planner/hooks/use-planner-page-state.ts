@@ -31,7 +31,8 @@ import { usePlannerShotActions } from './use-planner-shot-actions';
 import { usePlannerShotEditor } from './use-planner-shot-editor';
 import { usePlannerShotPromptPreview } from './use-planner-shot-prompt-preview';
 import { usePlannerStream } from './use-planner-stream';
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { usePlannerPageBaseState } from './use-planner-page-base-state';
+import { useCallback, useEffect, useMemo, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { sekoPlanData, sekoPlanThreadData } from '@aiv/mock-data';
 
@@ -101,33 +102,49 @@ export function usePlannerPageState(options: UsePlannerPageStateOptions) {
   } = options;
 
   const router = useRouter();
-  const subjectUploadInputRef = useRef<HTMLInputElement | null>(null);
-  const sceneUploadInputRef = useRef<HTMLInputElement | null>(null);
-
   const plannerMode: PlannerMode = studio.project.contentMode === 'series' ? 'series' : 'single';
-
-  const [activeEpisodeId, setActiveEpisodeId] = useState('episode-1');
-  const [displayTitle, setDisplayTitle] = useState(studio.project.title);
-  const [aspectRatio, setAspectRatio] = useState<PlannerAssetRatio>('16:9');
-  const [storyboardModelId, setStoryboardModelId] = useState(() => readPreferredStoryboardModelId(initialWorkspace ?? null));
-  const [remainingPoints, setRemainingPoints] = useState(studio.creation.points);
-  const [requirement, setRequirement] = useState(studio.planner.submittedRequirement || sekoPlanThreadData.userPrompt);
-  const [notice, setNoticeState] = useState<PlannerNotice | null>(null);
-  const [outlineConfirmed, setOutlineConfirmed] = useState(false);
-  const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
-  const [runtimeWorkspace, setRuntimeWorkspace] = useState<ApiPlannerWorkspace | null>(initialWorkspace ?? null);
-  const [messages, setMessages] = useState<PlannerThreadMessage[]>(() => mapWorkspaceMessagesToThread(initialWorkspace?.messages));
-  const [plannerImageAssets, setPlannerImageAssets] = useState<PlannerRuntimeAssetOption[]>([]);
-  const [assetUploadPending, setAssetUploadPending] = useState<'subject' | 'scene' | null>(null);
-  const [serverPlannerText, setServerPlannerText] = useState(initialGeneratedText ?? '');
-  const [structuredPlannerDoc, setStructuredPlannerDoc] = useState<PlannerStructuredDoc | null>(initialStructuredDoc ?? null);
-  const [plannerSubmitting, setPlannerSubmitting] = useState(false);
+  const {
+    subjectUploadInputRef,
+    sceneUploadInputRef,
+    activeEpisodeId,
+    setActiveEpisodeId,
+    displayTitle,
+    setDisplayTitle,
+    aspectRatio,
+    setAspectRatio,
+    storyboardModelId,
+    setStoryboardModelId,
+    remainingPoints,
+    requirement,
+    setRequirement,
+    notice,
+    setNotice,
+    outlineConfirmed,
+    setOutlineConfirmed,
+    historyMenuOpen,
+    setHistoryMenuOpen,
+    runtimeWorkspace,
+    setRuntimeWorkspace,
+    messages,
+    setMessages,
+    plannerImageAssets,
+    setPlannerImageAssets,
+    assetUploadPending,
+    setAssetUploadPending,
+    serverPlannerText,
+    setServerPlannerText,
+    structuredPlannerDoc,
+    setStructuredPlannerDoc,
+    plannerSubmitting,
+    setPlannerSubmitting,
+  } = usePlannerPageBaseState({
+    studio,
+    initialGeneratedText,
+    initialStructuredDoc,
+    initialWorkspace,
+  });
 
   const { streamState, startPlannerStream, stopPlannerStream } = usePlannerStream(runtimeApi);
-
-  const setNotice = useCallback((value: PlannerNoticeInput) => {
-    setNoticeState(toPlannerNotice(value));
-  }, []);
 
   const plannerDoc = useMemo(
     () => (structuredPlannerDoc ? toPlannerSeedData(structuredPlannerDoc, sekoPlanData) : sekoPlanData),

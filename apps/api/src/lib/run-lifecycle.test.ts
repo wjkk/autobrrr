@@ -228,6 +228,7 @@ test('finalizeGeneratedRun stores planner subject assets locally and syncs refin
     },
     syncPlannerRefinementProjection: async ({ refinementVersionId }: { refinementVersionId: string }) => {
       syncedRefinementVersionId = refinementVersionId;
+      return {} as never;
     },
   });
 

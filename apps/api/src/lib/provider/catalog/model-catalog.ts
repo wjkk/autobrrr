@@ -1,29 +1,41 @@
-import { extractArkCatalogModels, listArkModels, syncArkModelCatalog } from '../../ark-model-catalog.js';
-import { extractPlatouCatalogModels, syncPlatouModelCatalog } from '../../platou-model-catalog.js';
-import { listPlatouModels } from '../../platou-client.js';
+import {
+  extractArkCatalogModels,
+  listArkCatalogModels,
+  syncArkModelCatalog,
+  type ArkCatalogModel,
+} from './ark-parser.js';
+import {
+  extractPlatouCatalogModels,
+  listPlatouCatalogModels,
+  syncPlatouModelCatalog,
+  type PlatouCatalogModel,
+} from './platou-parser.js';
 
 export type ProviderCatalogCode = 'ark' | 'platou';
+export type ProviderCatalogModel = ArkCatalogModel | PlatouCatalogModel;
+
+function isArkProviderCatalogCode(providerCode: ProviderCatalogCode): providerCode is 'ark' {
+  return providerCode === 'ark';
+}
 
 export async function listProviderCatalogModels(args: {
   providerCode: ProviderCatalogCode;
   baseUrl: string;
   apiKey: string;
 }) {
-  if (args.providerCode === 'ark') {
-    return listArkModels({
-      baseUrl: args.baseUrl,
-      apiKey: args.apiKey,
-    });
-  }
-
-  return listPlatouModels({
-    baseUrl: args.baseUrl,
-    apiKey: args.apiKey,
-  });
+  return isArkProviderCatalogCode(args.providerCode)
+    ? listArkCatalogModels({
+        baseUrl: args.baseUrl,
+        apiKey: args.apiKey,
+      })
+    : listPlatouCatalogModels({
+        baseUrl: args.baseUrl,
+        apiKey: args.apiKey,
+      });
 }
 
 export function extractProviderCatalogModels(providerCode: ProviderCatalogCode, payload: unknown) {
-  return providerCode === 'ark'
+  return isArkProviderCatalogCode(providerCode)
     ? extractArkCatalogModels(payload)
     : extractPlatouCatalogModels(payload);
 }
@@ -31,17 +43,15 @@ export function extractProviderCatalogModels(providerCode: ProviderCatalogCode, 
 export async function syncProviderModelCatalog(args: {
   providerCode: ProviderCatalogCode;
   providerId: string;
-  discoveredModels: ReturnType<typeof extractArkCatalogModels> | ReturnType<typeof extractPlatouCatalogModels>;
+  discoveredModels: ProviderCatalogModel[];
 }) {
-  if (args.providerCode === 'ark') {
-    return syncArkModelCatalog({
-      providerId: args.providerId,
-      discoveredModels: args.discoveredModels as ReturnType<typeof extractArkCatalogModels>,
-    });
-  }
-
-  return syncPlatouModelCatalog({
-    providerId: args.providerId,
-    discoveredModels: args.discoveredModels as ReturnType<typeof extractPlatouCatalogModels>,
-  });
+  return isArkProviderCatalogCode(args.providerCode)
+    ? syncArkModelCatalog({
+        providerId: args.providerId,
+        discoveredModels: args.discoveredModels as ArkCatalogModel[],
+      })
+    : syncPlatouModelCatalog({
+        providerId: args.providerId,
+        discoveredModels: args.discoveredModels as PlatouCatalogModel[],
+      });
 }

@@ -4,6 +4,9 @@
 日期：2026-03-16
 状态：现行执行拆解（Planner 专项）
 
+> 路由口径说明（2026-03-20）：
+> 本文若引用旧写法 `/api/projects/:projectId/planner/*`，当前实际外部路由统一以 `/api/planner/projects/:projectId/*` 为准。
+
 当前进度（2026-03-16）：
 
 1. `model-capability.ts` 已落地第一版，开始把 `model_families.capabilityJson` 收口成稳定类型

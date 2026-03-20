@@ -4,6 +4,9 @@
 日期：2026-03-16
 状态：现行执行基线（用于收口 AI 重构架构口径）
 
+> 路由口径说明（2026-03-20）：
+> 本文若引用旧写法 `/api/projects/:projectId/planner/*`，当前实际外部路由统一以 `/api/planner/projects/:projectId/*` 为准。
+
 ## 1. 文档目的
 
 本文只做一件事：把当前文档中分散在 `checklist`、`guardrails`、`planner-agent-refactor-design` 里的 AI 重构口径收敛成一页可执行基线。

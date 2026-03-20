@@ -1,8 +1,8 @@
 # 后端实施检查清单（v0.3）
 
 版本：v0.3
-日期：2026-03-16
-状态：按当前代码现状重写后的实施与重构清单
+日期：2026-03-20
+状态：按 2026-03-20 当前代码现状复核后的实施与重构清单
 
 ## 1. 文档目的
 
@@ -81,37 +81,41 @@
 1. model families / providers / endpoints
 2. 用户级 provider 配置
 3. provider test
-4. provider model sync（Platou）
+4. provider model sync（Ark / Platou）
 5. 用户默认模型与 enabled model 过滤
 
 ## 3. 当前未完成或未达标部分
 
 ### 3.1 系统文档收口
 
+当前已完成：
+
+1. `planner-agent-orchestration-spec-v0.1.md`、`planner-workflow-and-document-spec-v0.1.md` 已降级归档
+2. 主索引已将当前基线、草案与历史快照分层
+
 仍需继续收口：
 
-1. `docs/specs/planner-agent-orchestration-spec-v0.1.md` 状态说明
-2. `docs/specs/planner-workflow-and-document-spec-v0.1.md` 状态说明
-3. 其余 specs 与 review 之间的交叉引用
+1. 其余 specs 与 review 之间的交叉引用
 
 ### 3.2 AI 层收口不足
 
 当前已完成：
 
 1. AICSO provider 已从主执行链路剔除（2026-03-16）
-2. `provider-adapters.ts` 已形成 gateway 雏形（ProviderAdapter interface + arkAdapter + platouAdapter）
-3. 当前剩余 provider：`ark`、`platou`
-4. 当前代码主链路中：`ark` 主要跑 TEXT；`platou` 已跑 TEXT + IMAGE + VIDEO
-5. 规划上：`ark` 不能再被视为 text-only provider，后续也要接入 IMAGE / VIDEO / AUDIO 能力
+2. `run-input.ts` 已完成类型化解析，provider 侧不再依赖字符串路径读取 `inputJson`
+3. `provider-adapters.ts` 已降为兼容 facade，真实执行逻辑已拆入 `provider/adapter-resolution.ts` 与 `provider/adapters/*.ts`
+4. `provider-gateway.ts` 已通过 `provider/registry.ts` 暴露统一 capability 入口
+5. `catalog-subject-image.ts` 已改走 `provider-gateway.ts`
+6. `run-lifecycle.ts` 已移除 `generated.local` 占位 URL 回退
+7. `external_api_call_logs` 已落地，server / worker 已自动安装 transport hook
+8. 当前剩余 provider：`ark`、`platou`
+9. 当前代码主链路中：`ark` 已支持 TEXT + IMAGE + VIDEO + AUDIO；`platou` 已支持 TEXT + IMAGE + VIDEO
+10. 当前已不得再沿用 “ark = text only” 的架构假设
 
-仍需重构：
+当前剩余收口重点：
 
-1. `run.inputJson` 是裸 JSON 字段，路由写入与 adapter 读取靠字符串路径约定，编译期无保护
-2. `catalog-subject-image.ts` 直连 `platou-client.ts`，是唯一绕开统一 gateway 的业务 AI 调用路径
-3. `run-lifecycle.ts` 中 `resolveProviderSourceUrl` 找不到 URL 时回退到假地址 `https://generated.local/...`，静默污染 Asset 数据
-4. `ark-client.ts` / `platou-client.ts` 无 instrumentation 钩子，Phase 3 的外部调用日志无法统一落点
-5. `seed-model-registry.ts` 当前只给 `ark` 写入了 text family，规划层面低估了 ARK 的图片 / 视频 / 音频接入需求
-6. `provider-gateway.ts` 与 `/provider-configs/:providerCode/test` 的设计不能写死 `ark = text only`
+1. 继续保持 `provider-gateway.ts -> provider/registry.ts -> provider/adapters/*.ts` 的边界稳定
+2. 如后续新增 provider 或新能力，优先沿现有 capability / adapter 分层扩展，而不是回退到 route 或 feature service 直连 client
 
 ### 3.3 Planner AI 专项缺口
 
@@ -121,7 +125,7 @@
 
 - 策划大纲/细化生成：TEXT，ARK（Doubao），同步，经 gateway ✅
 - 局部重跑：TEXT，ARK（Doubao），同步，经 gateway ✅（但 scope 字符串化，见 Phase 2-F3）
-- 主体草图生成：IMAGE，Platou，**直连 `platou-client.ts`，绕过 gateway** ⚠️（见 Phase 2-B）
+- 主体草图生成：IMAGE，Ark / Platou，统一经 gateway ✅
 - Debug 运行：TEXT，ARK（Doubao），同步，经 gateway ✅
 
 **Creation 页**：
@@ -132,7 +136,7 @@
 补充说明：
 
 1. 上述是当前代码主链路现状，不代表长期 provider 能力边界
-2. ARK 后续同样纳入 IMAGE / VIDEO / AUDIO 能力接入计划，Phase 2 起不得再沿用 “ark = text only” 的架构假设
+2. 当前已不得再沿用 “ark = text only” 的架构假设
 
 **核心 AI 功能缺口**（影响产品差异化，优先级最高）：
 
@@ -143,11 +147,16 @@
 
 ### 3.4 外部调用日志不足
 
-当前未完成：
+当前已完成：
 
 1. 独立的 `external_api_call_logs` 表
 2. request / response 全量审计
 3. latency / trace id / provider request id 统一记录
+
+当前剩余工作：
+
+1. 继续保持新增 provider / gateway 调用自动走统一 hook
+2. 在新增高价值链路时补 focused smoke 或单测，避免审计字段静默漂移
 
 ### 3.5 AICSO 语义残留
 
@@ -716,7 +725,7 @@ DoD：
 
 目标：
 
-- 新增 SSE 端点：`GET /api/projects/:projectId/planner/stream`
+- 新增 SSE 端点：`GET /api/planner/projects/:projectId/stream`
 - `planner-orchestrator.ts` 执行过程中，通过 SSE 推送步骤事件：
   - `{ event: 'step_started', stepKey, stepTitle }`
   - `{ event: 'step_done', stepKey, details[] }`
@@ -764,7 +773,7 @@ DoD：
 
 建议接口：
 
-- `POST /api/projects/:projectId/planner/refinement-versions/:versionId/create-draft`
+- `POST /api/planner/projects/:projectId/refinement-versions/:versionId/create-draft`
 
 DoD：
 
@@ -781,7 +790,7 @@ DoD：
 
 目标：
 
-- 新增接口：`POST /api/projects/:projectId/planner/finalize`
+- 新增接口：`POST /api/planner/projects/:projectId/finalize`
 - 动作：
   1. 当前 `activeRefinement` 标记 `isConfirmed = true`
   2. 按 `ShotScript[]` 批量创建或更新 `Shot` 记录

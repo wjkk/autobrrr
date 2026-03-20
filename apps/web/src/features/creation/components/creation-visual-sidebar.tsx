@@ -1,6 +1,5 @@
 'use client';
 
-import { cx } from '@aiv/ui';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -8,71 +7,25 @@ import { getCreationShotMediaUrl, getCreationShotSummaryMediaUrl, getCreationVer
 import type { CreationWorkspaceController } from '../lib/use-creation-workspace';
 import pageStyles from './creation-page.module.css';
 import { CreationIcon } from './creation-icons';
+import { CreationVisualSidebarComposer } from './creation-visual-sidebar-composer';
+import { CreationVisualSidebarThread } from './creation-visual-sidebar-thread';
+import {
+  canElementConsumeWheel,
+  ComposerMode,
+  EDIT_COST,
+  getShotBadgeLabel,
+  hasVideoResult,
+  IMAGE_COST,
+  VIDEO_COST,
+} from './creation-visual-sidebar-helpers';
 import styles from './creation-visual-sidebar.module.css';
 
 interface CreationVisualSidebarProps {
   controller: CreationWorkspaceController;
 }
 
-type ComposerMode = 'edit' | 'image' | 'video';
-
-const EDIT_COST = 1;
-const IMAGE_COST = 2;
-const VIDEO_COST = 8;
-const IMAGE_PROMPT_ASSIST_OPTIONS = [
-  { id: 'style', label: '补充画风', suffix: '，现代科技感，电影级灯光，角色形象统一。' },
-  { id: 'detail', label: '增强细节', suffix: '，补充材质细节、表情层次和环境质感。' },
-  { id: 'camera', label: '加入镜头感', suffix: '，加入景深、构图层次和主体聚焦。' },
-] as const;
-function hasVideoResult(shot: CreationWorkspaceController['activeShot']) {
-  if (!shot) {
-    return false;
-  }
-
-  return shot.versions.some((version) => version.mediaKind === 'video');
-}
-
-function getShotBadgeLabel(shotId: string, fallback: string) {
-  const index = Number(shotId.match(/(\d+)(?!.*\d)/)?.[1] ?? 0);
-  return index > 0 ? `分镜${index}` : fallback;
-}
-
-function getDurationLabel(durationMode: string) {
-  if (durationMode === '4s' || durationMode === '6s') {
-    return durationMode;
-  }
-
-  return '智能';
-}
-
-function canElementConsumeWheel(target: EventTarget | null, boundary: HTMLElement | null, deltaY: number) {
-  if (typeof window === 'undefined' || !(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  let current: HTMLElement | null = target;
-
-  while (current && current !== boundary) {
-    const { overflowY } = window.getComputedStyle(current);
-    const isScrollable = (overflowY === 'auto' || overflowY === 'scroll') && current.scrollHeight > current.clientHeight + 1;
-
-    if (isScrollable) {
-      const atTop = current.scrollTop <= 0;
-      const atBottom = current.scrollTop + current.clientHeight >= current.scrollHeight - 1;
-
-      if ((deltaY < 0 && !atTop) || (deltaY > 0 && !atBottom)) {
-        return true;
-      }
-    }
-
-    current = current.parentElement;
-  }
-
-  return false;
-}
-
 export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps) {
-  const { activeShot, activeVersion, selectedVersion, generateDraft, creation, modelPickerDraft, activeMaterial, studio } = controller;
+  const { activeShot, activeVersion, selectedVersion, generateDraft, creation, studio } = controller;
   const [composerMode, setComposerMode] = useState<ComposerMode>('edit');
   const [videoThreadVisible, setVideoThreadVisible] = useState(() => hasVideoResult(controller.activeShot));
   const [composerText, setComposerText] = useState('');
@@ -354,394 +307,98 @@ export function CreationVisualSidebar({ controller }: CreationVisualSidebarProps
           </div>
         </header>
 
-        <div className={styles.thread} ref={threadRef}>
-          <div className={styles.messageList}>
-            <section className={styles.summarySection}>
-              <div className={styles.shotSummaryCard}>
-                <div className={styles.shotSummaryTitleRow}>
-                  <span className={styles.panelHeaderDot} />
-                  <div className={styles.shotSummaryTitle}>{shotLabel}</div>
-                </div>
-                <div className={styles.shotSummaryStrip}>
-                  <div className={styles.shotSummaryStripTrack} />
-                  {summaryImageUrl ? <img className={styles.shotSummaryStripImage} src={summaryImageUrl} alt={activeShot.title} /> : null}
-                </div>
-                <div className={styles.shotSummaryActions}>
-                  <button type="button" className={styles.summaryActionButton} onClick={applyQuotedImage}>
-                    <CreationIcon name="replace" className={styles.smallIcon} />
-                    <span>引用图片</span>
-                  </button>
-                  <button type="button" className={styles.summaryActionButton} onClick={revealVideoThread}>
-                    <CreationIcon name="video" className={styles.smallIcon} />
-                    <span>转视频</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className={styles.userMessageRow}>
-                <button type="button" className={styles.userMessageBubble} onClick={revealVideoThread}>
-                  <span className={styles.userMessageBubbleInner}>图片生成视频</span>
-                </button>
-              </div>
-            </section>
-
-            <section className={styles.assistantSection}>
-              <div className={styles.assistantBadge}>
-                <span className={styles.assistantBadgeIcon}>
-                  <CreationIcon name="brand" className={styles.assistantBrandIcon} />
-                </span>
-                <span>Seko</span>
-              </div>
-
-              <div className={styles.promptCard}>
-                <div className={styles.promptCardHeader}>
-                  <div className={styles.promptCardTitle}>
-                    <CreationIcon name={videoThreadVisible ? 'video' : 'image'} className={styles.cardIcon} />
-                    <span>{visiblePromptLabel}</span>
-                  </div>
-                </div>
-                <p className={styles.promptText}>{visiblePrompt}</p>
-              </div>
-
-              <div className={styles.resultCard}>
-                <div className={styles.resultCanvas} data-video={videoThreadVisible ? 'true' : 'false'}>
-                  {videoThreadVisible ? (
-                    <div className={styles.smartChip}>
-                      <CreationIcon name="magic" className={styles.smallIcon} />
-                      <span>{controller.resolveModelDisplayName(generateDraft.model)}</span>
-                    </div>
-                  ) : null}
-
-                  {(videoThreadVisible ? videoResultUrl : imageResultUrl) ? (
-                    <img className={styles.resultImage} src={videoThreadVisible ? videoResultUrl : imageResultUrl} alt={activeShot.title} />
-                  ) : (
-                    <div className={styles.emptyState}>暂无生成结果</div>
-                  )}
-
-                  {videoThreadVisible ? (
-                    <button type="button" className={styles.playButton} aria-label="播放预览" onClick={() => openExternalMedia(videoResultUrl)}>
-                      <CreationIcon name="play" className={styles.playIcon} />
-                    </button>
-                  ) : null}
-
-                  <div className={styles.resultHoverToolbar}>
-                    <button type="button" className={styles.resultHoverAction} aria-label="下载结果" onClick={() => openExternalMedia(videoThreadVisible ? videoResultUrl : imageResultUrl)}>
-                      <CreationIcon name="download" className={styles.smallIcon} />
-                    </button>
-                    <button type="button" className={styles.resultHoverAction} aria-label="打开素材" onClick={controller.openMaterialsDialog}>
-                      <CreationIcon name="image" className={styles.smallIcon} />
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.resultHoverAction}
-                      aria-label="重新生成"
-                      onClick={() =>
-                        controller.submitInlineGeneration(
-                          videoThreadVisible ? 'video' : 'image',
-                          videoThreadVisible
-                            ? {
-                                ...(sourceImageUrl ? { firstFrameUrl: sourceImageUrl } : {}),
-                                ...(tailFramePreviewUrl ? { lastFrameUrl: tailFramePreviewUrl } : {}),
-                              }
-                            : undefined,
-                        )
-                      }
-                    >
-                      <CreationIcon name="retry" className={styles.smallIcon} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </section>
-          </div>
+        <div ref={threadRef}>
+          <CreationVisualSidebarThread
+            activeShotTitle={activeShot.title}
+            shotLabel={shotLabel}
+            summaryImageUrl={summaryImageUrl}
+            imageResultUrl={imageResultUrl}
+            videoResultUrl={videoResultUrl}
+            visiblePrompt={visiblePrompt}
+            visiblePromptLabel={visiblePromptLabel}
+            videoThreadVisible={videoThreadVisible}
+            modelDisplayName={controller.resolveModelDisplayName(generateDraft.model)}
+            onApplyQuotedImage={applyQuotedImage}
+            onRevealVideoThread={revealVideoThread}
+            onOpenExternalMedia={openExternalMedia}
+            onOpenMaterialsDialog={controller.openMaterialsDialog}
+            onRetryCurrent={() =>
+              controller.submitInlineGeneration(
+                videoThreadVisible ? 'video' : 'image',
+                videoThreadVisible
+                  ? {
+                      ...(sourceImageUrl ? { firstFrameUrl: sourceImageUrl } : {}),
+                      ...(tailFramePreviewUrl ? { lastFrameUrl: tailFramePreviewUrl } : {}),
+                    }
+                  : undefined,
+              )
+            }
+          />
         </div>
 
-        <form className={styles.composerForm} onSubmit={submitComposer}>
-          {composerMode !== 'image' ? (
-            <div className={styles.composerDeck}>
-              <div className={styles.frameCardShell}>
-                <div className={styles.frameThumbStatic} aria-hidden="true">
-                  {sourceImageUrl ? (
-                    <img className={styles.sourceThumbImage} src={sourceImageUrl} alt={activeShot.title} />
-                  ) : (
-                    <span className={styles.sourceThumbPlaceholder}>首帧</span>
-                  )}
-                </div>
-              </div>
-
-              {composerMode === 'video' ? (
-                <div className={styles.frameCardShell}>
-                  <button
-                    type="button"
-                    className={styles.tailFrameCard}
-                    onClick={() => {
-                      setTailFrameMenuOpen((current) => !current);
-                    }}
-                    aria-label="选择尾帧"
-                  >
-                    {tailFramePreviewUrl ? (
-                      <img className={styles.tailFramePreview} src={tailFramePreviewUrl} alt="尾帧预览" />
-                    ) : (
-                      <>
-                        <span className={styles.tailFramePlus}>+</span>
-                        <span className={styles.tailFrameLabel}>尾帧</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          <textarea
-            className={styles.textarea}
-            placeholder={composerPlaceholder}
-            value={composerText}
-            onChange={(event) => setComposerText(event.target.value)}
-          />
-
-          {modeMenuOpen ? (
-            <div className={styles.modeMenu} ref={modeMenuRef}>
-              <button type="button" className={cx(styles.modeMenuItem, composerMode === 'image' && styles.modeMenuItemActive)} onClick={() => switchComposerMode('image')}>
-                <CreationIcon name="image" className={styles.smallIcon} />
-                <span>图片生成</span>
-                {composerMode === 'image' ? <span className={styles.menuCheck}>✓</span> : null}
-              </button>
-              <button type="button" className={cx(styles.modeMenuItem, composerMode === 'edit' && styles.modeMenuItemActive)} onClick={() => switchComposerMode('edit')}>
-                <CreationIcon name="magic" className={styles.smallIcon} />
-                <span>对话改图</span>
-                {composerMode === 'edit' ? <span className={styles.menuCheck}>✓</span> : null}
-              </button>
-              <button type="button" className={cx(styles.modeMenuItem, composerMode === 'video' && styles.modeMenuItemActive)} onClick={revealVideoThread}>
-                <CreationIcon name="video" className={styles.smallIcon} />
-                <span>视频生成</span>
-                {composerMode === 'video' ? <span className={styles.menuCheck}>✓</span> : null}
-              </button>
-            </div>
-          ) : null}
-
-          {settingsOpen && composerMode === 'video' ? (
-            <div className={styles.settingsPanel} ref={settingsRef}>
-              <div className={styles.settingRow}>
-                <span>分辨率</span>
-                <div className={styles.segmentedGroup}>
-                  {(['720P', '1080P'] as const).map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      className={cx(styles.segmentedButton, generateDraft.resolution === item && styles.segmentedButtonActive)}
-                      onClick={() => controller.setGenerateDraft({ ...generateDraft, resolution: item })}
-                    >
-                      <span>{item}</span>
-                      {item === '1080P' ? <span className={styles.crown}>♛</span> : null}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <button type="button" className={styles.settingRow} onClick={() => controller.openModelPicker('video')}>
-                <span>选用模型</span>
-                <span className={styles.settingValue}>
-                  {controller.resolveModelDisplayName(generateDraft.model)}
-                  <CreationIcon name="chevron" className={styles.smallIcon} />
-                </span>
-              </button>
-              <button
-                type="button"
-                className={styles.settingRow}
-                onClick={() => controller.setGenerateDraft({ ...generateDraft, durationMode: generateDraft.durationMode === '智能' ? '4s' : generateDraft.durationMode === '4s' ? '6s' : '智能' })}
-              >
-                <span>视频时长</span>
-                <span className={styles.settingValue}>
-                  {getDurationLabel(generateDraft.durationMode)}
-                  <CreationIcon name="chevron" className={styles.smallIcon} />
-                </span>
-              </button>
-              <div className={styles.settingRow}>
-                <span>裁剪至配音时长</span>
-                <button
-                  type="button"
-                  className={cx(styles.switch, generateDraft.cropToVoice && styles.switchActive)}
-                  aria-pressed={generateDraft.cropToVoice}
-                  onClick={() => controller.setGenerateDraft({ ...generateDraft, cropToVoice: !generateDraft.cropToVoice })}
-                />
-              </div>
-            </div>
-          ) : null}
-
-          {tailFrameMenuOpen && composerMode === 'video' ? (
-            <div className={styles.tailFrameMenu} ref={tailFrameMenuRef}>
-              <button type="button" className={styles.tailFrameMenuItem} onClick={handleTailFrameUpload}>
-                上传尾帧
-              </button>
-              <button type="button" className={styles.tailFrameMenuItem} onClick={generateTailFrame}>
-                生成图片
-              </button>
-              <button type="button" className={styles.tailFrameMenuItem} onClick={useNextShotAsTailFrame} disabled={!nextShotFrameUrl}>
-                使用下一分镜首帧图
-              </button>
-            </div>
-          ) : null}
-
-          {imageModelMenuOpen && composerMode === 'image' ? (
-            <div className={cx(styles.inlinePanel, styles.modelPanel)} ref={imageModelMenuRef}>
-              <div className={styles.inlinePanelHeader}>选择模型</div>
-              <div className={styles.inlinePanelList}>
-                {(controller.availableModelOptions.length ? controller.availableModelOptions.filter((item) => item.modelKind === 'image') : []).map((item) => (
-                  <button key={item.id} type="button" className={cx(styles.inlinePanelItem, modelPickerDraft.selectedModel === item.id && styles.inlinePanelItemActive)} onClick={() => applyImageModel(item.id)}>
-                    <span className={styles.inlinePanelItemTitle}>{item.title}</span>
-                    <span className={styles.inlinePanelItemMeta}>{item.description}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {imageReferenceMenuOpen && composerMode === 'image' ? (
-            <div className={cx(styles.inlinePanel, styles.referencePanel)} ref={imageReferenceMenuRef}>
-              <div className={styles.inlinePanelHeader}>引用与素材</div>
-              <div className={styles.inlineActionRow}>
-                <button type="button" className={styles.inlineActionChip} onClick={handleImageReferenceUpload}>
-                  上传图片
-                </button>
-                {imageResultUrl ? (
-                  <button
-                    type="button"
-                    className={styles.inlineActionChip}
-                    onClick={() => {
-                      controller.applyUploadedMaterial(`${activeShot.title}-当前图`);
-                      setImageReferenceMenuOpen(false);
-                    }}
-                  >
-                    引用当前图
-                  </button>
-                ) : null}
-              </div>
-              {activeShot.materials.length ? (
-                <div className={styles.inlineSection}>
-                  <div className={styles.inlineSectionTitle}>当前分镜素材</div>
-                  <div className={styles.inlineTokenRow}>
-                    {activeShot.materials.slice(0, 4).map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={cx(styles.inlineToken, activeMaterial?.id === item.id && styles.inlineTokenActive)}
-                        onClick={() => {
-                          controller.setActiveMaterial(item.id);
-                          setImageReferenceMenuOpen(false);
-                        }}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              <div className={styles.inlineSection}>
-                <div className={styles.inlineSectionTitle}>历史作品</div>
-                <div className={styles.inlineWorkList}>
-                  {visibleHistoryWorks.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={styles.inlineWorkCard}
-                      onClick={() => {
-                        controller.attachHistoryMaterial(item.title);
-                        setImageReferenceMenuOpen(false);
-                      }}
-                    >
-                      <span className={styles.inlineWorkTitle}>{item.title}</span>
-                      <span className={styles.inlineWorkMeta}>{item.durationLabel}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {promptAssistMenuOpen && composerMode === 'image' ? (
-            <div className={cx(styles.inlinePanel, styles.promptAssistMenu)} ref={promptAssistMenuRef}>
-              <div className={styles.inlinePanelHeader}>提示词辅助</div>
-              {IMAGE_PROMPT_ASSIST_OPTIONS.map((item) => (
-                <button key={item.id} type="button" className={styles.promptAssistItem} onClick={() => applyPromptAssist(item.suffix)}>
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          <div className={styles.composerFooter}>
-            <div className={styles.footerLeft}>
-              <button
-                type="button"
-                className={styles.modeButton}
-                onClick={() => {
-                  setSettingsOpen(false);
-                  setModeMenuOpen((current) => !current);
-                }}
-              >
-                <CreationIcon name={composerModeIcon} className={styles.smallIcon} />
-                <span>{composerModeLabel}</span>
-                <CreationIcon name="chevron" className={styles.smallIcon} />
-              </button>
-
-              <button
-                type="button"
-                className={styles.utilityButton}
-                onClick={
-                  composerMode === 'video'
-                    ? () => setSettingsOpen((current) => !current)
-                    : () => {
-                        setImageReferenceMenuOpen(false);
-                        setPromptAssistMenuOpen(false);
-                        setImageModelMenuOpen((current) => !current);
-                      }
-                }
-                aria-label={composerMode === 'video' ? '打开视频设置' : '打开模型面板'}
-              >
-                <CreationIcon name="model" className={styles.smallIcon} />
-              </button>
-
-              {isImageComposer ? (
-                <>
-                  <button
-                    type="button"
-                    className={cx(styles.utilityButton, imageReferenceMenuOpen && styles.utilityButtonActive)}
-                    onClick={() => {
-                      setImageModelMenuOpen(false);
-                      setPromptAssistMenuOpen(false);
-                      setImageReferenceMenuOpen((current) => !current);
-                    }}
-                    aria-label="打开引用素材"
-                  >
-                    <CreationIcon name="mention" className={styles.smallIcon} />
-                  </button>
-                  <button
-                    type="button"
-                    className={cx(styles.utilityButton, promptAssistMenuOpen && styles.utilityButtonActive)}
-                    onClick={() => {
-                      setImageModelMenuOpen(false);
-                      setImageReferenceMenuOpen(false);
-                      setPromptAssistMenuOpen((current) => !current);
-                    }}
-                    aria-label="打开提示词辅助"
-                  >
-                    <CreationIcon name="edit" className={styles.smallIcon} />
-                  </button>
-                </>
-              ) : null}
-            </div>
-
-            <div className={styles.footerRight}>
-              <span className={styles.costBadge}>{`✦ ${composerCost}`}</span>
-              <button type="submit" className={styles.submitButton} disabled={!canSubmitComposer} aria-label="提交生成">
-                <span className={styles.submitArrow}>↑</span>
-              </button>
-            </div>
-          </div>
-
-          <input ref={tailFrameUploadRef} type="file" accept="image/*" hidden onChange={handleTailFrameFileChange} />
-          <input ref={imageReferenceUploadRef} type="file" accept="image/*" hidden onChange={handleImageReferenceFileChange} />
-        </form>
+        <CreationVisualSidebarComposer
+          controller={controller}
+          composerMode={composerMode}
+          composerText={composerText}
+          composerPlaceholder={composerPlaceholder}
+          composerModeLabel={composerModeLabel}
+          composerModeIcon={composerModeIcon}
+          isImageComposer={isImageComposer}
+          canSubmitComposer={canSubmitComposer}
+          composerCost={composerCost}
+          settingsOpen={settingsOpen}
+          modeMenuOpen={modeMenuOpen}
+          tailFrameMenuOpen={tailFrameMenuOpen}
+          imageModelMenuOpen={imageModelMenuOpen}
+          imageReferenceMenuOpen={imageReferenceMenuOpen}
+          promptAssistMenuOpen={promptAssistMenuOpen}
+          tailFramePreviewUrl={tailFramePreviewUrl}
+          sourceImageUrl={sourceImageUrl}
+          imageResultUrl={imageResultUrl}
+          nextShotFrameUrl={nextShotFrameUrl}
+          visibleHistoryWorks={visibleHistoryWorks}
+          modeMenuRef={modeMenuRef}
+          settingsRef={settingsRef}
+          tailFrameMenuRef={tailFrameMenuRef}
+          imageModelMenuRef={imageModelMenuRef}
+          imageReferenceMenuRef={imageReferenceMenuRef}
+          promptAssistMenuRef={promptAssistMenuRef}
+          tailFrameUploadRef={tailFrameUploadRef}
+          imageReferenceUploadRef={imageReferenceUploadRef}
+          onSubmit={submitComposer}
+          onComposerTextChange={setComposerText}
+          onSwitchComposerMode={switchComposerMode}
+          onRevealVideoThread={revealVideoThread}
+          onToggleModeMenu={() => {
+            setSettingsOpen(false);
+            setModeMenuOpen((current) => !current);
+          }}
+          onToggleSettings={() => setSettingsOpen((current) => !current)}
+          onToggleTailFrameMenu={() => setTailFrameMenuOpen((current) => !current)}
+          onToggleImageModelMenu={() => {
+            setImageReferenceMenuOpen(false);
+            setPromptAssistMenuOpen(false);
+            setImageModelMenuOpen((current) => !current);
+          }}
+          onToggleImageReferenceMenu={() => {
+            setImageModelMenuOpen(false);
+            setPromptAssistMenuOpen(false);
+            setImageReferenceMenuOpen((current) => !current);
+          }}
+          onTogglePromptAssistMenu={() => {
+            setImageModelMenuOpen(false);
+            setImageReferenceMenuOpen(false);
+            setPromptAssistMenuOpen((current) => !current);
+          }}
+          onHandleTailFrameUpload={handleTailFrameUpload}
+          onGenerateTailFrame={generateTailFrame}
+          onUseNextShotAsTailFrame={useNextShotAsTailFrame}
+          onHandleTailFrameFileChange={handleTailFrameFileChange}
+          onApplyImageModel={applyImageModel}
+          onHandleImageReferenceUpload={handleImageReferenceUpload}
+          onHandleImageReferenceFileChange={handleImageReferenceFileChange}
+          onApplyPromptAssist={applyPromptAssist}
+        />
 
         {controller.notice ? <div className={styles.notice}>{controller.notice}</div> : null}
       </div>

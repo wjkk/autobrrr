@@ -1,8 +1,8 @@
 # 后端系统设计稿（v0.3）
 
 版本：v0.3  
-日期：2026-03-15  
-状态：按当前代码重写后的现行实现说明
+日期：2026-03-20  
+状态：按 2026-03-20 当前代码复核后的现行实现说明
 
 ## 1. 文档目的
 
@@ -53,9 +53,12 @@
 关键代码：
 
 1. `/Users/jiankunwu/project/aiv/apps/api/src/lib/run-worker.ts`
-2. `/Users/jiankunwu/project/aiv/apps/api/src/lib/provider-adapters.ts`
-3. `/Users/jiankunwu/project/aiv/apps/api/src/lib/run-lifecycle.ts`
-4. `/Users/jiankunwu/project/aiv/apps/api/src/routes/provider-callbacks.ts`
+2. `/Users/jiankunwu/project/aiv/apps/api/src/lib/provider/adapter-resolution.ts`
+3. `/Users/jiankunwu/project/aiv/apps/api/src/lib/provider/adapters/*.ts`
+4. `/Users/jiankunwu/project/aiv/apps/api/src/lib/provider-adapters.ts`
+5. `/Users/jiankunwu/project/aiv/apps/api/src/lib/provider-gateway.ts`
+6. `/Users/jiankunwu/project/aiv/apps/api/src/lib/run-lifecycle.ts`
+7. `/Users/jiankunwu/project/aiv/apps/api/src/routes/provider-callbacks.ts`
 
 ## 3. 领域边界
 
@@ -127,8 +130,8 @@ Planner 的真实特点：
 
 真实实现中：
 
-1. `POST /api/projects/:projectId/shots/:shotId/generate-image`
-2. `POST /api/projects/:projectId/shots/:shotId/generate-video`
+1. `POST /api/creation/projects/:projectId/shots/:shotId/generate-image`
+2. `POST /api/creation/projects/:projectId/shots/:shotId/generate-video`
 
 都会创建 `Run`，再由 worker 驱动执行。
 
@@ -146,7 +149,7 @@ Planner 的真实特点：
 1. 用户级 provider API Key 配置
 2. 模型目录查询
 3. provider 连通性测试
-4. Platou catalog sync
+4. Ark / Platou catalog sync
 5. 用户默认模型和启用模型过滤
 
 ### 3.6 Dormant / 未进入主路径的对象
@@ -167,8 +170,9 @@ Planner 的真实特点：
 1. route / orchestrator 组装业务输入
 2. `model-registry` 解析模型
 3. `provider-runtime-config` 解析用户级 provider 配置
-4. `provider-adapters` 统一路由到外部 provider client
-5. `run-worker` / `provider-callbacks` 推进执行状态
+4. `provider-gateway.ts` 通过 `provider/registry.ts` 暴露统一 capability 入口
+5. `provider/adapter-resolution.ts` 选择 `provider/adapters/*.ts` 中的实际 Run adapter
+6. `run-worker` / `provider-callbacks` 推进执行状态
 
 ### 4.2 已支持的 provider client
 
@@ -181,10 +185,10 @@ Planner 的真实特点：
 
 当前 AI 相关代码尚未达到“高度模块化、易插拔、易升级改造”的要求，主要问题：
 
-1. provider client 仍被部分 route / feature service 直接调用
-2. 文本 / 图片 / 视频能力没有统一 capability 层
-3. planner debug、provider test、catalog 图片生成之间仍有重复逻辑
-4. 没有统一的外部调用日志表
+1. provider 调用主链路已统一经过 gateway，但 `provider-gateway.ts` 与 `provider/registry.ts` 仍存在双层入口，需要继续保持边界清晰
+2. route 层在少数 feature 中仍承担较多 orchestration 责任
+3. worker 仍与 API 应用共置于 `apps/api`，部署边界仍偏轻
+4. dormant 模型仍会干扰部分历史文档阅读
 
 ## 5. 当前 Run 机制
 
@@ -215,12 +219,10 @@ Planner 的真实特点：
 
 `Run` 仍不足以替代“外部接口调用日志表”，因为它偏业务账本，不是调用审计账本。
 
-当前缺失：
+当前 `external_api_call_logs` 已补齐调用级审计，但 `Run` 与调用账本仍是两套不同职责：
 
-1. 每次外部请求的 request/response 独立记录
-2. provider latency 统一记录
-3. normalized input/output 审计
-4. request id / trace id 统一追踪
+1. `Run` 负责业务执行状态与结果
+2. `external_api_call_logs` 负责 request / response / trace / provider request id 审计
 
 ## 6. 当前架构是否符合最佳实践
 
@@ -228,31 +230,30 @@ Planner 的真实特点：
 
 1. 数据真相已回到后端数据库
 2. 主业务接口基本按 feature 分 route
-3. Provider 适配层已开始形成
+3. Provider 适配层已形成 `gateway -> registry -> adapters` 主干
 4. Planner 已从单文档模型进化到 outline/refinement 双阶段
+5. 外部调用日志已落到独立审计表
 
 ### 6.2 不足的部分
 
 1. route 层仍承担过多业务编排
-2. AI 能力未完全模块化
-3. 外部调用日志缺位
-4. 仍存在部分 dormant 模型干扰文档理解
-5. worker 仍在 `apps/api` 内，不利于边界清晰化
+2. 少数高频页面与 route 仍需继续瘦身
+3. 仍存在部分 dormant 模型干扰文档理解
+4. worker 仍在 `apps/api` 内，不利于边界清晰化
 
 ## 7. 下一阶段重构方向
 
 在“不考虑兼容老数据和老业务”的前提下，下一阶段建议：
 
-1. 以 `ai-core / ai-providers / ai-capabilities / ai-applications` 重构 AI 层
-2. 新增独立 `external_api_call_logs` 表
-3. route 只保留协议转换，业务编排下沉到 service / orchestrator
-4. 将 `apps/api/src/worker.ts` 演进为独立 worker 应用或独立执行边界
-5. 将 dormant 的 `GenerationRecipe / RecipeExecution` 从当前主设计说明中降级为未来扩展项
+1. 继续保持 provider 层以 `provider-gateway.ts -> provider/registry.ts -> provider/adapters/*.ts` 为唯一主干
+2. route 只保留协议转换，业务编排继续下沉到 service / orchestrator
+3. 将 `apps/api/src/worker.ts` 演进为独立 worker 应用或独立执行边界
+4. 将 dormant 的 `GenerationRecipe / RecipeExecution` 从当前主设计说明中继续降级为未来扩展项
 
 ## 8. 当前最准确的系统判断
 
 今天的系统不是“文档里的目标态后端”，而是：
 
 1. 一个已经真实跑通用户、目录、planner、creation、publish 主链路的 MySQL + Prisma + API + worker 系统
-2. 一个 AI 层尚未完成模块化、但已经具备统一账本与 provider adapter 雏形的系统
-3. 一个需要优先补“外部调用日志”和“AI 模块化边界”的系统
+2. 一个 AI 层已经形成统一 gateway / registry / adapter 主干，但仍需继续稳固边界的系统
+3. 一个后端主链路较健康、下一步重点转向前端与少量后端按需治理的系统

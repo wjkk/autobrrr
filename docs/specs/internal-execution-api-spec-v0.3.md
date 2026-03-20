@@ -1,8 +1,8 @@
 # 内部执行接口规格（v0.3）
 
 版本：v0.3  
-日期：2026-03-15  
-状态：按当前代码重写后的现行执行链路说明
+日期：2026-03-20  
+状态：按 2026-03-20 当前代码复核后的现行执行链路说明
 
 ## 1. 文档目的
 
@@ -11,10 +11,13 @@
 当前事实来源：
 
 1. `/Users/jiankunwu/project/aiv/apps/api/src/lib/run-worker.ts`
-2. `/Users/jiankunwu/project/aiv/apps/api/src/lib/provider-adapters.ts`
-3. `/Users/jiankunwu/project/aiv/apps/api/src/lib/run-lifecycle.ts`
-4. `/Users/jiankunwu/project/aiv/apps/api/src/routes/provider-callbacks.ts`
-5. `/Users/jiankunwu/project/aiv/apps/api/src/worker.ts`
+2. `/Users/jiankunwu/project/aiv/apps/api/src/lib/provider/adapter-resolution.ts`
+3. `/Users/jiankunwu/project/aiv/apps/api/src/lib/provider/adapters/*.ts`
+4. `/Users/jiankunwu/project/aiv/apps/api/src/lib/provider-adapters.ts`
+5. `/Users/jiankunwu/project/aiv/apps/api/src/lib/provider-gateway.ts`
+6. `/Users/jiankunwu/project/aiv/apps/api/src/lib/run-lifecycle.ts`
+7. `/Users/jiankunwu/project/aiv/apps/api/src/routes/provider-callbacks.ts`
+8. `/Users/jiankunwu/project/aiv/apps/api/src/worker.ts`
 
 ## 2. 当前执行模型
 
@@ -30,11 +33,12 @@
 2. `Run.status = QUEUED`
 3. `/Users/jiankunwu/project/aiv/apps/api/src/worker.ts` 调用 `processNextQueuedRun()`
 4. `run-worker.ts` 从数据库领取最早的 queued run 或待轮询 run
-5. `provider-adapters.ts` 根据 provider 与模型类型执行：
+5. `provider/adapter-resolution.ts` 根据 provider code 选择实际 adapter
+6. `provider/adapters/*.ts` 按 provider 与模型类型执行：
    - submit
    - poll
    - callback handle
-6. `run-lifecycle.ts` 在任务完成后回写业务对象
+7. `run-lifecycle.ts` 在任务完成后回写业务对象
 
 ## 3. 当前正式执行账本
 
@@ -66,14 +70,12 @@
 
 当前 schema 中**没有** `event_logs`。
 
-因此当前执行相关审计主要依赖：
+当前执行审计分为两层：
 
-1. `runs.inputJson`
-2. `runs.outputJson`
-3. `runs.providerStatus`
-4. `runs.errorCode / errorMessage`
+1. `Run`：保存业务执行状态、provider job id、终态结果与错误码
+2. `external_api_call_logs`：保存 request / response / trace / provider request id 级别的外部调用审计
 
-这能支撑基本功能，但不足以满足后期分析要求。
+因此当前仍然没有“事件总线式事件表”，但已经具备独立的调用审计账本。
 
 ## 4. 当前支持的 RunType
 
@@ -135,7 +137,9 @@
 
 ## 6. 当前 Provider Adapter 协议
 
-`provider-adapters.ts` 当前抽象为：
+当前正式的 adapter 协议定义位于 `provider/adapters/types.ts`；`provider-adapters.ts` 仅保留兼容 facade。
+
+协议为：
 
 ```ts
 interface ProviderAdapter {
@@ -158,18 +162,23 @@ interface ProviderAdapter {
 
 ### 7.1 ARK
 
-当前代码主路径主要用于文本生成。
+当前已支持：
+
+1. 文本生成
+2. 图片生成
+3. 视频生成
+4. 音频生成
 
 特点：
 
-1. 以同步响应为主
-2. 不支持 poll
-3. 不支持 callback
+1. 文本 / 图片 / 音频以同步响应为主
+2. 视频走 taskId + poll 模式
+3. callback 入口已统一，但当前主 provider 仍以 submit / poll 驱动为主
 
 补充说明：
 
-1. 上述是当前代码现状，不是长期 provider 能力边界
-2. 规划上 ARK 也应纳入 IMAGE / VIDEO / AUDIO 能力接入，架构上不得再把它固化为 text-only provider
+1. `provider/registry.ts` 已将 ARK 注册为 `text + image + video + audio`
+2. 架构上不得再把 ARK 固化为 text-only provider
 
 ### 7.2 Platou
 
@@ -261,7 +270,7 @@ Shot 生成完成后：
 4. provider request id
 5. provider raw status
 
-当前真实实现只部分记录在 `Run` 中，还没有独立审计表。
+当前真实实现已经补齐独立审计表 `external_api_call_logs`，但 `Run` 仍不是审计账本本身。
 
 ## 11. 当前最佳实践评价
 
@@ -274,17 +283,15 @@ Shot 生成完成后：
 
 ### 11.2 不足
 
-1. 没有独立外部调用日志表
-2. 没有事件总线，不适合高并发扩展场景
-3. `apps/api/src/worker.ts` 仍然过轻，尚未演化为独立 worker 应用边界
-4. Provider adapter 与 provider client 仍然属于“半模块化”状态
+1. 没有事件总线，不适合高并发扩展场景
+2. `apps/api/src/worker.ts` 仍然过轻，尚未演化为独立 worker 应用边界
+3. provider 层已明显模块化，但 `provider-gateway.ts` 与 `provider/registry.ts` 仍存在双层入口，需要继续保持边界清晰
 
 ## 12. 下一阶段重构建议
 
 在不考虑兼容老数据和老业务的前提下，建议：
 
 1. 保留 `Run` 作为业务账本
-2. 新增 `external_api_call_logs` 作为外部调用审计账本
-3. 将 provider 调用全部收拢到统一 capability 层
-4. 将 `apps/api/src/worker.ts` 演进为独立 worker 应用或独立执行进程边界
-5. 如后续确有需要，再引入 Redis / queue / event bus，而不是继续在文档中提前假定其已存在
+2. 继续保持 provider 调用统一经过 `provider-gateway.ts -> provider/registry.ts`
+3. 将 `apps/api/src/worker.ts` 演进为独立 worker 应用或独立执行进程边界
+4. 如后续确有需要，再引入 Redis / queue / event bus，而不是继续在文档中提前假定其已存在

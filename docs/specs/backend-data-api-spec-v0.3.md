@@ -1,8 +1,8 @@
 # 外部接口规格（v0.3）
 
 版本：v0.3  
-日期：2026-03-15  
-状态：按当前代码重写后的现行接口清单
+日期：2026-03-20  
+状态：按 2026-03-20 当前代码复核后的现行接口清单
 
 ## 1. 通用约定
 
@@ -103,11 +103,14 @@ interface CreateProjectRequestVNext {
 
 1. `GET /api/explore/subjects`
 2. `POST /api/explore/subjects`
-3. `PATCH /api/explore/subjects/:itemId`
-4. `POST /api/explore/subjects/generate-image`
-5. `GET /api/explore/styles`
-6. `POST /api/explore/styles`
-7. `PATCH /api/explore/styles/:itemId`
+3. `GET /api/explore/subjects/:itemId`
+4. `PATCH /api/explore/subjects/:itemId`
+5. `POST /api/explore/subjects/upload-image`
+6. `POST /api/explore/subjects/generate-image`
+7. `GET /api/explore/styles`
+8. `POST /api/explore/styles`
+9. `GET /api/explore/styles/:itemId`
+10. `PATCH /api/explore/styles/:itemId`
 
 说明：
 
@@ -118,16 +121,15 @@ interface CreateProjectRequestVNext {
 
 ### 5.1 模型目录
 
-1. `GET /api/model-families`
-2. `GET /api/model-endpoints`
-3. `POST /api/model-resolution/resolve`
+1. `GET /api/model-endpoints`
 
 ### 5.2 用户 Provider 配置
 
 1. `GET /api/provider-configs`
-2. `PUT /api/provider-configs/:providerCode`
-3. `POST /api/provider-configs/:providerCode/sync-models`
-4. `POST /api/provider-configs/:providerCode/test`
+2. `GET /api/provider-configs/:providerCode`
+3. `PUT /api/provider-configs/:providerCode`
+4. `POST /api/provider-configs/:providerCode/sync-models`
+5. `POST /api/provider-configs/:providerCode/test`
 
 说明：
 
@@ -136,25 +138,31 @@ interface CreateProjectRequestVNext {
 
 ## 6. Planner 主流程接口
 
-1. `POST /api/projects/:projectId/planner/generate-doc`
-2. `GET /api/projects/:projectId/planner/workspace`
-3. `POST /api/projects/:projectId/planner/outline-versions/:versionId/activate`
-4. `POST /api/projects/:projectId/planner/outline-versions/:versionId/confirm`
-5. `POST /api/projects/:projectId/planner/refinement-versions/:versionId/activate`
-6. `POST /api/projects/:projectId/planner/partial-rerun`
-7. `PUT /api/projects/:projectId/planner/document`
+1. `POST /api/planner/projects/:projectId/generate-doc`
+2. `GET /api/planner/projects/:projectId/workspace`
+3. `GET /api/planner/projects/:projectId/stream`
+4. `POST /api/planner/projects/:projectId/finalize`
+5. `POST /api/planner/projects/:projectId/outline-versions/:versionId/activate`
+6. `POST /api/planner/projects/:projectId/outline-versions/:versionId/confirm`
+7. `POST /api/planner/projects/:projectId/refinement-versions/:versionId/activate`
+8. `POST /api/planner/projects/:projectId/refinement-versions/:versionId/create-draft`
+9. `POST /api/planner/projects/:projectId/partial-rerun`
+10. `PUT /api/planner/projects/:projectId/document`
+11. `GET /api/planner/projects/:projectId/shot-prompts`
 
 ### 6.1 Planner 派生实体接口
 
-1. `PATCH /api/projects/:projectId/planner/subjects/:subjectId`
-2. `PUT /api/projects/:projectId/planner/subjects/:subjectId/assets`
-3. `POST /api/projects/:projectId/planner/subjects/:subjectId/generate-image`
-4. `PATCH /api/projects/:projectId/planner/scenes/:sceneId`
-5. `PUT /api/projects/:projectId/planner/scenes/:sceneId/assets`
-6. `POST /api/projects/:projectId/planner/scenes/:sceneId/generate-image`
-7. `PATCH /api/projects/:projectId/planner/shot-scripts/:shotScriptId`
-8. `DELETE /api/projects/:projectId/planner/shot-scripts/:shotScriptId`
-9. `POST /api/projects/:projectId/planner/shot-scripts/:shotScriptId/generate-image`
+1. `PATCH /api/planner/projects/:projectId/subjects/:subjectId`
+2. `PUT /api/planner/projects/:projectId/subjects/:subjectId/assets`
+3. `POST /api/planner/projects/:projectId/subjects/:subjectId/generate-image`
+4. `GET /api/planner/projects/:projectId/subjects/:subjectId/recommendations`
+5. `PATCH /api/planner/projects/:projectId/scenes/:sceneId`
+6. `PUT /api/planner/projects/:projectId/scenes/:sceneId/assets`
+7. `POST /api/planner/projects/:projectId/scenes/:sceneId/generate-image`
+8. `GET /api/planner/projects/:projectId/scenes/:sceneId/recommendations`
+9. `PATCH /api/planner/projects/:projectId/shot-scripts/:shotScriptId`
+10. `DELETE /api/planner/projects/:projectId/shot-scripts/:shotScriptId`
+11. `POST /api/planner/projects/:projectId/shot-scripts/:shotScriptId/generate-image`
 
 ## 7. Planner Agent 管理与调试接口
 
@@ -172,6 +180,7 @@ interface CreateProjectRequestVNext {
 3. `POST /api/planner/debug/runs/:id/replay`
 4. `POST /api/planner/debug/run`
 5. `POST /api/planner/debug/compare`
+6. `POST /api/planner/debug/runs/:id/apply`
 
 说明：
 
@@ -182,30 +191,34 @@ interface CreateProjectRequestVNext {
 
 ### 8.1 Shot 与生成命令
 
-1. `POST /api/projects/:projectId/shots`
-2. `POST /api/projects/:projectId/shots/:shotId/generate-image`
-3. `POST /api/projects/:projectId/shots/:shotId/generate-video`
+1. `POST /api/creation/projects/:projectId/shots/:shotId/generate-image`
+2. `POST /api/creation/projects/:projectId/shots/:shotId/generate-video`
 
 ### 8.2 Creation Workspace
 
-1. `GET /api/projects/:projectId/creation/workspace`
+1. `GET /api/creation/projects/:projectId/workspace`
 
 ## 9. Publish 接口
 
-1. `GET /api/projects/:projectId/publish/workspace`
-2. `POST /api/projects/:projectId/publish/submit`
+1. `GET /api/publish/projects/:projectId/workspace`
+2. `POST /api/publish/projects/:projectId/submit`
 
 ## 10. 资产与运行接口
 
 ### 10.1 资产
 
-1. `GET /api/projects/:projectId/assets`
-2. `POST /api/projects/:projectId/assets`
+1. `GET /api/planner/projects/:projectId/assets`
+2. `POST /api/planner/projects/:projectId/assets/upload`
 
 ### 10.2 Run
 
-1. `GET /api/runs/:runId`
-2. `POST /api/runs/:runId/cancel`
+1. `GET /api/planner/runs/:runId`
+2. `GET /api/creation/runs/:runId`
+
+说明：
+
+1. 当前 web 外部接口没有暴露统一 `POST /api/runs/:runId/cancel` 入口。
+2. 运行状态查询按 feature 路由分别暴露 planner / creation 别名，但后端仍共用 `Run` 账本。
 
 ## 11. 内部接口
 
@@ -223,14 +236,15 @@ interface CreateProjectRequestVNext {
 1. `/api/explore/subjects/generate-image`
 2. `/api/planner/debug/*`
 3. `/api/planner/sub-agent-profiles/*`
-4. `/api/projects/:projectId/planner/subjects/:subjectId/generate-image`
-5. `/api/projects/:projectId/planner/scenes/:sceneId/generate-image`
-6. `/api/projects/:projectId/planner/shot-scripts/:shotScriptId/generate-image`
+4. `/api/planner/projects/:projectId/subjects/:subjectId/generate-image`
+5. `/api/planner/projects/:projectId/scenes/:sceneId/generate-image`
+6. `/api/planner/projects/:projectId/shot-scripts/:shotScriptId/generate-image`
 
 ### 12.2 当前已变化的接口形态
 
 1. `POST /api/studio/projects` 已支持 `creationConfig`，不能再按旧版简化接口理解。
-2. `Planner` 当前不是单一 `/generate-doc + document` 模式，而是完整版本流转体系。
+2. 外部项目工作区路由已迁到按 feature 分组的 `/api/planner|creation|publish/projects/:projectId/*`。
+3. `Planner` 当前不是单一 `/generate-doc + document` 模式，而是完整版本流转体系。
 
 ## 13. 下一阶段 API 重构建议
 

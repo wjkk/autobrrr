@@ -17,10 +17,11 @@ import { AuthRequiredPanel } from '../../shared/components/auth-required-panel';
 import { SystemShell } from '../../shared/components/system-shell';
 import { buildUserShellNavItems } from '../../shared/lib/user-shell-nav';
 import { CatalogCardGrid } from './catalog-card-grid';
+import { catalogManagementAdminNavItems } from './catalog-management-admin-nav';
+import { CatalogManagementAuthGate } from './catalog-management-auth-gate';
+import { CatalogManagementDialogs } from './catalog-management-dialogs';
 import type { StyleDraft, SubjectDraft } from './catalog-management-editor-types';
 import { CatalogLibraryToolbar } from './catalog-library-toolbar';
-import { CatalogStyleDialog } from './catalog-style-dialog';
-import { CatalogSubjectDialog } from './catalog-subject-dialog';
 
 interface CatalogManagementPageProps {
   currentUser: SettingsAuthUser | null;
@@ -205,12 +206,6 @@ export function CatalogManagementPage(props: CatalogManagementPageProps) {
     () => stylesList.find((item) => item.id === selectedStyleId) ?? null,
     [selectedStyleId, stylesList],
   );
-  const adminShellNavItems = [
-        { key: 'dashboard', label: '后台首页', title: '后台首页', href: '/admin', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect></svg> },
-        { key: 'planner', label: 'Agent 管理', title: 'Agent 管理', href: '/admin/planner-agents', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4"></path><path d="M12 18v4"></path><path d="M4.93 4.93l2.83 2.83"></path><path d="M16.24 16.24l2.83 2.83"></path><path d="M2 12h4"></path><path d="M18 12h4"></path><path d="M4.93 19.07l2.83-2.83"></path><path d="M16.24 7.76l2.83-2.83"></path><circle cx="12" cy="12" r="4"></circle></svg> },
-        { key: 'catalogs', label: '公共目录', title: '公共目录', href: '/admin/catalogs', active: true, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="9" y1="14" x2="15" y2="14"></line></svg> },
-        { key: 'models', label: '模型目录', title: '模型目录', href: '/admin/models', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="7" ry="3"></ellipse><path d="M5 5v6c0 1.66 3.13 3 7 3s7-1.34 7-3V5"></path><path d="M5 11v8c0 1.66 3.13 3 7 3s7-1.34 7-3v-8"></path></svg> },
-      ];
   const filteredSubjects = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     return subjects.filter((item) => {
@@ -574,44 +569,27 @@ export function CatalogManagementPage(props: CatalogManagementPageProps) {
 
   if (!currentUser) {
     return (
-      <SystemShell
-        pageTitle={adminMode ? '系统目录管理' : '主体库'}
-        navItems={[]}
-        topActions={[{ key: 'home', label: adminMode ? '返回后台首页' : '返回首页', href: adminMode ? '/admin' : '/explore' }]}
-      >
-        <AuthRequiredPanel
-          eyebrow="Characters"
-          title="先登录，再管理你的主体库与画风库"
-          description="目录项写入当前用户对应的数据表。登录后，你就能像素材库一样浏览主体卡片，同时继续编辑 prompt 模板和参考图配置。"
-        >
-          <div className={styles.contentShell}>
-            <section className={styles.authCard}>
-              <div className={styles.authTabs}>
-                <button type="button" className={`${styles.authTab} ${authMode === 'login' ? styles.authTabActive : ''}`} onClick={() => setAuthMode('login')}>登录</button>
-                <button type="button" className={`${styles.authTab} ${authMode === 'register' ? styles.authTabActive : ''}`} onClick={() => setAuthMode('register')}>注册</button>
-              </div>
-              <div className={styles.authFields}>
-                {authMode === 'register' ? (
-                  <input className={styles.input} value={authDisplayName} onChange={(event) => setAuthDisplayName(event.target.value)} placeholder="显示名称（可选）" />
-                ) : null}
-                <input className={styles.input} type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} placeholder="邮箱" />
-                <input className={styles.input} type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} placeholder="密码（至少 8 位）" />
-              </div>
-              {authFeedback ? <div className={`${styles.feedback} ${styles.feedbackError}`}>{authFeedback}</div> : null}
-              <button type="button" className={styles.primaryButton} onClick={submitAuth} disabled={authSubmitting}>
-                {authSubmitting ? '提交中...' : authMode === 'login' ? '登录' : '注册并登录'}
-              </button>
-            </section>
-          </div>
-        </AuthRequiredPanel>
-      </SystemShell>
+      <CatalogManagementAuthGate
+        adminMode={adminMode}
+        authMode={authMode}
+        authEmail={authEmail}
+        authPassword={authPassword}
+        authDisplayName={authDisplayName}
+        authSubmitting={authSubmitting}
+        authFeedback={authFeedback}
+        onAuthModeChange={setAuthMode}
+        onAuthEmailChange={setAuthEmail}
+        onAuthPasswordChange={setAuthPassword}
+        onAuthDisplayNameChange={setAuthDisplayName}
+        onSubmitAuth={submitAuth}
+      />
     );
   }
 
   return (
       <SystemShell
         pageTitle={adminMode ? (renderingSubjects ? '公共主体库' : '公共画风库') : (renderingSubjects ? '主体库' : '画风库')}
-      navItems={adminMode ? adminShellNavItems : buildUserShellNavItems('subjects')}
+      navItems={adminMode ? catalogManagementAdminNavItems : buildUserShellNavItems('subjects')}
       topActions={shellTopActions}
       badge={{ strong: String(renderingSubjects ? subjects.length : stylesList.length), label: renderingSubjects ? '主体目录' : '画风目录', onClick: () => setActiveTab(renderingSubjects ? 'styles' : 'subjects') }}
     >
@@ -643,42 +621,31 @@ export function CatalogManagementPage(props: CatalogManagementPageProps) {
               />
             </div>
           </section>
-          {renderingSubjects ? (
-            <CatalogSubjectDialog
-              open={editorOpen}
-              draft={subjectDraft}
-              saving={saving}
-              feedback={feedback}
-              feedbackError={feedbackError}
-              imageSubmitting={imageSubmitting}
-              imageFeedback={imageFeedback}
-              imageFeedbackTone={imageFeedbackTone}
-              imageMode={subjectImageMode}
-              imagePrompt={subjectImagePrompt}
-              imagePreviewPulse={imagePreviewPulse}
-              onClose={closeEditor}
-              onUseForCreation={useSubjectForCreation}
-              onClear={() => setSubjectDraft(makeEmptySubjectDraft())}
-              onSave={saveSubject}
-              onDraftChange={(updater) => setSubjectDraft(updater)}
-              onImageModeChange={setSubjectImageMode}
-              onImagePromptChange={setSubjectImagePrompt}
-              onUploadImage={(file) => void uploadSubjectImage(file)}
-              onGenerateImage={() => void generateSubjectImage()}
-            />
-          ) : (
-            <CatalogStyleDialog
-              open={editorOpen}
-              draft={styleDraft}
-              saving={saving}
-              feedback={feedback}
-              feedbackError={feedbackError}
-              onClose={closeEditor}
-              onClear={() => setStyleDraft(makeEmptyStyleDraft())}
-              onSave={saveStyle}
-              onDraftChange={(updater) => setStyleDraft(updater)}
-            />
-          )}
+          <CatalogManagementDialogs
+            renderingSubjects={renderingSubjects}
+            editorOpen={editorOpen}
+            subjectDraft={subjectDraft}
+            styleDraft={styleDraft}
+            saving={saving}
+            feedback={feedback}
+            feedbackError={feedbackError}
+            imageSubmitting={imageSubmitting}
+            imageFeedback={imageFeedback}
+            imageFeedbackTone={imageFeedbackTone}
+            imageMode={subjectImageMode}
+            imagePrompt={subjectImagePrompt}
+            imagePreviewPulse={imagePreviewPulse}
+            setSubjectDraft={setSubjectDraft}
+            setStyleDraft={setStyleDraft}
+            setImageMode={setSubjectImageMode}
+            setImagePrompt={setSubjectImagePrompt}
+            onClose={closeEditor}
+            onUseForCreation={useSubjectForCreation}
+            onSaveSubject={saveSubject}
+            onUploadImage={(file) => void uploadSubjectImage(file)}
+            onGenerateImage={() => void generateSubjectImage()}
+            onSaveStyle={saveStyle}
+          />
       </div>
     </SystemShell>
   );

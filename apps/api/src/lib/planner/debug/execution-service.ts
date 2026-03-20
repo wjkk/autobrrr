@@ -1,75 +1,25 @@
-import { randomUUID } from 'node:crypto';
-
 import { Prisma } from '@prisma/client';
 
 import { resolveModelSelection } from '../../model-registry.js';
 import { inspectPlannerAssistantPackage } from '../agent/schemas.js';
-import { debugRunSchema, type PlannerDebugCompareInput, type PlannerDebugRunInput } from './contract.js';
+import type { PlannerDebugRunInput } from './contract.js';
 import { buildPlannerGenerationPrompt, type PlannerPromptSnapshot } from '../orchestration/orchestrator.js';
 import { buildUsageSummary, deriveDiffSummary, readObject, readTargetEntityId } from './shared.js';
 import { prisma } from '../../prisma.js';
-import { submitTextGeneration } from '../../provider-gateway.js';
 import { resolveProviderRuntimeConfigForUser } from '../../provider-runtime-config.js';
-import type { PlannerStructuredDoc } from '../doc/planner-doc.js';
 import { buildPlannerOutlineRefinementHints } from '../doc/outline-doc.js';
 import { applyPartialRerunScope } from '../refinement/partial.js';
 import { buildPlannerRerunPromptContext } from '../rerun/context.js';
 import { parseStoredPlannerRerunScope } from '../rerun/scope.js';
 import { resolvePlannerTargetVideoModel } from '../target-video-model.js';
 import { extractPlannerText } from '../text-extraction.js';
+import { parseStoredDebugInput, readStructuredDoc, runPlannerTextDebug } from './execution-shared.js';
 import {
   buildPlannerDebugModelSelectionSnapshot,
   defaultPlannerDebugSelectionDeps,
   resolvePlannerDebugSelection,
   resolvePlannerDebugSelectionWithDeps,
 } from './selection-service.js';
-
-function readStructuredDoc(value: unknown): PlannerStructuredDoc | null {
-  return value && typeof value === 'object' && !Array.isArray(value) ? (value as PlannerStructuredDoc) : null;
-}
-
-async function runPlannerTextDebug(args: {
-  userId: string;
-  providerCode: string | null;
-  baseUrl: string | null;
-  apiKey: string | null;
-  remoteModelKey: string;
-  prompt: string;
-}) {
-  if (!args.providerCode || !args.baseUrl || !args.apiKey) {
-    return null;
-  }
-
-  return submitTextGeneration({
-    providerCode: args.providerCode,
-    model: args.remoteModelKey,
-    prompt: args.prompt,
-    baseUrl: args.baseUrl,
-    apiKey: args.apiKey,
-    hookMetadata: {
-      traceId: `planner-debug:${args.userId}:${args.remoteModelKey}`,
-      userId: args.userId,
-      resourceType: 'planner_debug',
-    },
-  });
-}
-
-function parseStoredDebugInput(value: unknown) {
-  const parsed = debugRunSchema.safeParse(value);
-  if (!parsed.success) {
-    throw new Error('Stored planner debug run input is invalid.');
-  }
-
-  return parsed.data;
-}
-
-interface PlannerDebugDeps {
-  prisma: typeof prisma;
-}
-
-const defaultPlannerDebugDeps: PlannerDebugDeps = {
-  prisma,
-};
 
 export async function executePlannerDebugRun(args: PlannerDebugRunInput & {
   userId: string;
@@ -362,136 +312,6 @@ export async function executePlannerDebugRun(args: PlannerDebugRunInput & {
   };
 }
 
-async function replayPlannerDebugRunWithDeps(
-  userId: string,
-  runId: string,
-  deps: Pick<PlannerDebugDeps, 'prisma'> & {
-    executePlannerDebugRun: typeof executePlannerDebugRun;
-  },
-) {
-  const run = await deps.prisma.plannerDebugRun.findFirst({
-    where: {
-      id: runId,
-      userId,
-    },
-    select: {
-      id: true,
-      inputJson: true,
-    },
-  });
-
-  if (!run) {
-    return null;
-  }
-
-  const input = parseStoredDebugInput(run.inputJson);
-  return deps.executePlannerDebugRun({
-    userId,
-    ...input,
-    replaySourceRunId: run.id,
-  });
-}
-
-export async function replayPlannerDebugRun(userId: string, runId: string) {
-  return replayPlannerDebugRunWithDeps(userId, runId, {
-    prisma,
-    executePlannerDebugRun,
-  });
-}
-
-async function comparePlannerDebugRunsWithDeps(
-  userId: string,
-  payload: PlannerDebugCompareInput,
-  deps: Pick<PlannerDebugDeps, 'prisma'> & {
-    executePlannerDebugRun: typeof executePlannerDebugRun;
-  },
-) {
-  const [leftSubAgent, rightSubAgent] = await Promise.all([
-    deps.prisma.plannerSubAgentProfile.findUnique({
-      where: { id: payload.leftSubAgentId },
-      include: { agentProfile: true },
-    }),
-    deps.prisma.plannerSubAgentProfile.findUnique({
-      where: { id: payload.rightSubAgentId },
-      include: { agentProfile: true },
-    }),
-  ]);
-
-  if (!leftSubAgent || !rightSubAgent) {
-    return null;
-  }
-
-  const compareGroupKey = randomUUID();
-
-  const [leftResult, rightResult] = await Promise.all([
-    deps.executePlannerDebugRun({
-      userId,
-      contentType: leftSubAgent.agentProfile.contentType,
-      subtype: leftSubAgent.subtype,
-      subAgentId: leftSubAgent.id,
-      configSource: payload.configSource,
-      targetStage: payload.targetStage,
-      projectTitle: payload.projectTitle,
-      episodeTitle: payload.episodeTitle,
-      userPrompt: payload.userPrompt,
-      scriptContent: payload.scriptContent,
-      selectedSubjectName: payload.selectedSubjectName,
-      selectedStyleName: payload.selectedStyleName,
-      selectedImageModelLabel: payload.selectedImageModelLabel,
-      targetVideoModelFamilySlug: payload.targetVideoModelFamilySlug,
-      priorMessages: payload.priorMessages,
-      currentOutlineDoc: payload.currentOutlineDoc,
-      currentStructuredDoc: payload.currentStructuredDoc,
-      partialRerunScope: payload.partialRerunScope,
-      targetEntity: payload.targetEntity,
-      plannerAssets: payload.plannerAssets,
-      modelFamily: payload.modelFamily,
-      modelEndpoint: payload.modelEndpoint,
-      compareGroupKey,
-      compareLabel: 'A',
-    }),
-    deps.executePlannerDebugRun({
-      userId,
-      contentType: rightSubAgent.agentProfile.contentType,
-      subtype: rightSubAgent.subtype,
-      subAgentId: rightSubAgent.id,
-      configSource: payload.configSource,
-      targetStage: payload.targetStage,
-      projectTitle: payload.projectTitle,
-      episodeTitle: payload.episodeTitle,
-      userPrompt: payload.userPrompt,
-      scriptContent: payload.scriptContent,
-      selectedSubjectName: payload.selectedSubjectName,
-      selectedStyleName: payload.selectedStyleName,
-      selectedImageModelLabel: payload.selectedImageModelLabel,
-      targetVideoModelFamilySlug: payload.targetVideoModelFamilySlug,
-      priorMessages: payload.priorMessages,
-      currentOutlineDoc: payload.currentOutlineDoc,
-      currentStructuredDoc: payload.currentStructuredDoc,
-      partialRerunScope: payload.partialRerunScope,
-      targetEntity: payload.targetEntity,
-      plannerAssets: payload.plannerAssets,
-      modelFamily: payload.modelFamily,
-      modelEndpoint: payload.modelEndpoint,
-      compareGroupKey,
-      compareLabel: 'B',
-    }),
-  ]);
-
-  return {
-    compareGroupKey,
-    left: leftResult,
-    right: rightResult,
-  };
-}
-
-export async function comparePlannerDebugRuns(userId: string, payload: PlannerDebugCompareInput) {
-  return comparePlannerDebugRunsWithDeps(userId, payload, {
-    prisma,
-    executePlannerDebugRun,
-  });
-}
-
 export function toPrismaJsonInput(value: Prisma.JsonValue | null | undefined) {
   if (value === null || value === undefined) {
     return undefined;
@@ -507,6 +327,4 @@ export const __testables = {
       ...defaultPlannerDebugSelectionDeps,
       ...deps,
     }),
-  replayPlannerDebugRunWithDeps,
-  comparePlannerDebugRunsWithDeps,
 };

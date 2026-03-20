@@ -4,6 +4,9 @@
 日期：2026-03-16
 状态：现行执行基线（Planner AI 专项）
 
+> 路由口径说明（2026-03-20）：
+> 本文若引用旧写法 `/api/projects/:projectId/planner/*`，当前实际外部路由统一以 `/api/planner/projects/:projectId/*` 为准。
+
 ## 1. 文档目的
 
 本文用于把策划阶段最关键的产品与 AI 能力收成一份可执行基线，解决三个问题：
@@ -28,7 +31,7 @@
 1. [`plan.html`](/Users/jiankunwu/project/aiv/plan.html) 中复制自 Seko 的真实策划页内容
 2. `apps/api/src/routes/planner-*.ts`
 3. `apps/api/src/lib/planner-orchestrator.ts`
-4. `docs/specs/planner-workflow-and-document-spec-v0.1.md`
+4. `docs/archive/specs/planner-workflow-and-document-spec-v0.1.md`
 5. `docs/reviews/planner-agent-refactor-design-2026-03-16.md`
 
 裁决规则：

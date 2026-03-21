@@ -148,6 +148,120 @@ async function syncOutlinePreviewToWorkspace(args: {
   });
 }
 
+async function confirmPlannerOutlineVersionWithDeps(
+  args: {
+    projectId: string;
+    episodeId: string;
+    userId: string;
+    versionId: string;
+  },
+  deps: {
+    findPlannerContext: typeof findPlannerContextWithDeps;
+    syncOutlinePreviewToWorkspace: typeof syncOutlinePreviewToWorkspace;
+    prisma: Pick<typeof prisma, 'plannerOutlineVersion' | '$transaction' | 'plannerSession' | 'plannerRefinementVersion'>;
+  },
+): Promise<PlannerOutlineVersionResult> {
+  const { episode, plannerSession, refinementCount } = await deps.findPlannerContext(
+    args.projectId,
+    args.episodeId,
+    args.userId,
+    {
+      findOwnedEpisode,
+      prisma: deps.prisma,
+    },
+  );
+  if (!episode) {
+    return { ok: false, error: 'NOT_FOUND' };
+  }
+
+  if (!plannerSession) {
+    return { ok: false, error: 'PLANNER_SESSION_REQUIRED' };
+  }
+
+  if (refinementCount > 0) {
+    return { ok: false, error: 'PLANNER_OUTLINE_ALREADY_CONFIRMED' };
+  }
+
+  const targetVersion = await deps.prisma.plannerOutlineVersion.findFirst({
+    where: {
+      id: args.versionId,
+      plannerSessionId: plannerSession.id,
+    },
+    select: {
+      id: true,
+      outlineDocJson: true,
+    },
+  });
+  if (!targetVersion) {
+    return { ok: false, error: 'PLANNER_OUTLINE_NOT_FOUND' };
+  }
+
+  const confirmedAt = new Date();
+  const preview = toOutlinePreview(targetVersion.outlineDocJson);
+
+  await deps.prisma.$transaction(async (tx) => {
+    await tx.plannerOutlineVersion.updateMany({
+      where: {
+        plannerSessionId: plannerSession.id,
+      },
+      data: {
+        isActive: false,
+      },
+    });
+
+    await tx.plannerOutlineVersion.update({
+      where: { id: targetVersion.id },
+      data: {
+        isActive: true,
+        isConfirmed: true,
+        confirmedAt,
+        updatedAt: confirmedAt,
+      },
+    });
+
+    await tx.plannerSession.update({
+      where: { id: plannerSession.id },
+      data: {
+        outlineConfirmedAt: confirmedAt,
+        status: 'READY',
+      },
+    });
+
+    await tx.plannerMessage.create({
+      data: {
+        plannerSessionId: plannerSession.id,
+        outlineVersionId: targetVersion.id,
+        role: 'ASSISTANT',
+        messageType: 'SYSTEM_TRANSITION',
+        contentJson: {
+          text: '已确认当前大纲，下一步可继续细化剧情内容。',
+          transition: 'outline_confirmed',
+        } satisfies Prisma.InputJsonValue,
+        createdById: args.userId,
+      },
+    });
+
+    await deps.syncOutlinePreviewToWorkspace({
+      tx,
+      projectId: episode.project.id,
+      episodeId: episode.id,
+      plannerSessionId: plannerSession.id,
+      targetStage: 'refinement',
+      outlineVersionId: targetVersion.id,
+      preview,
+    });
+  });
+
+  return {
+    ok: true,
+    data: {
+      outlineVersionId: targetVersion.id,
+      isConfirmed: true,
+      confirmedAt: confirmedAt.toISOString(),
+    },
+  };
+}
+
 export async function activatePlannerOutlineVersion(args: {
   projectId: string;
   episodeId: string;
@@ -249,108 +363,15 @@ export async function confirmPlannerOutlineVersion(args: {
   userId: string;
   versionId: string;
 }): Promise<PlannerOutlineVersionResult> {
-  const { episode, plannerSession, refinementCount } = await findPlannerContextWithDeps(
-    args.projectId,
-    args.episodeId,
-    args.userId,
-    {
-      findOwnedEpisode,
-      prisma,
-    },
-  );
-  if (!episode) {
-    return { ok: false, error: 'NOT_FOUND' };
-  }
-
-  if (!plannerSession) {
-    return { ok: false, error: 'PLANNER_SESSION_REQUIRED' };
-  }
-
-  if (refinementCount > 0) {
-    return { ok: false, error: 'PLANNER_OUTLINE_ALREADY_CONFIRMED' };
-  }
-
-  const targetVersion = await prisma.plannerOutlineVersion.findFirst({
-    where: {
-      id: args.versionId,
-      plannerSessionId: plannerSession.id,
-    },
-    select: {
-      id: true,
-      outlineDocJson: true,
-    },
+  return confirmPlannerOutlineVersionWithDeps(args, {
+    findPlannerContext: findPlannerContextWithDeps,
+    syncOutlinePreviewToWorkspace,
+    prisma,
   });
-  if (!targetVersion) {
-    return { ok: false, error: 'PLANNER_OUTLINE_NOT_FOUND' };
-  }
-
-  const confirmedAt = new Date();
-  const preview = toOutlinePreview(targetVersion.outlineDocJson);
-
-  await prisma.$transaction(async (tx) => {
-    await tx.plannerOutlineVersion.updateMany({
-      where: {
-        plannerSessionId: plannerSession.id,
-      },
-      data: {
-        isActive: false,
-      },
-    });
-
-    await tx.plannerOutlineVersion.update({
-      where: { id: targetVersion.id },
-      data: {
-        isActive: true,
-        isConfirmed: true,
-        confirmedAt,
-        updatedAt: confirmedAt,
-      },
-    });
-
-    await tx.plannerSession.update({
-      where: { id: plannerSession.id },
-      data: {
-        outlineConfirmedAt: confirmedAt,
-        status: 'READY',
-      },
-    });
-
-    await tx.plannerMessage.create({
-      data: {
-        plannerSessionId: plannerSession.id,
-        outlineVersionId: targetVersion.id,
-        role: 'ASSISTANT',
-        messageType: 'SYSTEM_TRANSITION',
-        contentJson: {
-          text: '已确认当前大纲，下一步可继续细化剧情内容。',
-          transition: 'outline_confirmed',
-        } satisfies Prisma.InputJsonValue,
-        createdById: args.userId,
-      },
-    });
-
-    await syncOutlinePreviewToWorkspace({
-      tx,
-      projectId: episode.project.id,
-      episodeId: episode.id,
-      plannerSessionId: plannerSession.id,
-      targetStage: 'refinement',
-      outlineVersionId: targetVersion.id,
-      preview,
-    });
-  });
-
-  return {
-    ok: true,
-    data: {
-      outlineVersionId: targetVersion.id,
-      isConfirmed: true,
-      confirmedAt: confirmedAt.toISOString(),
-    },
-  };
 }
 
 export const __testables = {
   toOutlinePreview,
   findPlannerContextWithDeps,
+  confirmPlannerOutlineVersionWithDeps,
 };

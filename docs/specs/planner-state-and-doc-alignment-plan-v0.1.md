@@ -46,7 +46,7 @@
 ### 2.4 文档口径
 
 - 当前基线文档补到 `current-architecture-baseline-v0.1.md`
-- 9 分路线图补到 `architecture-9-score-roadmap-v0.1.md`
+- 架构评分口径改由更保守的评审与路线图文档维护，不再保留 9 分路线图
 - `todo.list` 作为本轮执行落单清单关闭
 - 继续保留 Web 代理路径 vs Fastify 实现路径双口径说明
 

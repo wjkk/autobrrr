@@ -1,8 +1,15 @@
 import type { PlannerStepStatus } from '@aiv/domain';
 import { cx } from '@aiv/ui';
-import { sekoPlanThreadData } from '@aiv/mock-data';
 
 import type { UsePlannerPageStateResult } from '../../hooks/use-planner-page-state';
+import {
+  DEFAULT_ASSISTANT_PROMPT,
+  DEFAULT_ASSISTANT_SUMMARY,
+  DEFAULT_CONFIRM_PROMPT,
+  DEFAULT_OUTLINE_TITLE,
+  DEFAULT_REFINEMENT_REPLY,
+  DEFAULT_USER_PROMPT,
+} from '../../lib/planner-defaults';
 import styles from '../planner-page.module.css';
 
 interface PlannerRefinementStepView {
@@ -18,10 +25,12 @@ interface PlannerThreadSeedProps {
 }
 
 export function PlannerThreadSeed({ thread }: PlannerThreadSeedProps) {
+  const hasSeedOutline = Boolean(thread.serverPlannerText.trim());
+
   return (
     <>
       <article className={cx(styles.messageRow, styles.messageRowUser)}>
-        <p className={cx(styles.messageBubble, styles.messageBubbleUser)}>{thread.requirement || sekoPlanThreadData.userPrompt}</p>
+        <p className={cx(styles.messageBubble, styles.messageBubbleUser)}>{thread.requirement || DEFAULT_USER_PROMPT}</p>
       </article>
 
       <article className={styles.assistantThread}>
@@ -37,22 +46,25 @@ export function PlannerThreadSeed({ thread }: PlannerThreadSeedProps) {
           </div>
         </article>
 
-        <article className={styles.outlineCard}>
-          <h4>{sekoPlanThreadData.outlineTitle}</h4>
-          {sekoPlanThreadData.sections.map((section) => (
-            <section key={section.title} className={styles.outlineSection}>
-              <h5>{section.title}</h5>
+        {hasSeedOutline ? (
+          <article className={styles.outlineCard}>
+            <h4>{DEFAULT_OUTLINE_TITLE}</h4>
+            <section className={styles.outlineSection}>
+              <h5>当前草稿</h5>
               <ul>
-                {section.lines.map((line, index) => (
-                  <li key={`${section.title}-${index}`}>{line}</li>
-                ))}
+                {thread.serverPlannerText
+                  .split('\n')
+                  .map((line) => line.trim())
+                  .filter(Boolean)
+                  .slice(0, 8)
+                  .map((line, index) => <li key={`outline-${index}`}>{line}</li>)}
               </ul>
             </section>
-          ))}
-        </article>
+          </article>
+        ) : null}
 
-        <p className={styles.messageBubble}>{sekoPlanThreadData.assistantSummary}</p>
-        <p className={styles.messageBubble}>{sekoPlanThreadData.assistantPrompt}</p>
+        <p className={styles.messageBubble}>{DEFAULT_ASSISTANT_SUMMARY}</p>
+        <p className={styles.messageBubble}>{DEFAULT_ASSISTANT_PROMPT}</p>
         {thread.serverPlannerText ? <p className={styles.messageBubble}>{thread.serverPlannerText}</p> : null}
 
         {!thread.outlineConfirmed ? (
@@ -60,7 +72,7 @@ export function PlannerThreadSeed({ thread }: PlannerThreadSeedProps) {
             <strong>确认后自动开始细化剧情内容</strong>
             <p>右侧文档会按步骤逐步渲染，支持后续局部微调与历史版本切换。</p>
             <button type="button" className={styles.confirmOutlineButton} onClick={thread.handleConfirmOutline} disabled={thread.plannerSubmitting}>
-              确认大纲
+              {DEFAULT_CONFIRM_PROMPT}
             </button>
           </article>
         ) : null}
@@ -80,7 +92,7 @@ export function PlannerThreadSeed({ thread }: PlannerThreadSeedProps) {
             </div>
           </article>
 
-          <p className={styles.messageBubble}>{sekoPlanThreadData.refinementReply}</p>
+          <p className={styles.messageBubble}>{DEFAULT_REFINEMENT_REPLY}</p>
 
           <article className={styles.docStepsCard}>
             {thread.refinementDetailSteps.map((step: PlannerRefinementStepView, index: number) => (

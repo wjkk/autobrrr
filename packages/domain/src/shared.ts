@@ -11,6 +11,14 @@ export type ProjectStatus =
   | 'failed'
   | 'archived';
 export type PlannerStatus = 'idle' | 'updating' | 'ready';
+export type PlannerRuntimeStatus =
+  | 'idle'
+  | 'outline_running'
+  | 'outline_ready'
+  | 'outline_failed'
+  | 'refinement_running'
+  | 'refinement_ready'
+  | 'refinement_failed';
 export type PlannerStepStatus = 'waiting' | 'running' | 'done';
 export type ShotStatus = 'pending' | 'queued' | 'generating' | 'success' | 'failed';
 export type ShotVersionStatus = 'pending_apply' | 'active' | 'archived';

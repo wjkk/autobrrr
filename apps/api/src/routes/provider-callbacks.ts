@@ -3,9 +3,11 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { mapRun } from '../lib/api-mappers.js';
+import { conflict, invalidArgument, notFound } from '../lib/app-error.js';
 import { resolveProviderAdapter } from '../lib/provider-adapters.js';
 import { failRun, finalizeGeneratedRun, inferMediaKindFromRunType } from '../lib/run-lifecycle.js';
 import { prisma } from '../lib/prisma.js';
+import { buildProviderCallbackLogEntry } from '../lib/run-observability.js';
 
 const callbackParamsSchema = z.object({
   callbackToken: z.string().min(1),
@@ -36,19 +38,25 @@ function mergeProviderOutput(run: { outputJson: unknown }, providerOutput?: Reco
   } as Prisma.InputJsonValue;
 }
 
+function assertProviderJobMatches(run: {
+  providerJobId: string | null;
+}, payload: {
+  providerJobId?: string;
+}) {
+  if (payload.providerJobId && run.providerJobId && payload.providerJobId !== run.providerJobId) {
+    throw conflict('Callback provider job id did not match the run.', 'PROVIDER_JOB_MISMATCH');
+  }
+}
+
 export async function registerProviderCallbackRoutes(app: FastifyInstance) {
   app.post('/api/internal/provider-callbacks/:callbackToken', async (request, reply) => {
     const params = callbackParamsSchema.safeParse(request.params);
     const payload = callbackPayloadSchema.safeParse(request.body);
     if (!params.success || !payload.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid provider callback payload.',
-          details: payload.success ? undefined : payload.error.flatten(),
-        },
-      });
+      throw invalidArgument(
+        'Invalid provider callback payload.',
+        payload.success ? undefined : payload.error.flatten(),
+      );
     }
 
     const run = await prisma.run.findFirst({
@@ -56,51 +64,49 @@ export async function registerProviderCallbackRoutes(app: FastifyInstance) {
     });
 
     if (!run) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Callback token not found.',
-        },
-      });
+      throw notFound('Callback token not found.');
     }
 
     if (terminalStatuses.has(run.status)) {
+      request.log.info(buildProviderCallbackLogEntry('terminal_short_circuit', {
+        callbackToken: params.data.callbackToken,
+        runId: run.id,
+        status: run.status,
+      }));
       return reply.send({
         ok: true,
         data: mapRun(run),
       });
     }
 
-    if (payload.data.providerJobId && run.providerJobId && payload.data.providerJobId !== run.providerJobId) {
-      return reply.code(409).send({
-        ok: false,
-        error: {
-          code: 'PROVIDER_JOB_MISMATCH',
-          message: 'Callback provider job id did not match the run.',
-        },
-      });
-    }
+    assertProviderJobMatches(run, payload.data);
 
     const mediaKind = inferMediaKindFromRunType(run.runType);
     if (!mediaKind) {
       const failed = await failRun(run.id, 'RUN_TYPE_NOT_SUPPORTED', `Unsupported run type: ${run.runType}`);
       const failedRun = await prisma.run.findUniqueOrThrow({ where: { id: failed.runId } });
-      return reply.code(409).send({
-        ok: false,
-        error: {
-          code: 'RUN_TYPE_NOT_SUPPORTED',
-          message: failedRun.errorMessage ?? 'Unsupported run type.',
-        },
-      });
+      throw conflict(failedRun.errorMessage ?? 'Unsupported run type.', 'RUN_TYPE_NOT_SUPPORTED');
     }
 
     const adapter = resolveProviderAdapter(run);
+    request.log.info(buildProviderCallbackLogEntry('received', {
+      callbackToken: params.data.callbackToken,
+      runId: run.id,
+      providerJobId: payload.data.providerJobId ?? run.providerJobId,
+      providerStatus: payload.data.providerStatus,
+    }));
     const update = await adapter.handleCallback(run, payload.data);
 
     if (update.type === 'failed') {
       await failRun(run.id, update.errorCode, update.errorMessage);
       const failedRun = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+      request.log.warn(buildProviderCallbackLogEntry('failed', {
+        callbackToken: params.data.callbackToken,
+        runId: run.id,
+        providerJobId: payload.data.providerJobId ?? run.providerJobId,
+        providerStatus: update.providerStatus,
+        errorCode: update.errorCode,
+      }));
       return reply.send({
         ok: true,
         data: mapRun(failedRun),
@@ -120,6 +126,12 @@ export async function registerProviderCallbackRoutes(app: FastifyInstance) {
         },
       });
 
+      request.log.info(buildProviderCallbackLogEntry('running', {
+        callbackToken: params.data.callbackToken,
+        runId: run.id,
+        providerJobId: payload.data.providerJobId ?? run.providerJobId,
+        providerStatus: update.providerStatus,
+      }));
       return reply.send({
         ok: true,
         data: mapRun(updatedRun),
@@ -142,9 +154,21 @@ export async function registerProviderCallbackRoutes(app: FastifyInstance) {
     await finalizeGeneratedRun(refreshedRun, mediaKind);
 
     const completedRun = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+    request.log.info(buildProviderCallbackLogEntry('completed', {
+      callbackToken: params.data.callbackToken,
+      runId: run.id,
+      providerJobId: payload.data.providerJobId ?? run.providerJobId,
+      providerStatus: completedRun.providerStatus,
+      status: completedRun.status,
+    }));
     return reply.send({
       ok: true,
       data: mapRun(completedRun),
     });
   });
 }
+
+export const __testables = {
+  mergeProviderOutput,
+  assertProviderJobMatches,
+};

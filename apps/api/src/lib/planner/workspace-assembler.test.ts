@@ -83,6 +83,7 @@ test('assemblePlannerWorkspace maps planner assets and debug metadata into dto',
   });
 
   assert.equal(dto.plannerSession?.stage, 'refinement');
+  assert.equal(dto.plannerSession?.runtimeStatus, 'refinement_ready');
   assert.equal(dto.activeRefinement?.debugApplySource?.debugRunId, 'debug-run-1');
   assert.equal(dto.activeRefinement?.subjects[0]?.referenceAssets[0]?.id, 'asset-1');
   assert.equal(dto.refinementVersions[0]?.debugApplySource?.debugRunId, 'debug-run-1');

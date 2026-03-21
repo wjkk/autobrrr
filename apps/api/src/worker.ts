@@ -2,6 +2,7 @@ import { pathToFileURL } from 'node:url';
 
 import { createExternalApiCallLogHook } from './lib/external-api-call-logs.js';
 import { prisma } from './lib/prisma.js';
+import { buildWorkerLogEntry } from './lib/run-observability.js';
 import { processNextQueuedRun } from './lib/run-worker.js';
 import { setTransportHook } from './lib/transport-hooks.js';
 
@@ -42,12 +43,17 @@ async function main() {
 
       if (!processed) {
         if (config.once) {
-          console.log('[worker] no queued runs');
+          console.log(JSON.stringify(buildWorkerLogEntry('idle', {
+            message: 'no queued runs',
+            once: true,
+          })));
           return;
         }
 
         if (!idleLogged) {
-          console.log(`[worker] idle; polling every ${config.idleIntervalMs}ms`);
+          console.log(JSON.stringify(buildWorkerLogEntry('idle', {
+            idleIntervalMs: config.idleIntervalMs,
+          })));
           idleLogged = true;
         }
         await sleep(config.idleIntervalMs);
@@ -55,13 +61,15 @@ async function main() {
       }
 
       idleLogged = false;
-      console.log(`[worker] ${processed.action}: ${processed.runId} (${processed.status})`);
+      console.log(JSON.stringify(buildWorkerLogEntry('run_processed', processed)));
       if (config.once) {
         return;
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.stack ?? error.message : String(error);
-      console.error(`[worker] failed: ${message}`);
+      console.error(JSON.stringify(buildWorkerLogEntry('worker_failed', {
+        error: message,
+      })));
       if (config.once) {
         throw error;
       }

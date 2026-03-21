@@ -1,4 +1,5 @@
 import type { PlannerOutlineDoc, PlannerStructuredDoc } from './planner-doc';
+import type { PlannerRuntimeStatus } from './shared';
 
 export interface ApiPlannerAssetOption {
   id: string;
@@ -153,6 +154,7 @@ export interface ApiPlannerWorkspace {
     id: string;
     status: string;
     stage?: 'idle' | 'outline' | 'refinement';
+    runtimeStatus?: PlannerRuntimeStatus;
     outlineConfirmedAt: string | null;
     createdAt: string;
     updatedAt: string;

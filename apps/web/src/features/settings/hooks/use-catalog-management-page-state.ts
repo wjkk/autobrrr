@@ -21,7 +21,7 @@ import { useCatalogCrudActions } from './catalog-management/use-catalog-crud-act
 import { useCatalogEditorState } from './catalog-management/use-catalog-editor-state';
 import { useCatalogFilterState } from './catalog-management/use-catalog-filter-state';
 import { useCatalogImageActions } from './catalog-management/use-catalog-image-actions';
-import type { SystemShellActionItem, SystemShellBadge, SystemShellNavItem } from '../../shared/components/system-shell';
+import type { SystemShellActionItem, SystemShellNavItem } from '../../shared/components/system-shell';
 
 interface CatalogManagementPageProps {
   currentUser: SettingsAuthUser | null;
@@ -39,7 +39,6 @@ interface CatalogManagementPageState {
     pageTitle: string;
     navItems: SystemShellNavItem[];
     topActions: SystemShellActionItem[];
-    badge: SystemShellBadge;
   };
   toolbar: ComponentProps<typeof CatalogLibraryToolbar>;
   grid: ComponentProps<typeof CatalogCardGrid>;
@@ -124,11 +123,6 @@ export function useCatalogManagementPageState(props: CatalogManagementPageProps)
         { key: 'providers', label: adminMode ? '用户 API Key 设置' : '接口配置', href: '/settings/providers' },
         { key: 'logout', label: '退出登录', onClick: auth.logout },
       ],
-      badge: {
-        strong: String(filters.renderingSubjects ? editor.subjects.length : editor.stylesList.length),
-        label: filters.renderingSubjects ? '主体目录' : '画风目录',
-        onClick: () => filters.setActiveTab(filters.renderingSubjects ? 'styles' : 'subjects'),
-      },
     },
     toolbar: {
       activeTab: filters.activeTab,

@@ -4,6 +4,9 @@
 日期：2026-03-21
 状态：已完成并封板
 
+> 本文是已完成重构的结果记录，不是当前执行计划。
+> 当前执行请改读 [architecture-8-score-roadmap-v0.1.md](/Users/jiankunwu/project/aiv/docs/specs/architecture-8-score-roadmap-v0.1.md)。
+
 ---
 
 ## 1. 本文件用途
@@ -38,7 +41,7 @@
 ### 文档
 
 - 路由口径统一为“Web 代理路径 vs Fastify 实现路径”双说明
-- 当前架构基线、9 分路线图、执行记录与 todo 已同步更新
+- 执行记录与 todo 已同步更新；过于乐观的高分口径文档已移除
 
 ### 验证
 

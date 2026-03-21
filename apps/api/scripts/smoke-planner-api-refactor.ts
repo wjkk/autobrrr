@@ -3,6 +3,7 @@ import { strict as assert } from 'node:assert';
 import type { Prisma } from '@prisma/client';
 
 import { finalizeGeneratedRun } from '../src/lib/run-lifecycle.js';
+import { resolveProviderAdapter } from '../src/lib/provider-adapters.js';
 import { syncPlannerRefinementDerivedData, syncPlannerRefinementProjection } from '../src/lib/planner/index.js';
 import { prisma } from '../src/lib/prisma.js';
 
@@ -10,6 +11,7 @@ const apiBaseUrl = (process.env.API_BASE_URL ?? 'http://127.0.0.1:8787').replace
 const email = process.env.SMOKE_EMAIL ?? `planner-refactor-${Date.now()}@example.com`;
 const password = process.env.SMOKE_PASSWORD ?? 'password123';
 const tinyPngDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4k0AAAAASUVORK5CYII=';
+const tinyMp4DataUrl = 'data:video/mp4;base64,AAAAHGZ0eXBpc29tAAAAAGlzb20=';
 
 function apiUrl(path: string) {
   return `${apiBaseUrl}${path.startsWith('/') ? path : `/${path}`}`;
@@ -368,6 +370,56 @@ async function seedPlannerState(args: {
         isDefault: true,
       },
     });
+    const videoProvider = await tx.modelProvider.upsert({
+      where: { code: 'smoke-video-provider' },
+      update: {
+        name: 'Smoke Video Provider',
+        providerType: 'PROXY',
+        baseUrl: apiUrl('/mock/video'),
+        enabled: true,
+      },
+      create: {
+        code: 'smoke-video-provider',
+        name: 'Smoke Video Provider',
+        providerType: 'PROXY',
+        baseUrl: apiUrl('/mock/video'),
+        enabled: true,
+      },
+    });
+    const videoFamily = await tx.modelFamily.upsert({
+      where: { slug: 'smoke-video-family' },
+      update: {
+        name: 'Smoke Video Family',
+        modelKind: 'VIDEO',
+      },
+      create: {
+        slug: 'smoke-video-family',
+        name: 'Smoke Video Family',
+        modelKind: 'VIDEO',
+      },
+    });
+    const videoEndpoint = await tx.modelEndpoint.upsert({
+      where: { slug: 'smoke-video-endpoint' },
+      update: {
+        familyId: videoFamily.id,
+        providerId: videoProvider.id,
+        remoteModelKey: 'smoke-video-model',
+        label: 'Smoke Video Model',
+        status: 'ACTIVE',
+        priority: 1,
+        isDefault: true,
+      },
+      create: {
+        familyId: videoFamily.id,
+        providerId: videoProvider.id,
+        slug: 'smoke-video-endpoint',
+        remoteModelKey: 'smoke-video-model',
+        label: 'Smoke Video Model',
+        status: 'ACTIVE',
+        priority: 1,
+        isDefault: true,
+      },
+    });
     await tx.userProviderConfig.upsert({
       where: {
         userId_providerId: {
@@ -385,6 +437,26 @@ async function seedPlannerState(args: {
         providerId: textProvider.id,
         apiKey: 'smoke-text-key',
         baseUrlOverride: textProvider.baseUrl,
+        enabled: true,
+      },
+    });
+    await tx.userProviderConfig.upsert({
+      where: {
+        userId_providerId: {
+          userId: args.userId,
+          providerId: videoProvider.id,
+        },
+      },
+      update: {
+        apiKey: 'smoke-video-key',
+        baseUrlOverride: videoProvider.baseUrl,
+        enabled: true,
+      },
+      create: {
+        userId: args.userId,
+        providerId: videoProvider.id,
+        apiKey: 'smoke-video-key',
+        baseUrlOverride: videoProvider.baseUrl,
         enabled: true,
       },
     });
@@ -620,6 +692,8 @@ async function seedPlannerState(args: {
       textModelEndpointSlug: textEndpoint.slug,
       imageModelFamilySlug: imageFamily.slug,
       imageModelEndpointSlug: imageEndpoint.slug,
+      videoModelFamilySlug: videoFamily.slug,
+      videoModelEndpointSlug: videoEndpoint.slug,
       debugAgentContentType: plannerAgent.contentType,
       debugSubAgentId: plannerSubAgent.id,
       debugSubAgentSubtype: plannerSubAgent.subtype,
@@ -989,7 +1063,7 @@ async function main() {
       providerStatus: 'succeeded',
       outputJson: {
         providerData: {
-          url: tinyPngDataUrl,
+          completionUrl: tinyPngDataUrl,
         },
       } as Prisma.InputJsonValue,
     },
@@ -1400,6 +1474,102 @@ async function main() {
   assert.equal(creationWorkspace.data.shots[0]?.promptJson?.plannerShotScriptId, draftShotScript?.id);
   assert.ok(creationWorkspace.data.shots[0]?.materialBindings.some((asset) => asset.id === seeded.replacementSubjectAssetId));
   assert.ok(creationWorkspace.data.shots[0]?.finalizedAt);
+  const creationShotId = creationWorkspace.data.shots[0]?.id;
+  if (!creationShotId) {
+    throw new Error('Missing finalized creation shot id.');
+  }
+
+  const creationVideoRun = await request<{
+    shot: { id: string; status: string };
+    run: { id: string; status: string };
+  }>(`/api/projects/${createdProject.data.projectId}/shots/${creationShotId}/generate-video`, {
+    method: 'POST',
+    cookie,
+    body: JSON.stringify({
+      prompt: '把这个镜头生成 6 秒视频，保持雨夜追逐氛围。',
+      modelFamily: seeded.videoModelFamilySlug,
+      modelEndpoint: seeded.videoModelEndpointSlug,
+      durationSeconds: 6,
+      aspectRatio: '16:9',
+      resolution: '720p',
+    }),
+  });
+  assert.equal(creationVideoRun.data.shot.id, creationShotId);
+  assert.equal(creationVideoRun.data.shot.status, 'queued');
+  assert.equal(creationVideoRun.data.run.status, 'queued');
+
+  const queuedCreationVideoRun = await prisma.run.findUniqueOrThrow({
+    where: { id: creationVideoRun.data.run.id },
+  });
+  const callbackSubmit = await resolveProviderAdapter(queuedCreationVideoRun).submit(queuedCreationVideoRun);
+  assert.equal(callbackSubmit.type, 'submitted');
+  await prisma.run.update({
+    where: { id: queuedCreationVideoRun.id },
+    data: {
+      status: 'RUNNING',
+      startedAt: queuedCreationVideoRun.startedAt ?? new Date(),
+      providerJobId: callbackSubmit.providerJobId,
+      providerCallbackToken: callbackSubmit.providerCallbackToken,
+      providerStatus: callbackSubmit.providerStatus,
+      nextPollAt: callbackSubmit.nextPollAt,
+    },
+  });
+
+  const callbackCompletion = await request<{
+    id: string;
+    status: string;
+    providerStatus: string | null;
+  }>(`/api/internal/provider-callbacks/${callbackSubmit.providerCallbackToken!}`, {
+    method: 'POST',
+    body: JSON.stringify({
+      providerJobId: callbackSubmit.providerJobId,
+      providerStatus: 'completed',
+      output: {
+        downloadUrl: tinyMp4DataUrl,
+      },
+    }),
+  });
+  assert.equal(callbackCompletion.data.id, queuedCreationVideoRun.id);
+  assert.equal(callbackCompletion.data.status, 'completed');
+  assert.equal(callbackCompletion.data.providerStatus, 'succeeded');
+
+  const completedCreationVideoRun = await request<{
+    id: string;
+    status: string;
+    output: {
+      assetId?: string;
+      shotVersionId?: string;
+      activeVersionId?: string;
+      shotStatus?: string;
+    } | null;
+  }>(`/api/runs/${queuedCreationVideoRun.id}`, { cookie });
+  assert.equal(completedCreationVideoRun.data.status, 'completed');
+  assert.equal(completedCreationVideoRun.data.output?.shotStatus, 'SUCCESS');
+  assert.ok(completedCreationVideoRun.data.output?.assetId);
+  assert.ok(completedCreationVideoRun.data.output?.shotVersionId);
+  assert.equal(
+    completedCreationVideoRun.data.output?.activeVersionId,
+    completedCreationVideoRun.data.output?.shotVersionId,
+  );
+
+  const creationWorkspaceAfterVideo = await request<{
+    shots: Array<{
+      id: string;
+      status: string;
+      activeVersionId: string | null;
+      activeVersion: { id: string; mediaKind: string; status: string } | null;
+      latestGenerationRun: { id: string; status: string; runType: string } | null;
+    }>;
+  }>(`/api/projects/${createdProject.data.projectId}/creation/workspace?episodeId=${episodeId}`, { cookie });
+  const finalizedCreationShot = creationWorkspaceAfterVideo.data.shots.find((shot) => shot.id === creationShotId);
+  assert.ok(finalizedCreationShot);
+  assert.equal(finalizedCreationShot?.status, 'success');
+  assert.equal(finalizedCreationShot?.latestGenerationRun?.id, queuedCreationVideoRun.id);
+  assert.equal(finalizedCreationShot?.latestGenerationRun?.status, 'completed');
+  assert.equal(finalizedCreationShot?.latestGenerationRun?.runType, 'video_generation');
+  assert.equal(finalizedCreationShot?.activeVersion?.mediaKind, 'video');
+  assert.equal(finalizedCreationShot?.activeVersion?.status, 'active');
+  assert.equal(finalizedCreationShot?.activeVersionId, completedCreationVideoRun.data.output?.shotVersionId ?? null);
 
   await request(`/api/projects/${createdProject.data.projectId}/planner/finalize`, {
     method: 'POST',

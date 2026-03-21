@@ -8,6 +8,47 @@ export function resolvePlannerStage(args: { outlineConfirmedAt: Date | null } | 
   return args?.outlineConfirmedAt ? 'refinement' : activeOutline ? 'outline' : 'idle';
 }
 
+export function resolvePlannerRuntimeStatus(args: {
+  plannerSession: { outlineConfirmedAt: Date | null } | null;
+  activeOutline: { id: string; status: string } | null;
+  activeRefinement: { id: string; status: string } | null;
+  latestPlannerRun: { status: string } | null;
+}) {
+  const stage = resolvePlannerStage(args.plannerSession, args.activeOutline);
+  const latestRunStatus = args.latestPlannerRun?.status.toUpperCase() ?? null;
+  if (latestRunStatus === 'QUEUED' || latestRunStatus === 'RUNNING') {
+    return stage === 'refinement' ? 'refinement_running' : 'outline_running';
+  }
+
+  if (latestRunStatus === 'FAILED' || latestRunStatus === 'TIMED_OUT' || latestRunStatus === 'CANCELED') {
+    if (stage === 'refinement' || args.activeRefinement) {
+      return 'refinement_failed';
+    }
+    if (stage === 'outline' || args.activeOutline) {
+      return 'outline_failed';
+    }
+    return 'idle';
+  }
+
+  if (stage === 'refinement' || args.activeRefinement) {
+    return args.activeRefinement?.status.toUpperCase() === 'FAILED'
+      ? 'refinement_failed'
+      : args.activeRefinement
+        ? 'refinement_ready'
+        : 'refinement_running';
+  }
+
+  if (stage === 'outline' || args.activeOutline) {
+    return args.activeOutline?.status.toUpperCase() === 'FAILED'
+      ? 'outline_failed'
+      : args.activeOutline
+        ? 'outline_ready'
+        : 'outline_running';
+  }
+
+  return 'idle';
+}
+
 export function collectPlannerAssetIds(
   subjects: Array<{ referenceAssetIdsJson: unknown; generatedAssetIdsJson: unknown }>,
   scenes: Array<{ referenceAssetIdsJson: unknown; generatedAssetIdsJson: unknown }>,

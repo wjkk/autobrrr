@@ -1,16 +1,32 @@
 import type { CSSProperties, Dispatch, MutableRefObject, SetStateAction } from 'react';
+import type { PlannerStepStatus } from '@aiv/domain';
 
 import type {
   ApiPlannerDebugApplySource,
   ApiPlannerEntityRecommendation,
   ApiPlannerShotPromptPreview,
+  ApiPlannerWorkspace,
 } from '../lib/planner-api';
 import type { PlannerPageData } from '../lib/planner-page-data';
-import type { PlannerAssetRatio, PlannerEpisodeDraft, PlannerHistoryVersionView } from '../lib/planner-page-helpers';
+import type {
+  PlannerAssetRatio,
+  PlannerAssetThumbCandidate,
+  PlannerEpisodeDraft,
+  PlannerHistoryVersionView,
+} from '../lib/planner-page-helpers';
 import type { PlannerNotice } from '../lib/planner-notice';
 import type { PlannerSaveState } from './use-planner-document-persistence';
 import type { PlannerMode } from '../lib/planner-page-helpers';
+import type { PlannerRefinementVersion } from './use-planner-refinement';
+import type { PlannerShotDraftState, PlannerShotPointer } from '../lib/planner-shot-editor';
 import type { PlannerThreadMessage } from '../lib/planner-thread';
+import type { SekoActDraft, SekoImageCard, SekoPlanData } from '@aiv/mock-data';
+
+type PlannerRefinementDetailStep = {
+  title: string;
+  status: PlannerStepStatus;
+  tags: string[];
+};
 
 export interface PlannerShellState {
   plannerMode: PlannerMode;
@@ -43,12 +59,12 @@ export interface PlannerThreadState {
   requirement: string;
   setRequirement: Dispatch<SetStateAction<string>>;
   outlineConfirmed: boolean;
-  runtimeActiveOutline: any;
-  runtimeActiveRefinement: any;
+  runtimeActiveOutline: ApiPlannerWorkspace['activeOutline'];
+  runtimeActiveRefinement: ApiPlannerWorkspace['activeRefinement'];
   plannerSubmitting: boolean;
   serverPlannerText: string;
-  refinementDetailSteps: any[];
-  activeVersion: any;
+  refinementDetailSteps: PlannerRefinementDetailStep[];
+  activeVersion: PlannerRefinementVersion | null;
   activeDebugApplySource: ApiPlannerDebugApplySource | null;
   notice: PlannerNotice | null;
   openDebugRun: (debugRunId: string) => void;
@@ -58,27 +74,27 @@ export interface PlannerThreadState {
 
 export interface PlannerDocumentState {
   hasDisplayVersion: boolean;
-  runtimeActiveOutline: any;
-  runtimeActiveRefinement: any;
+  runtimeActiveOutline: ApiPlannerWorkspace['activeOutline'];
+  runtimeActiveRefinement: ApiPlannerWorkspace['activeRefinement'];
   displayVersionStatus: string | null;
   displayVersionProgress: number | null;
   displaySections: Record<string, boolean>;
-  plannerDoc: any;
+  plannerDoc: SekoPlanData;
   activeStyle: { name: string; tone: string };
   mediaCardStyle: CSSProperties;
-  displaySubjectCards: any[];
+  displaySubjectCards: SekoImageCard[];
   openSubjectAdjustDialog: (subjectId: string) => void;
-  displaySceneCards: any[];
+  displaySceneCards: SekoImageCard[];
   openSceneAdjustDialog: (sceneId: string) => void;
-  displayScriptActs: any[];
+  displayScriptActs: SekoActDraft[];
   plannerSubmitting: boolean;
   runtimeEnabled: boolean;
-  editingShot: any;
-  shotDraft: any;
-  openShotInlineEditor: (...args: any[]) => void;
-  openShotDeleteDialog: (...args: any[]) => void;
+  editingShot: PlannerShotPointer | null;
+  shotDraft: PlannerShotDraftState | null;
+  openShotInlineEditor: (actId: string, shotId: string) => void;
+  openShotDeleteDialog: (actId: string, shotId: string) => void;
   rerunActAdjust: (actId: string) => Promise<void>;
-  setShotDraft: Dispatch<SetStateAction<any>>;
+  setShotDraft: Dispatch<SetStateAction<PlannerShotDraftState | null>>;
   rerunShotAdjust: () => Promise<void>;
   generateShotImage: () => Promise<void>;
   cancelShotInlineEditor: () => void;
@@ -105,13 +121,13 @@ export interface PlannerDialogState {
   bootProgress: number;
   remainingPoints: number;
   subjectDialogCardId: string | null;
-  activeSubjectCard: any;
+  activeSubjectCard: SekoImageCard | null;
   subjectImageDraft: string;
   subjectNameDraft: string;
   subjectPromptDraft: string;
   subjectAdjustMode: 'upload' | 'ai';
   activeSubjectAssetLabel: string;
-  subjectAssetThumbs: any[];
+  subjectAssetThumbs: PlannerAssetThumbCandidate[];
   subjectAssetDraftId: string | null;
   subjectRecommendations: ApiPlannerEntityRecommendation[];
   subjectRecommendationsLoading: boolean;
@@ -120,20 +136,20 @@ export interface PlannerDialogState {
   setSubjectImageDraft: Dispatch<SetStateAction<string>>;
   setSubjectAssetDraftId: Dispatch<SetStateAction<string | null>>;
   setSubjectPromptDraft: Dispatch<SetStateAction<string>>;
-  setSubjectAdjustMode: Dispatch<SetStateAction<any>>;
+  setSubjectAdjustMode: Dispatch<SetStateAction<'upload' | 'ai'>>;
   applySubjectRecommendation: (recommendation: ApiPlannerEntityRecommendation) => void;
   generateSubjectImage: () => Promise<void>;
   rerunSubjectAdjust: () => Promise<void>;
   applySubjectAdjust: () => Promise<void>;
   handleSubjectUpload: (file: File | null) => Promise<void>;
   sceneDialogCardId: string | null;
-  activeSceneCard: any;
+  activeSceneCard: SekoImageCard | null;
   sceneImageDraft: string;
   sceneNameDraft: string;
   scenePromptDraft: string;
   sceneAdjustMode: 'upload' | 'ai';
   activeSceneAssetLabel: string;
-  sceneAssetThumbs: any[];
+  sceneAssetThumbs: PlannerAssetThumbCandidate[];
   sceneAssetDraftId: string | null;
   sceneRecommendations: ApiPlannerEntityRecommendation[];
   sceneRecommendationsLoading: boolean;
@@ -142,14 +158,14 @@ export interface PlannerDialogState {
   setSceneImageDraft: Dispatch<SetStateAction<string>>;
   setSceneAssetDraftId: Dispatch<SetStateAction<string | null>>;
   setScenePromptDraft: Dispatch<SetStateAction<string>>;
-  setSceneAdjustMode: Dispatch<SetStateAction<any>>;
+  setSceneAdjustMode: Dispatch<SetStateAction<'upload' | 'ai'>>;
   applySceneRecommendation: (recommendation: ApiPlannerEntityRecommendation) => void;
   generateSceneImage: () => Promise<void>;
   rerunSceneAdjust: () => Promise<void>;
   applySceneAdjust: () => Promise<void>;
   handleSceneUpload: (file: File | null) => Promise<void>;
-  shotDeleteDialog: any;
-  deletingShot: any;
+  shotDeleteDialog: PlannerShotPointer | null;
+  deletingShot: SekoActDraft['shots'][number] | null;
   closeShotDeleteDialog: () => void;
   confirmDeleteShot: () => Promise<void>;
 }

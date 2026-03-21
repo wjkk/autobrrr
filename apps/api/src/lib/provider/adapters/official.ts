@@ -5,6 +5,7 @@ export const officialAdapter: ProviderAdapter = {
     return {
       type: 'completed',
       providerStatus: 'succeeded',
+      completionUrl: null,
     };
   },
   async poll() {

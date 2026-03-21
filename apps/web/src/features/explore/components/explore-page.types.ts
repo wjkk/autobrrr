@@ -64,15 +64,20 @@ export type InspirationCard =
   | {
       id: string;
       type: 'work';
+      title: string;
+      category: string;
+      author: string;
+      metric: string;
+      accent?: string;
       rowSpan: number;
-      imageClass: string;
+      imageUrl: string;
       likeCount: string;
     }
   | {
       id: string;
       type: 'ad';
       rowSpan: number;
-      imageClass: string;
+      imageUrl: string;
       brand: string;
       title: string;
       summary: string;

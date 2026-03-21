@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { AppError, parseOrThrow } from '../lib/app-error.js';
 import { requireUser } from '../lib/auth.js';
 import {
   listProviderConfigItems,
@@ -56,6 +57,25 @@ function mapServiceErrorToStatus(code: string) {
   }
 }
 
+function toProviderConfigAppError(error: {
+  code: string;
+  message: string;
+  details?: unknown;
+  data?: unknown;
+}) {
+  return new AppError({
+    code: error.code,
+    message: error.message,
+    statusCode: mapServiceErrorToStatus(error.code),
+    details: error.data !== undefined
+      ? {
+          ...(error.details === undefined ? {} : { details: error.details }),
+          data: error.data,
+        }
+      : error.details,
+  });
+}
+
 export async function registerProviderConfigRoutes(app: FastifyInstance) {
   app.get('/api/provider-configs', async (request, reply) => {
     const user = await requireUser(request, reply);
@@ -75,34 +95,16 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       return;
     }
 
-    const params = providerCodeParamsSchema.safeParse(request.params);
-    const payload = updateProviderConfigSchema.safeParse(request.body);
-    if (!params.success || !payload.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid provider config payload.',
-          details: payload.success ? undefined : payload.error.flatten(),
-        },
-      });
-    }
+    const params = parseOrThrow(providerCodeParamsSchema, request.params, 'Invalid provider config payload.');
+    const payload = parseOrThrow(updateProviderConfigSchema, request.body, 'Invalid provider config payload.');
 
     const result = await updateProviderConfigForUser({
-      providerCode: params.data.providerCode,
+      providerCode: params.providerCode,
       userId: user.id,
-      payload: payload.data,
+      payload,
     });
     if (!result.ok) {
-      return reply.code(mapServiceErrorToStatus(result.error.code)).send({
-        ok: false,
-        error: {
-          code: result.error.code,
-          message: result.error.message,
-          ...(result.error.details ? { details: result.error.details } : {}),
-        },
-        ...(result.error.data !== undefined ? { data: result.error.data } : {}),
-      });
+      throw toProviderConfigAppError(result.error);
     }
 
     return reply.send({
@@ -117,30 +119,14 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       return;
     }
 
-    const params = providerCodeParamsSchema.safeParse(request.params);
-    if (!params.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid provider sync request.',
-        },
-      });
-    }
+    const params = parseOrThrow(providerCodeParamsSchema, request.params, 'Invalid provider sync request.');
 
     const result = await syncProviderModelsForUser({
-      providerCode: params.data.providerCode,
+      providerCode: params.providerCode,
       userId: user.id,
     });
     if (!result.ok) {
-      return reply.code(mapServiceErrorToStatus(result.error.code)).send({
-        ok: false,
-        error: {
-          code: result.error.code,
-          message: result.error.message,
-        },
-        ...(result.error.data !== undefined ? { data: result.error.data } : {}),
-      });
+      throw toProviderConfigAppError(result.error);
     }
 
     return reply.send({
@@ -155,32 +141,16 @@ export async function registerProviderConfigRoutes(app: FastifyInstance) {
       return;
     }
 
-    const params = providerCodeParamsSchema.safeParse(request.params);
-    const payload = testProviderConfigSchema.safeParse(request.body ?? {});
-    if (!params.success || !payload.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid provider test request.',
-        },
-      });
-    }
+    const params = parseOrThrow(providerCodeParamsSchema, request.params, 'Invalid provider test request.');
+    const payload = parseOrThrow(testProviderConfigSchema, request.body ?? {}, 'Invalid provider test request.');
 
     const result = await testProviderConfigForUser({
-      providerCode: params.data.providerCode,
+      providerCode: params.providerCode,
       userId: user.id,
-      testKind: payload.data.testKind,
+      testKind: payload.testKind,
     });
     if (!result.ok) {
-      return reply.code(mapServiceErrorToStatus(result.error.code)).send({
-        ok: false,
-        error: {
-          code: result.error.code,
-          message: result.error.message,
-        },
-        ...(result.error.data !== undefined ? { data: result.error.data } : {}),
-      });
+      throw toProviderConfigAppError(result.error);
     }
 
     return reply.send({

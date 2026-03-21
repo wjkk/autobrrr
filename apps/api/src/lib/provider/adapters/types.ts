@@ -26,6 +26,7 @@ export type ProviderAdapterUpdate =
   | {
       type: 'completed';
       providerStatus: string;
+      completionUrl?: string | null;
       providerOutput?: Record<string, unknown>;
     }
   | {

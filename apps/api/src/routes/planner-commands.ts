@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { mapRun } from '../lib/api-mappers.js';
+import { conflict, notFound, parseOrThrow } from '../lib/app-error.js';
 import { requireUser } from '../lib/auth.js';
 import { queuePlannerGenerateDocRun } from '../lib/planner/orchestration/run-service.js';
 
@@ -26,69 +27,41 @@ export async function registerPlannerCommandRoutes(app: FastifyInstance) {
       return;
     }
 
-    const params = paramsSchema.safeParse(request.params);
-    const payload = payloadSchema.safeParse(request.body);
-    if (!params.success || !payload.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid planner generation payload.',
-          details: payload.success ? undefined : payload.error.flatten(),
-        },
-      });
-    }
+    const params = parseOrThrow(paramsSchema, request.params, 'Invalid planner generation payload.');
+    const payload = parseOrThrow(payloadSchema, request.body, 'Invalid planner generation payload.');
 
     const result = await queuePlannerGenerateDocRun({
-      projectId: params.data.projectId,
-      episodeId: payload.data.episodeId,
+      projectId: params.projectId,
+      episodeId: payload.episodeId,
       userId: user.id,
-      prompt: payload.data.prompt,
-      subtype: payload.data.subtype,
-      modelFamily: payload.data.modelFamily,
-      modelEndpoint: payload.data.modelEndpoint,
-      targetVideoModelFamilySlug: payload.data.targetVideoModelFamilySlug,
-      idempotencyKey: payload.data.idempotencyKey,
+      prompt: payload.prompt,
+      subtype: payload.subtype,
+      modelFamily: payload.modelFamily,
+      modelEndpoint: payload.modelEndpoint,
+      targetVideoModelFamilySlug: payload.targetVideoModelFamilySlug,
+      idempotencyKey: payload.idempotencyKey,
     });
 
     if (!result.ok) {
       if (result.error === 'NOT_FOUND') {
-        return reply.code(404).send({
-          ok: false,
-          error: {
-            code: 'NOT_FOUND',
-            message: 'Episode not found.',
-          },
-        });
+        throw notFound('Episode not found.');
       }
 
       if (result.error === 'MODEL_NOT_FOUND') {
-        return reply.code(404).send({
-          ok: false,
-          error: {
-            code: 'MODEL_NOT_FOUND',
-            message: 'No active text model endpoint matched the selection.',
-          },
-        });
+        throw notFound('No active text model endpoint matched the selection.', 'MODEL_NOT_FOUND');
       }
 
       if (result.error === 'PROVIDER_NOT_CONFIGURED') {
-        return reply.code(409).send({
-          ok: false,
-          error: {
-            code: 'PROVIDER_NOT_CONFIGURED',
-            message: '请先在 /settings/providers 中为当前账号配置并启用可用的文本模型 Provider，再执行策划生成。',
-          },
-        });
+        throw conflict(
+          '请先在 /settings/providers 中为当前账号配置并启用可用的文本模型 Provider，再执行策划生成。',
+          'PROVIDER_NOT_CONFIGURED',
+        );
       }
 
-      return reply.code(409).send({
-        ok: false,
-        error: {
-          code: 'PLANNER_AGENT_NOT_CONFIGURED',
-          message: 'No active planner sub-agent matched the current content type and subtype.',
-        },
-      });
+      throw conflict(
+        'No active planner sub-agent matched the current content type and subtype.',
+        'PLANNER_AGENT_NOT_CONFIGURED',
+      );
     }
 
     return reply.code(202).send({

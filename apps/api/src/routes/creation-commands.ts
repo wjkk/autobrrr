@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { mapRun } from '../lib/api-mappers.js';
+import { notFound, parseOrThrow } from '../lib/app-error.js';
 import { requireUser } from '../lib/auth.js';
 import { queueShotGenerationRun } from '../lib/creation-run-service.js';
 
@@ -34,51 +35,29 @@ export async function registerCreationCommandRoutes(app: FastifyInstance) {
       return;
     }
 
-    const params = paramsSchema.safeParse(request.params);
-    const payload = commandSchema.safeParse(request.body);
-    if (!params.success || !payload.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid image generation payload.',
-          details: payload.success ? undefined : payload.error.flatten(),
-        },
-      });
-    }
+    const params = parseOrThrow(paramsSchema, request.params, 'Invalid image generation payload.');
+    const payload = parseOrThrow(commandSchema, request.body, 'Invalid image generation payload.');
 
     const result = await queueShotGenerationRun({
-      projectId: params.data.projectId,
-      shotId: params.data.shotId,
+      projectId: params.projectId,
+      shotId: params.shotId,
       userId: user.id,
       runType: 'IMAGE_GENERATION',
       modelKind: 'IMAGE',
       promptField: 'imagePrompt',
-      promptOverride: payload.data.prompt,
-      modelFamily: payload.data.modelFamily,
-      modelEndpoint: payload.data.modelEndpoint,
-      referenceAssetIds: payload.data.referenceAssetIds,
-      idempotencyKey: payload.data.idempotencyKey,
-      options: payload.data.options,
+      promptOverride: payload.prompt,
+      modelFamily: payload.modelFamily,
+      modelEndpoint: payload.modelEndpoint,
+      referenceAssetIds: payload.referenceAssetIds,
+      idempotencyKey: payload.idempotencyKey,
+      options: payload.options,
     });
 
     if (!result.ok) {
       if (result.error === 'MODEL_NOT_FOUND') {
-        return reply.code(404).send({
-          ok: false,
-          error: {
-            code: 'MODEL_NOT_FOUND',
-            message: 'No active image model endpoint matched the selection.',
-          },
-        });
+        throw notFound('No active image model endpoint matched the selection.', 'MODEL_NOT_FOUND');
       }
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Shot not found.',
-        },
-      });
+      throw notFound('Shot not found.');
     }
 
     return reply.code(202).send({
@@ -101,58 +80,36 @@ export async function registerCreationCommandRoutes(app: FastifyInstance) {
       return;
     }
 
-    const params = paramsSchema.safeParse(request.params);
-    const payload = videoCommandSchema.safeParse(request.body);
-    if (!params.success || !payload.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid video generation payload.',
-          details: payload.success ? undefined : payload.error.flatten(),
-        },
-      });
-    }
+    const params = parseOrThrow(paramsSchema, request.params, 'Invalid video generation payload.');
+    const payload = parseOrThrow(videoCommandSchema, request.body, 'Invalid video generation payload.');
 
     const result = await queueShotGenerationRun({
-      projectId: params.data.projectId,
-      shotId: params.data.shotId,
+      projectId: params.projectId,
+      shotId: params.shotId,
       userId: user.id,
       runType: 'VIDEO_GENERATION',
       modelKind: 'VIDEO',
       promptField: 'motionPrompt',
-      promptOverride: payload.data.prompt,
-      modelFamily: payload.data.modelFamily,
-      modelEndpoint: payload.data.modelEndpoint,
-      referenceAssetIds: payload.data.referenceAssetIds,
-      idempotencyKey: payload.data.idempotencyKey,
+      promptOverride: payload.prompt,
+      modelFamily: payload.modelFamily,
+      modelEndpoint: payload.modelEndpoint,
+      referenceAssetIds: payload.referenceAssetIds,
+      idempotencyKey: payload.idempotencyKey,
       options: {
-        ...(payload.data.options ?? {}),
-        ...(payload.data.durationSeconds ? { durationSeconds: payload.data.durationSeconds } : {}),
-        ...(payload.data.aspectRatio ? { aspectRatio: payload.data.aspectRatio } : {}),
-        ...(payload.data.resolution ? { resolution: payload.data.resolution } : {}),
-        ...(payload.data.firstFrameUrl ? { firstFrameUrl: payload.data.firstFrameUrl } : {}),
-        ...(payload.data.lastFrameUrl ? { lastFrameUrl: payload.data.lastFrameUrl } : {}),
+        ...(payload.options ?? {}),
+        ...(payload.durationSeconds ? { durationSeconds: payload.durationSeconds } : {}),
+        ...(payload.aspectRatio ? { aspectRatio: payload.aspectRatio } : {}),
+        ...(payload.resolution ? { resolution: payload.resolution } : {}),
+        ...(payload.firstFrameUrl ? { firstFrameUrl: payload.firstFrameUrl } : {}),
+        ...(payload.lastFrameUrl ? { lastFrameUrl: payload.lastFrameUrl } : {}),
       },
     });
 
     if (!result.ok) {
       if (result.error === 'MODEL_NOT_FOUND') {
-        return reply.code(404).send({
-          ok: false,
-          error: {
-            code: 'MODEL_NOT_FOUND',
-            message: 'No active video model endpoint matched the selection.',
-          },
-        });
+        throw notFound('No active video model endpoint matched the selection.', 'MODEL_NOT_FOUND');
       }
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Shot not found.',
-        },
-      });
+      throw notFound('Shot not found.');
     }
 
     return reply.code(202).send({

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { AppError, notFound, parseOrThrow } from '../lib/app-error.js';
 import { requireUser } from '../lib/auth.js';
 import {
   createStudioProject,
@@ -39,6 +40,28 @@ const projectParamsSchema = z.object({
   projectId: z.string().min(1),
 });
 
+function toCreateStudioProjectAppError(error: 'INVALID_IMAGE_MODEL' | 'INVALID_SUBJECT_PROFILE' | 'INVALID_STYLE_PRESET') {
+  const errorMap = {
+    INVALID_IMAGE_MODEL: {
+      code: 'INVALID_IMAGE_MODEL',
+      message: 'Selected image model is not available.',
+    },
+    INVALID_SUBJECT_PROFILE: {
+      code: 'INVALID_SUBJECT_PROFILE',
+      message: 'Selected subject is not available.',
+    },
+    INVALID_STYLE_PRESET: {
+      code: 'INVALID_STYLE_PRESET',
+      message: 'Selected style is not available.',
+    },
+  } as const;
+
+  return new AppError({
+    ...errorMap[error],
+    statusCode: 400,
+  });
+}
+
 export async function registerStudioProjectRoutes(app: FastifyInstance) {
   app.get('/api/studio/projects', async (request, reply) => {
     const user = await requireUser(request, reply);
@@ -58,39 +81,11 @@ export async function registerStudioProjectRoutes(app: FastifyInstance) {
       return;
     }
 
-    const payload = createProjectSchema.safeParse(request.body);
-    if (!payload.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid project payload.',
-          details: payload.error.flatten(),
-        },
-      });
-    }
+    const payload = parseOrThrow(createProjectSchema, request.body, 'Invalid project payload.');
 
-    const result = await createStudioProject(user.id, payload.data);
+    const result = await createStudioProject(user.id, payload);
     if (!result.ok) {
-      const errorMap = {
-        INVALID_IMAGE_MODEL: {
-          code: 'INVALID_IMAGE_MODEL',
-          message: 'Selected image model is not available.',
-        },
-        INVALID_SUBJECT_PROFILE: {
-          code: 'INVALID_SUBJECT_PROFILE',
-          message: 'Selected subject is not available.',
-        },
-        INVALID_STYLE_PRESET: {
-          code: 'INVALID_STYLE_PRESET',
-          message: 'Selected style is not available.',
-        },
-      } as const;
-
-      return reply.code(400).send({
-        ok: false,
-        error: errorMap[result.error],
-      });
+      throw toCreateStudioProjectAppError(result.error);
     }
 
     return reply.code(201).send({
@@ -105,26 +100,11 @@ export async function registerStudioProjectRoutes(app: FastifyInstance) {
       return;
     }
 
-    const params = projectParamsSchema.safeParse(request.params);
-    if (!params.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid project id.',
-        },
-      });
-    }
+    const params = parseOrThrow(projectParamsSchema, request.params, 'Invalid project id.');
 
-    const project = await getStudioProject(user.id, params.data.projectId);
+    const project = await getStudioProject(user.id, params.projectId);
     if (!project) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Project not found.',
-        },
-      });
+      throw notFound('Project not found.');
     }
 
     return reply.send({
@@ -133,3 +113,8 @@ export async function registerStudioProjectRoutes(app: FastifyInstance) {
     });
   });
 }
+
+export const __testables = {
+  countHanCharacters,
+  toCreateStudioProjectAppError,
+};

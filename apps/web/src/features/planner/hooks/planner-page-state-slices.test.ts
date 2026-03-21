@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { createEmptyPlannerSeedData } from '../lib/planner-defaults';
 import {
   buildPlannerDialogState,
   buildPlannerDocumentState,
@@ -58,7 +59,22 @@ test('planner page slice builders preserve explicit slice boundaries', () => {
     displayVersionStatus: 'ready',
     displayVersionProgress: null,
     displaySections: { summary: true },
-    plannerDoc: { summaryBullets: [] },
+    plannerDoc: createEmptyPlannerSeedData({
+      brandName: 'AIV',
+      assistantName: 'Seko',
+      project: {
+        id: 'project-1',
+        title: '夜航者',
+        brief: 'brief',
+        contentMode: 'series',
+        executionMode: 'auto',
+        aspectRatio: '16:9',
+        status: 'planning',
+      },
+      episodes: [],
+      planner: { submittedRequirement: '', pointCost: 0, messages: [] },
+      creation: { points: 0 },
+    }),
     activeStyle: { name: '韩漫二次元', tone: '高对比' },
     mediaCardStyle: {},
     displaySubjectCards: [],

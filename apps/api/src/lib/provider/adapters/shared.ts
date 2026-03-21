@@ -130,6 +130,31 @@ export function findStringDeep(value: unknown, keys: string[]): string | null {
   return null;
 }
 
+export function resolveProviderCompletionUrl(providerOutput: Record<string, unknown> | undefined) {
+  if (!providerOutput) {
+    return null;
+  }
+
+  return findStringDeep(providerOutput, ['completionUrl', 'downloadUrl', 'url', 'uri', 'video_url', 'image_url']);
+}
+
+export function withNormalizedCompletedOutput(providerOutput: Record<string, unknown> | undefined) {
+  if (!providerOutput) {
+    return undefined;
+  }
+
+  const completionUrl = resolveProviderCompletionUrl(providerOutput);
+  if (!completionUrl) {
+    return providerOutput;
+  }
+
+  return {
+    ...providerOutput,
+    completionUrl,
+    downloadUrl: completionUrl,
+  };
+}
+
 export function inferPlatouVideoState(payload: Record<string, unknown>) {
   return (findStringDeep(payload, ['status', 'state']) ?? 'processing').toLowerCase();
 }

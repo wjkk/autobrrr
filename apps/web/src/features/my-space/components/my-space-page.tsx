@@ -181,7 +181,6 @@ export function MySpacePage(props: { projects: MySpaceProjectItem[]; error?: str
         { key: 'providers', label: '接口配置', href: '/settings/providers', icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v6m0 6v6M3 12h6m6 0h6" /></svg> },
         { key: 'catalogs', label: '管理目录', href: '/settings/catalogs', icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg> },
       ]}
-      badge={{ strong: String(props.projects.length), label: '继续创作', href: '/explore' }}
     >
         <div className={styles.contentShell}>
           {props.authRequired ? (

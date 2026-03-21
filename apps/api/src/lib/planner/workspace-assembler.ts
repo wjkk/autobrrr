@@ -6,6 +6,7 @@ import {
   collectPlannerAssetIds,
   mapPlannerLatestRun,
   readPlannerDebugApplySource,
+  resolvePlannerRuntimeStatus,
   resolvePlannerStage,
   resolvePlannerWorkspaceAssets,
 } from './workspace-presenters.js';
@@ -14,6 +15,12 @@ export async function assemblePlannerWorkspace(source: PlannerWorkspaceSource, d
   loadAssets: (assetIds: string[]) => Promise<Asset[]>;
 }) {
   const plannerStage = resolvePlannerStage(source.plannerSession, source.activeOutline);
+  const plannerRuntimeStatus = resolvePlannerRuntimeStatus({
+    plannerSession: source.plannerSession,
+    activeOutline: source.activeOutline,
+    activeRefinement: source.activeRefinement,
+    latestPlannerRun: source.latestPlannerRun,
+  });
   const refinementSubjects = source.activeRefinement?.subjects ?? [];
   const refinementScenes = source.activeRefinement?.scenes ?? [];
   const refinementShotScripts = source.activeRefinement?.shotScripts ?? [];
@@ -47,10 +54,11 @@ export async function assemblePlannerWorkspace(source: PlannerWorkspaceSource, d
       status: source.episode.status.toLowerCase(),
     },
     plannerSession: source.plannerSession
-      ? {
+        ? {
           id: source.plannerSession.id,
           status: source.plannerSession.status.toLowerCase(),
           stage: plannerStage,
+          runtimeStatus: plannerRuntimeStatus,
           outlineConfirmedAt: source.plannerSession.outlineConfirmedAt?.toISOString() ?? null,
           createdAt: source.plannerSession.createdAt.toISOString(),
           updatedAt: source.plannerSession.updatedAt.toISOString(),

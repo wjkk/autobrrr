@@ -61,6 +61,28 @@ test('buildProviderOutputJson merges provider data into existing object payloads
   assert.equal(missing, undefined);
 });
 
+test('buildProviderOutputJson persists explicit completion url for completed updates', () => {
+  const merged = __testables.buildProviderOutputJson(
+    createRun({ outputJson: { preserved: true } }),
+    {
+      type: 'completed',
+      providerStatus: 'succeeded',
+      completionUrl: 'https://example.com/final.mp4',
+      providerOutput: { taskId: 'task-1' },
+    },
+  );
+
+  assert.deepEqual(merged, {
+    preserved: true,
+    executionMode: 'live',
+    providerData: {
+      taskId: 'task-1',
+      completionUrl: 'https://example.com/final.mp4',
+      downloadUrl: 'https://example.com/final.mp4',
+    },
+  });
+});
+
 test('processClaimedRunWithDeps dispatches planner and media runs to submit or poll handlers', async () => {
   const calls: string[] = [];
   const submissionAction = { runId: 'run-1', status: 'running', action: 'submitted', providerJobId: 'job-1' } as const;
@@ -123,4 +145,44 @@ test('processClaimedRunWithDeps fails unsupported media run types before dispatc
     },
   ]);
   assert.equal(result.action, 'failed');
+});
+
+test('claimNextRunWithDeps prefers pollable runs before queued runs', async () => {
+  const calls: string[] = [];
+  const pollableRun = createRun({
+    id: 'run-poll',
+    status: 'RUNNING',
+    providerJobId: 'job-1',
+    nextPollAt: new Date('2026-03-17T00:00:00.000Z'),
+  });
+
+  const result = await __testables.claimNextRunWithDeps({
+    findFirst: (async (args: { where: { status: string } }) => {
+      calls.push(`findFirst:${args.where.status}`);
+      return args.where.status === 'RUNNING' ? pollableRun : null;
+    }) as never,
+    updateMany: (async () => {
+      throw new Error('queued claim should not run when pollable work exists');
+    }) as never,
+    findUnique: (async () => {
+      throw new Error('queued refresh should not run when pollable work exists');
+    }) as never,
+  } as never);
+
+  assert.equal(result?.id, 'run-poll');
+  assert.deepEqual(calls, ['findFirst:RUNNING']);
+});
+
+test('claimNextRunWithDeps returns null when queued run claim loses the race', async () => {
+  const queuedRun = createRun({ id: 'run-queued', status: 'QUEUED' });
+
+  const result = await __testables.claimNextRunWithDeps({
+    findFirst: (async (args: { where: { status: string } }) => (args.where.status === 'QUEUED' ? queuedRun : null)) as never,
+    updateMany: (async () => ({ count: 0 })) as never,
+    findUnique: (async () => {
+      throw new Error('findUnique should not run when claim fails');
+    }) as never,
+  } as never);
+
+  assert.equal(result, null);
 });

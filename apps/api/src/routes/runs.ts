@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { mapRun } from '../lib/api-mappers.js';
+import { conflict, notFound, parseOrThrow } from '../lib/app-error.js';
 import { requireUser } from '../lib/auth.js';
 import { findOwnedRun } from '../lib/ownership.js';
 import { prisma } from '../lib/prisma.js';
@@ -10,6 +11,12 @@ const runParamsSchema = z.object({
   runId: z.string().min(1),
 });
 
+function assertRunIsCancelable(run: { status: string }) {
+  if (run.status === 'COMPLETED' || run.status === 'FAILED' || run.status === 'CANCELED' || run.status === 'TIMED_OUT') {
+    throw conflict('Run is already terminal.', 'RUN_NOT_CANCELABLE');
+  }
+}
+
 export async function registerRunRoutes(app: FastifyInstance) {
   app.get('/api/runs/:runId', async (request, reply) => {
     const user = await requireUser(request, reply);
@@ -17,26 +24,11 @@ export async function registerRunRoutes(app: FastifyInstance) {
       return;
     }
 
-    const params = runParamsSchema.safeParse(request.params);
-    if (!params.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid run id.',
-        },
-      });
-    }
+    const params = parseOrThrow(runParamsSchema, request.params, 'Invalid run id.');
 
-    const run = await findOwnedRun(params.data.runId, user.id);
+    const run = await findOwnedRun(params.runId, user.id);
     if (!run) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Run not found.',
-        },
-      });
+      throw notFound('Run not found.');
     }
 
     return reply.send({
@@ -51,37 +43,14 @@ export async function registerRunRoutes(app: FastifyInstance) {
       return;
     }
 
-    const params = runParamsSchema.safeParse(request.params);
-    if (!params.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid run id.',
-        },
-      });
-    }
+    const params = parseOrThrow(runParamsSchema, request.params, 'Invalid run id.');
 
-    const run = await findOwnedRun(params.data.runId, user.id);
+    const run = await findOwnedRun(params.runId, user.id);
     if (!run) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Run not found.',
-        },
-      });
+      throw notFound('Run not found.');
     }
 
-    if (run.status === 'COMPLETED' || run.status === 'FAILED' || run.status === 'CANCELED' || run.status === 'TIMED_OUT') {
-      return reply.code(409).send({
-        ok: false,
-        error: {
-          code: 'RUN_NOT_CANCELABLE',
-          message: 'Run is already terminal.',
-        },
-      });
-    }
+    assertRunIsCancelable(run);
 
     const canceledRun = await prisma.$transaction(async (tx) => {
       const updatedRun = await tx.run.update({
@@ -115,3 +84,7 @@ export async function registerRunRoutes(app: FastifyInstance) {
     });
   });
 }
+
+export const __testables = {
+  assertRunIsCancelable,
+};

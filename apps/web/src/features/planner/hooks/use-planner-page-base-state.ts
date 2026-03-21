@@ -8,7 +8,7 @@ import { toPlannerNotice, type PlannerNotice, type PlannerNoticeInput } from '..
 import type { PlannerPageData } from '../lib/planner-page-data';
 import type { PlannerStructuredDoc } from '../lib/planner-structured-doc';
 import type { PlannerThreadMessage } from '../lib/planner-thread';
-import { sekoPlanThreadData } from '@aiv/mock-data';
+import { DEFAULT_USER_PROMPT } from '../lib/planner-defaults';
 
 export interface UsePlannerPageBaseStateOptions {
   studio: PlannerPageData;
@@ -33,7 +33,7 @@ export function usePlannerPageBaseState(options: UsePlannerPageBaseStateOptions)
   const [aspectRatio, setAspectRatio] = useState<PlannerAssetRatio>('16:9');
   const [storyboardModelId, setStoryboardModelId] = useState(() => readPreferredStoryboardModelId(initialWorkspace ?? null));
   const [remainingPoints, setRemainingPoints] = useState(studio.creation.points);
-  const [requirement, setRequirement] = useState(studio.planner.submittedRequirement || sekoPlanThreadData.userPrompt);
+  const [requirement, setRequirement] = useState(studio.planner.submittedRequirement || studio.project.brief || DEFAULT_USER_PROMPT);
   const [notice, setNoticeState] = useState<PlannerNotice | null>(null);
   const [outlineConfirmed, setOutlineConfirmed] = useState(false);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);

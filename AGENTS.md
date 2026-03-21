@@ -5,6 +5,62 @@
 避免重复代码，确保 DRY。
 预留出足够的可扩展性，但不要过度设计。
 
+## Current Hard Guardrails
+
+以下要求属于当前仓库的硬约束，适用于 Codex、Claude Code 和其他进入该仓库执行改动的 AI agent。
+
+### 1. 先守住现有收口成果，再做新改动
+
+任何改动都不得破坏以下已完成的基线：
+
+1. Planner 运行时不得重新引入 `@aiv/mock-data` 参与真实业务决策。
+2. API 必须优先沿用统一错误模型，不得在新代码中继续扩散手写错误响应结构。
+3. `run-lifecycle` 必须保持薄协调入口，不允许把跨域副作用重新堆回单文件热点。
+4. Web BFF 不得重新回到“一个后端接口对应一个纯代理 route”的模式。
+5. 已删除的休眠 schema 模型不得在无明确设计评审前重新加入当前主路径。
+
+### 2. 变更优先级规则
+
+后续工作优先级固定如下：
+
+1. 主链路稳定性与业务正确性
+2. 错误模型一致性
+3. smoke / unit / typecheck 护栏
+4. 可观测性与运行边界说明
+5. 局部结构优化
+
+禁止把“目录更整齐”“文件更小”“继续 facade 化”当成高于主链路稳定性的目标。
+
+### 3. 任何改动前必须先检查的护栏
+
+在提交任何实现前，必须先确认是否影响以下基线：
+
+1. `pnpm --filter @aiv/api test:unit`
+2. `pnpm --filter @aiv/api exec tsc --noEmit`
+3. `pnpm typecheck`
+4. `pnpm --filter @aiv/web test:unit`
+5. `pnpm test:planner:api-smoke`
+
+如果改动触达 Planner、Creation、Run、Worker、Provider callback、BFF route、schema 或共享契约层，上述护栏默认视为相关。
+
+### 4. 新增代码的行为要求
+
+1. 新 route 优先复用 `AppError` / `parseOrThrow` / 统一 envelope。
+2. 新的 run / worker / callback 逻辑必须明确终态、重试和重复调用边界。
+3. 新的 Planner / Creation 主链路变更，至少要补一条 unit test 或纳入现有 smoke 证据。
+4. 不允许用 fixture、mock、fallback 文本去替代真实运行时必需字段。
+5. 不允许为了“先跑通”而引入新的 `any` 扩散到页面总装配器或共享契约边界。
+
+### 5. 文档同步要求
+
+如果改动影响上述基线之一，必须同步检查：
+
+1. `/Users/jiankunwu/project/aiv/todo.list`
+2. `/Users/jiankunwu/project/aiv/docs/specs/architecture-8-score-roadmap-v0.1.md`
+3. `/Users/jiankunwu/project/aiv/docs/reviews/aiv-studio-architecture-review.md`
+
+文档里禁止继续保留与当前代码矛盾的“已完成”“已达到 8 分”“结构性重构已完成”之类表述。
+
 ## Skills
 A skill is a set of local instructions to follow that is stored in a `SKILL.md` file. Below is the list of skills that can be used. Each entry includes a name, description, and file path so you can open the source for full instructions when using a specific skill.
 

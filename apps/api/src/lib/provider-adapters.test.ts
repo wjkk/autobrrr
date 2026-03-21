@@ -92,6 +92,18 @@ test('provider adapter helpers normalize provider-backed fields and nested task 
   assert.equal(__testables.inferArkVideoTaskId({ data: { id: 'task-2' } }), 'task-2');
   assert.equal(__testables.inferPlatouVideoState({ data: { state: 'processing' } }), 'processing');
   assert.equal(__testables.inferArkVideoState({ data: { task_status: 'SUCCESS' } }), 'success');
+  assert.deepEqual(
+    __testables.withNormalizedCompletedOutput({ payload: { image_url: 'https://example.com/generated.png' } }),
+    {
+      payload: { image_url: 'https://example.com/generated.png' },
+      completionUrl: 'https://example.com/generated.png',
+      downloadUrl: 'https://example.com/generated.png',
+    },
+  );
+  assert.equal(
+    __testables.resolveProviderCompletionUrl({ payload: { image_url: 'https://example.com/generated.png' } }),
+    'https://example.com/generated.png',
+  );
 });
 
 test('resolveProviderAdapter selects ark, platou, proxy mock and official adapters', () => {
@@ -234,6 +246,7 @@ test('official adapter rejects poll and callback because no async provider behav
   assert.deepEqual(submit, {
     type: 'completed',
     providerStatus: 'succeeded',
+    completionUrl: null,
   });
   assert.equal(poll.type, 'failed');
   assert.equal(callback.type, 'failed');

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { ProviderAdapter } from './types.js';
-import { normalizeProviderStatus, secondsFromNow } from './shared.js';
+import { normalizeProviderStatus, resolveProviderCompletionUrl, secondsFromNow, withNormalizedCompletedOutput } from './shared.js';
 
 export const mockProxyAdapter: ProviderAdapter = {
   async submit(run) {
@@ -31,10 +31,12 @@ export const mockProxyAdapter: ProviderAdapter = {
   async handleCallback(_run, payload) {
     const providerStatus = normalizeProviderStatus(payload.providerStatus);
     if (providerStatus === 'succeeded') {
+      const providerOutput = withNormalizedCompletedOutput(payload.output);
       return {
         type: 'completed',
         providerStatus,
-        providerOutput: payload.output,
+        completionUrl: resolveProviderCompletionUrl(providerOutput),
+        providerOutput,
       };
     }
 

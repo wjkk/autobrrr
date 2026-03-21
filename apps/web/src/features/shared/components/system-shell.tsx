@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 import styles from './system-shell.module.css';
 
@@ -41,6 +41,7 @@ export function SystemShell(props: {
   children: ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
@@ -62,6 +63,10 @@ export function SystemShell(props: {
       setNotice(noticeText);
     }
   };
+
+  const profileActive = pathname === '/profile' || pathname.startsWith('/profile/');
+  const notificationsActive = pathname === '/notifications' || pathname.startsWith('/notifications/');
+  const feedbackActive = pathname === '/feedback' || pathname.startsWith('/feedback/');
 
   return (
     <div className={styles.page}>
@@ -90,15 +95,27 @@ export function SystemShell(props: {
               <span>{props.badge.label}</span>
             </button>
           ) : null}
-          <button className={styles.utilBtn} aria-label="Profile" onClick={() => router.push('/profile')}>
+          <button
+            className={`${styles.utilBtn} ${profileActive ? styles.utilBtnActive : ''}`}
+            aria-label="Profile"
+            onClick={() => router.push('/profile')}
+          >
             <div className={styles.avatar}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
             </div>
           </button>
-          <button className={styles.utilBtn} aria-label="Notifications" onClick={() => router.push('/notifications')}>
+          <button
+            className={`${styles.utilBtn} ${notificationsActive ? styles.utilBtnActive : ''}`}
+            aria-label="Notifications"
+            onClick={() => router.push('/notifications')}
+          >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
           </button>
-          <button className={styles.utilBtn} aria-label="Feedback" onClick={() => router.push('/feedback')}>
+          <button
+            className={`${styles.utilBtn} ${feedbackActive ? styles.utilBtnActive : ''}`}
+            aria-label="Feedback"
+            onClick={() => router.push('/feedback')}
+          >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><circle cx="9" cy="10" r="1.5" fill="currentColor"></circle><circle cx="12" cy="10" r="1.5" fill="currentColor"></circle><circle cx="15" cy="10" r="1.5" fill="currentColor"></circle></svg>
           </button>
         </div>

@@ -59,7 +59,7 @@ export function usePlannerRuntimeWorkspace(options: UsePlannerRuntimeWorkspaceOp
       ?? (workspace.activeOutline?.outlineDoc ? options.outlineToPreviewStructuredPlannerDoc(workspace.activeOutline.outlineDoc) : null)
       ?? null;
     options.setStructuredPlannerDoc(derivedStructuredDoc);
-    options.setOutlineConfirmed(Boolean(workspace.plannerSession?.outlineConfirmedAt));
+    options.setOutlineConfirmed(workspace.plannerSession?.stage === 'refinement');
 
     return workspace;
   }, [options]);

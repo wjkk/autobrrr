@@ -5,9 +5,9 @@ import { useCallback } from 'react';
 import { plannerCopy } from '@/lib/copy';
 
 import { confirmPlannerOutlineVersion, type PlannerRuntimeApiContext } from '../lib/planner-api';
+import { DEFAULT_CONFIRM_PROMPT, DEFAULT_REFINEMENT_REPLY } from '../lib/planner-defaults';
 import { buildPlannerNoticeFromError, type PlannerNoticeInput } from '../lib/planner-notice';
 import type { PlannerThreadMessage } from '../lib/planner-thread';
-import { sekoPlanThreadData } from '@aiv/mock-data';
 import type { PlannerRefinementTrigger } from './use-planner-refinement';
 
 type SubmitPlannerRunViaApi = (
@@ -73,8 +73,8 @@ export function usePlannerComposerActions(options: UsePlannerComposerActionsOpti
 
     options.setMessages((current) => [
       ...current,
-      { id: options.nextLocalId('msg'), role: 'user', messageType: 'user_input', content: sekoPlanThreadData.confirmPrompt },
-      { id: options.nextLocalId('msg'), role: 'assistant', messageType: 'assistant_text', content: sekoPlanThreadData.refinementReply },
+      { id: options.nextLocalId('msg'), role: 'user', messageType: 'user_input', content: DEFAULT_CONFIRM_PROMPT },
+      { id: options.nextLocalId('msg'), role: 'assistant', messageType: 'assistant_text', content: DEFAULT_REFINEMENT_REPLY },
     ]);
 
     options.setNotice('已确认大纲，开始细化剧情内容。');

@@ -17,8 +17,10 @@ import {
   inferArkVideoState,
   inferArkVideoTaskId,
   readAdapterOptions,
+  resolveProviderCompletionUrl,
   readString,
   secondsFromNow,
+  withNormalizedCompletedOutput,
 } from './shared-export.js';
 
 export const arkAdapter: ProviderAdapter = {
@@ -54,7 +56,7 @@ export const arkAdapter: ProviderAdapter = {
     }
 
     if (getModelKind(run) === 'text') {
-      const response = await submitTextGeneration({
+      const rawResponse = await submitTextGeneration({
         providerCode: runtimeConfig.providerCode ?? 'ark',
         model,
         prompt,
@@ -62,9 +64,11 @@ export const arkAdapter: ProviderAdapter = {
         baseUrl: runtimeConfig.baseUrl,
         hookMetadata,
       });
+      const response = withNormalizedCompletedOutput(rawResponse) ?? rawResponse;
       return {
         type: 'completed',
         providerStatus: 'succeeded',
+        completionUrl: resolveProviderCompletionUrl(response),
         providerOutput: {
           ...response,
           modelUsed: model,
@@ -73,7 +77,7 @@ export const arkAdapter: ProviderAdapter = {
     }
 
     if (getModelKind(run) === 'image') {
-      const response = await submitImageGeneration({
+      const rawResponse = await submitImageGeneration({
         providerCode: runtimeConfig.providerCode ?? 'ark',
         baseUrl: runtimeConfig.baseUrl,
         apiKey: runtimeConfig.apiKey,
@@ -81,9 +85,11 @@ export const arkAdapter: ProviderAdapter = {
         prompt,
         hookMetadata,
       });
+      const response = withNormalizedCompletedOutput(rawResponse) ?? rawResponse;
       return {
         type: 'completed',
         providerStatus: 'succeeded',
+        completionUrl: resolveProviderCompletionUrl(response),
         providerOutput: {
           ...response,
           modelUsed: model,
@@ -165,19 +171,21 @@ export const arkAdapter: ProviderAdapter = {
       };
     }
 
-    const response = await queryVideoGenerationTask({
+    const rawResponse = await queryVideoGenerationTask({
       providerCode: runtimeConfig.providerCode ?? 'ark',
       baseUrl: runtimeConfig.baseUrl,
       apiKey: runtimeConfig.apiKey,
       taskId: run.providerJobId,
       hookMetadata,
     });
+    const response = withNormalizedCompletedOutput(rawResponse) ?? rawResponse;
     const state = inferArkVideoState(response);
 
     if (state === 'completed' || state === 'succeeded' || state === 'success') {
       return {
         type: 'completed',
         providerStatus: 'succeeded',
+        completionUrl: resolveProviderCompletionUrl(response),
         providerOutput: response,
       };
     }

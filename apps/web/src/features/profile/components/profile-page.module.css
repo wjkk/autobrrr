@@ -1,0 +1,296 @@
+.page {
+  display: grid;
+  gap: 24px;
+  padding: 92px 32px 48px;
+  background: var(--bg-app);
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(260px, 0.9fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.title {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1.1;
+  color: var(--text-primary);
+}
+
+.description {
+  margin: 14px 0 0;
+  max-width: 720px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.identityCard,
+.panel,
+.metricCard {
+  border: 1px solid var(--border-default);
+  border-radius: 24px;
+  background: var(--bg-panel-elevated);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.identityCard {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 22px;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #1f2937, #475569);
+  color: #f8fafc;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.identityBody {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.identityMeta {
+  display: grid;
+  gap: 6px;
+}
+
+.identityMeta strong {
+  color: var(--text-primary);
+  font-size: 18px;
+}
+
+.identityMeta span {
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.logoutButton {
+  border: 1px solid var(--border-strong);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+  white-space: nowrap;
+}
+
+.logoutButton:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--text-tertiary);
+  transform: translateY(-1px);
+}
+
+.logoutButton:disabled {
+  cursor: default;
+  opacity: 0.68;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.panel {
+  padding: 22px;
+}
+
+.panel h2 {
+  margin: 0 0 16px;
+  color: var(--text-primary);
+  font-size: 18px;
+}
+
+.list {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list li {
+  display: grid;
+  gap: 4px;
+}
+
+.list strong,
+.quickLink strong {
+  color: var(--text-primary);
+}
+
+.list span,
+.quickLink span {
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.linkList {
+  display: grid;
+  gap: 12px;
+}
+
+.quickLink {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  text-decoration: none;
+  background: var(--bg-app);
+  border: 1px solid var(--border-default);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.quickLink:hover {
+  transform: translateY(-1px);
+  border-color: var(--border-strong);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+}
+
+.emptyHint {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--bg-app);
+  border: 1px dashed var(--border-strong);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.metricCard {
+  padding: 20px;
+}
+
+.metricCard span {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.metricCard strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+  font-size: 24px;
+}
+
+.metricCard p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.profileEditor {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.profileEditorLabel {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.profileEditorInput {
+  width: 100%;
+  border: 1px solid var(--border-default);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.profileEditorInput:focus {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+}
+
+.profileEditorActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.profileSaveButton {
+  border: 1px solid var(--border-strong);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.profileSaveButton:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--text-tertiary);
+  transform: translateY(-1px);
+}
+
+.profileSaveButton:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.profileFeedback {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media (max-width: 960px) {
+  .hero,
+  .grid,
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .page {
+    padding: 20px 20px 32px;
+  }
+
+  .identityBody {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

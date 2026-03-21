@@ -1,8 +1,9 @@
 import type { ApiPlannerDebugApplySource, ApiPlannerWorkspace } from './planner-api';
 import { summarizePlannerDisplayText } from './planner-display-normalization';
 import type { PlannerThreadMessage } from './planner-thread';
-import { sekoPlanData } from '@aiv/mock-data';
 import { findPlannerVideoModelOption, PLANNER_VIDEO_MODEL_OPTIONS } from './planner-video-model-options';
+
+export { SCENE_IMAGE_POOL, SUBJECT_IMAGE_POOL } from './planner-defaults';
 
 export type PlannerMode = 'single' | 'series';
 export type PlannerAssetRatio = '16:9' | '9:16' | '4:3' | '3:4';
@@ -61,8 +62,6 @@ export const DOC_TOC: Array<{ id: string; title: string }> = [
 
 export const ASPECT_RATIO_OPTIONS: PlannerAssetRatio[] = ['16:9', '9:16', '4:3', '3:4'];
 
-export const SUBJECT_IMAGE_POOL = sekoPlanData.subjects.map((item) => item.image);
-export const SCENE_IMAGE_POOL = sekoPlanData.scenes.map((item) => item.image);
 export const SUBJECT_TONE_LABEL = '不羁青年';
 export const SUBJECT_TONE_META = '男性/青年/普通话';
 

@@ -111,7 +111,7 @@ test('finalizeGeneratedRun fails when shot resource is missing', async () => {
     },
     outputJson: {
       providerData: {
-        url: 'https://example.com/video.mp4',
+        completionUrl: 'https://example.com/video.mp4',
       },
     },
   } as never, 'VIDEO', {
@@ -138,6 +138,7 @@ test('finalizeGeneratedRun fails when shot resource is missing', async () => {
 test('finalizeGeneratedRun stores planner subject assets locally and syncs refinement projection', async () => {
   let syncedRefinementVersionId: string | null = null;
   const runUpdates: Array<Record<string, unknown>> = [];
+  let subjectGeneratedAssetIds: unknown[] | null = null;
 
   const result = await __testables.finalizeGeneratedRunWithDeps({
     id: 'run-4',
@@ -155,7 +156,7 @@ test('finalizeGeneratedRun stores planner subject assets locally and syncs refin
     },
     outputJson: {
       providerData: {
-        image_url: 'https://provider.example.com/generated.png',
+        completionUrl: 'https://provider.example.com/generated.png',
       },
     },
   } as never, 'IMAGE', {
@@ -169,9 +170,33 @@ test('finalizeGeneratedRun stores planner subject assets locally and syncs refin
         findUnique: async () => ({
           id: 'subject-1',
           refinementVersionId: 'ref-1',
-          generatedAssetIdsJson: ['asset-old'],
+          generatedAssetIdsJson: [
+            'asset-old',
+            'asset-keep-1',
+            'asset-keep-2',
+            'asset-keep-3',
+            'asset-keep-4',
+            'asset-keep-5',
+            'asset-keep-6',
+            'asset-keep-7',
+            'asset-keep-8',
+            'asset-keep-9',
+            'asset-keep-10',
+            'asset-keep-11',
+            'asset-keep-12',
+            'asset-keep-13',
+            'asset-keep-14',
+            'asset-keep-15',
+            'asset-old',
+            '',
+            1,
+            null,
+          ],
         }),
-        update: async () => ({}),
+        update: async ({ data }: { data: { generatedAssetIdsJson?: unknown[] } }) => {
+          subjectGeneratedAssetIds = data.generatedAssetIdsJson ?? null;
+          return {};
+        },
       },
       asset: {
         create: async ({ data }: { data: Record<string, unknown> }) => ({
@@ -202,9 +227,33 @@ test('finalizeGeneratedRun stores planner subject assets locally and syncs refin
             findUnique: async () => ({
               id: 'subject-1',
               refinementVersionId: 'ref-1',
-              generatedAssetIdsJson: ['asset-old'],
+              generatedAssetIdsJson: [
+                'asset-old',
+                'asset-keep-1',
+                'asset-keep-2',
+                'asset-keep-3',
+                'asset-keep-4',
+                'asset-keep-5',
+                'asset-keep-6',
+                'asset-keep-7',
+                'asset-keep-8',
+                'asset-keep-9',
+                'asset-keep-10',
+                'asset-keep-11',
+                'asset-keep-12',
+                'asset-keep-13',
+                'asset-keep-14',
+                'asset-keep-15',
+                'asset-old',
+                '',
+                1,
+                null,
+              ],
             }),
-            update: async () => ({}),
+            update: async ({ data }: { data: { generatedAssetIdsJson?: unknown[] } }) => {
+              subjectGeneratedAssetIds = data.generatedAssetIdsJson ?? null;
+              return {};
+            },
           },
           run: {
             update: async ({ data }: { data: Record<string, unknown> }) => {
@@ -240,6 +289,24 @@ test('finalizeGeneratedRun stores planner subject assets locally and syncs refin
   });
   assert.equal(syncedRefinementVersionId, 'ref-1');
   assert.equal((runUpdates[0]?.outputJson as { assetId?: string } | undefined)?.assetId, 'asset-new');
+  assert.deepEqual(subjectGeneratedAssetIds, [
+    'asset-new',
+    'asset-old',
+    'asset-keep-1',
+    'asset-keep-2',
+    'asset-keep-3',
+    'asset-keep-4',
+    'asset-keep-5',
+    'asset-keep-6',
+    'asset-keep-7',
+    'asset-keep-8',
+    'asset-keep-9',
+    'asset-keep-10',
+    'asset-keep-11',
+    'asset-keep-12',
+    'asset-keep-13',
+    'asset-keep-14',
+  ]);
 });
 
 test('finalizeGeneratedRun creates a new shot version for generated video assets', async () => {
@@ -263,7 +330,7 @@ test('finalizeGeneratedRun creates a new shot version for generated video assets
     },
     outputJson: {
       providerData: {
-        video_url: 'https://provider.example.com/generated.mp4',
+        completionUrl: 'https://provider.example.com/generated.mp4',
       },
     },
   } as never, 'VIDEO', {

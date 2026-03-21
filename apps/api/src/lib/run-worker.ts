@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { Run } from '@prisma/client';
 
+import { readObject } from './json-helpers.js';
 import { resolveProviderAdapter, type ProviderAdapterUpdate } from './provider-adapters.js';
 import { prisma } from './prisma.js';
 import { failRun, finalizeGeneratedRun, finalizePlannerRun, inferMediaKindFromRunType } from './run-lifecycle.js';
@@ -13,15 +14,40 @@ function buildProviderOutputJson(run: Run, update: ProviderAdapterUpdate) {
   const currentOutput = run.outputJson && typeof run.outputJson === 'object' && !Array.isArray(run.outputJson)
     ? (run.outputJson as Record<string, unknown>)
     : {};
+  const providerData =
+    update.type === 'completed' && update.completionUrl && !('completionUrl' in update.providerOutput)
+      ? { ...update.providerOutput, completionUrl: update.completionUrl, downloadUrl: update.completionUrl }
+      : update.providerOutput;
 
   return {
     ...currentOutput,
     executionMode:
-      update.providerOutput && typeof update.providerOutput === 'object' && 'mocked' in update.providerOutput
-        ? update.providerOutput.mocked === true ? 'fallback' : 'live'
+      providerData && typeof providerData === 'object' && 'mocked' in providerData
+        ? providerData.mocked === true ? 'fallback' : 'live'
         : 'live',
-    providerData: update.providerOutput,
+    providerData,
   } as Prisma.InputJsonValue;
+}
+
+function toTerminalWorkerAction(run: Run): WorkerAction {
+  if (run.status === 'COMPLETED') {
+    const output = readObject(run.outputJson);
+    const assetId = typeof output.assetId === 'string' ? output.assetId : undefined;
+    const shotVersionId = typeof output.shotVersionId === 'string' ? output.shotVersionId : undefined;
+    return {
+      runId: run.id,
+      status: 'completed',
+      action: 'processed',
+      ...(assetId ? { assetId } : {}),
+      ...(shotVersionId ? { shotVersionId } : {}),
+    };
+  }
+
+  return {
+    runId: run.id,
+    status: run.status.toLowerCase(),
+    action: 'failed',
+  };
 }
 
 async function processClaimedRunWithDeps(
@@ -113,6 +139,11 @@ async function handleProviderSubmission(run: Run): Promise<WorkerAction> {
 }
 
 async function handleProviderPoll(run: Run): Promise<WorkerAction> {
+  const activeRun = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+  if (activeRun.status !== 'RUNNING') {
+    return toTerminalWorkerAction(activeRun);
+  }
+
   const adapter = resolveProviderAdapter(run);
   const update = await adapter.poll(run);
 
@@ -121,8 +152,11 @@ async function handleProviderPoll(run: Run): Promise<WorkerAction> {
   }
 
   if (update.type === 'running') {
-    await prisma.run.update({
-      where: { id: run.id },
+    const runningUpdate = await prisma.run.updateMany({
+      where: {
+        id: run.id,
+        status: 'RUNNING',
+      },
       data: {
         providerStatus: update.providerStatus,
         pollAttemptCount: run.pollAttemptCount + 1,
@@ -131,6 +165,11 @@ async function handleProviderPoll(run: Run): Promise<WorkerAction> {
         outputJson: buildProviderOutputJson(run, update),
       },
     });
+
+    if (runningUpdate.count !== 1) {
+      const latestRun = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+      return toTerminalWorkerAction(latestRun);
+    }
 
     return {
       runId: run.id,
@@ -144,8 +183,11 @@ async function handleProviderPoll(run: Run): Promise<WorkerAction> {
     return failRun(run.id, 'PROVIDER_POLL_INVALID_STATE', 'Provider adapter returned an invalid poll state.');
   }
 
-  await prisma.run.update({
-    where: { id: run.id },
+  const completedUpdate = await prisma.run.updateMany({
+    where: {
+      id: run.id,
+      status: 'RUNNING',
+    },
     data: {
       providerStatus: update.providerStatus,
       pollAttemptCount: run.pollAttemptCount + 1,
@@ -154,6 +196,11 @@ async function handleProviderPoll(run: Run): Promise<WorkerAction> {
       outputJson: buildProviderOutputJson(run, update),
     },
   });
+
+  if (completedUpdate.count !== 1) {
+    const latestRun = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+    return toTerminalWorkerAction(latestRun);
+  }
 
   const refreshedRun = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
   if (refreshedRun.runType === 'PLANNER_DOC_UPDATE') {
@@ -167,10 +214,14 @@ async function handleProviderPoll(run: Run): Promise<WorkerAction> {
   return finalizeGeneratedRun(refreshedRun, mediaKind);
 }
 
-async function claimNextRun(): Promise<Run | null> {
+async function claimNextRunWithDeps(deps: {
+  findFirst: typeof prisma.run.findFirst;
+  updateMany: typeof prisma.run.updateMany;
+  findUnique: typeof prisma.run.findUnique;
+}): Promise<Run | null> {
   const now = new Date();
 
-  const pollableRun = await prisma.run.findFirst({
+  const pollableRun = await deps.findFirst({
     where: {
       status: 'RUNNING',
       providerJobId: { not: null },
@@ -186,7 +237,7 @@ async function claimNextRun(): Promise<Run | null> {
     return pollableRun;
   }
 
-  const queuedRun = await prisma.run.findFirst({
+  const queuedRun = await deps.findFirst({
     where: {
       status: 'QUEUED',
       runType: {
@@ -200,7 +251,7 @@ async function claimNextRun(): Promise<Run | null> {
     return null;
   }
 
-  const claim = await prisma.run.updateMany({
+  const claim = await deps.updateMany({
     where: {
       id: queuedRun.id,
       status: 'QUEUED',
@@ -215,13 +266,17 @@ async function claimNextRun(): Promise<Run | null> {
     return null;
   }
 
-  return prisma.run.findUnique({
+  return deps.findUnique({
     where: { id: queuedRun.id },
   });
 }
 
 export async function processNextQueuedRun(): Promise<WorkerAction | null> {
-  const run = await claimNextRun();
+  const run = await claimNextRunWithDeps({
+    findFirst: prisma.run.findFirst.bind(prisma.run),
+    updateMany: prisma.run.updateMany.bind(prisma.run),
+    findUnique: prisma.run.findUnique.bind(prisma.run),
+  });
   if (!run) {
     return null;
   }
@@ -236,5 +291,8 @@ export async function processNextQueuedRun(): Promise<WorkerAction | null> {
 
 export const __testables = {
   buildProviderOutputJson,
+  toTerminalWorkerAction,
+  handleProviderPoll,
   processClaimedRunWithDeps,
+  claimNextRunWithDeps,
 };

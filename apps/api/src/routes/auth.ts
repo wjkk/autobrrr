@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { AppError, conflict, parseOrThrow, unauthorized } from '../lib/app-error.js';
+import { getCurrentUser } from '../lib/auth.js';
 import { env } from '../lib/env.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
 import { prisma } from '../lib/prisma.js';
@@ -17,40 +19,54 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+const updateProfileSchema = z.object({
+  displayName: z
+    .string()
+    .trim()
+    .max(64)
+    .transform((value) => value || null),
+});
+
+function assertLoginUserOrThrow(user: {
+  id: string;
+  email: string;
+  displayName: string | null;
+  status: string;
+  passwordHash: string;
+} | null, password: string): asserts user is {
+  id: string;
+  email: string;
+  displayName: string | null;
+  status: string;
+  passwordHash: string;
+} {
+  if (!user || user.status !== 'ACTIVE' || !verifyPassword(password, user.passwordHash)) {
+    throw new AppError({
+      code: 'INVALID_CREDENTIALS',
+      message: 'Invalid email or password.',
+      statusCode: 401,
+    });
+  }
+}
+
 export async function registerAuthRoutes(app: FastifyInstance) {
   app.post('/api/auth/register', async (request, reply) => {
-    const payload = registerSchema.safeParse(request.body);
-    if (!payload.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid registration payload.',
-          details: payload.error.flatten(),
-        },
-      });
-    }
+    const payload = parseOrThrow(registerSchema, request.body, 'Invalid registration payload.');
 
     const existing = await prisma.user.findUnique({
-      where: { email: payload.data.email },
+      where: { email: payload.email },
       select: { id: true },
     });
 
     if (existing) {
-      return reply.code(409).send({
-        ok: false,
-        error: {
-          code: 'EMAIL_ALREADY_EXISTS',
-          message: 'Email already registered.',
-        },
-      });
+      throw conflict('Email already registered.', 'EMAIL_ALREADY_EXISTS');
     }
 
     const user = await prisma.user.create({
       data: {
-        email: payload.data.email,
-        passwordHash: hashPassword(payload.data.password),
-        displayName: payload.data.displayName ?? null,
+        email: payload.email,
+        passwordHash: hashPassword(payload.password),
+        displayName: payload.displayName ?? null,
         status: 'ACTIVE',
       },
       select: {
@@ -64,31 +80,13 @@ export async function registerAuthRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/auth/login', async (request, reply) => {
-    const payload = loginSchema.safeParse(request.body);
-    if (!payload.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid login payload.',
-          details: payload.error.flatten(),
-        },
-      });
-    }
+    const payload = parseOrThrow(loginSchema, request.body, 'Invalid login payload.');
 
     const user = await prisma.user.findUnique({
-      where: { email: payload.data.email },
+      where: { email: payload.email },
     });
 
-    if (!user || user.status !== 'ACTIVE' || !verifyPassword(payload.data.password, user.passwordHash)) {
-      return reply.code(401).send({
-        ok: false,
-        error: {
-          code: 'INVALID_CREDENTIALS',
-          message: 'Invalid email or password.',
-        },
-      });
-    }
+    assertLoginUserOrThrow(user, payload.password);
 
     const sessionToken = createSessionToken();
     const now = new Date();
@@ -149,13 +147,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
   app.get('/api/auth/me', async (request, reply) => {
     const sessionToken = request.cookies[env.SESSION_COOKIE_NAME];
     if (!sessionToken) {
-      return reply.code(401).send({
-        ok: false,
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Authentication required.',
-        },
-      });
+      throw unauthorized();
     }
 
     const session = await prisma.userSession.findUnique({
@@ -175,13 +167,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     });
 
     if (!session || session.revokedAt || session.expiresAt <= new Date() || session.user.status !== 'ACTIVE') {
-      return reply.code(401).send({
-        ok: false,
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Authentication required.',
-        },
-      });
+      throw unauthorized();
     }
 
     return reply.send({
@@ -193,4 +179,31 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       },
     });
   });
+
+  app.patch('/api/auth/me', async (request, reply) => {
+    const currentUser = await getCurrentUser(request);
+    if (!currentUser) {
+      throw unauthorized();
+    }
+
+    const payload = parseOrThrow(updateProfileSchema, request.body, 'Invalid profile update payload.');
+
+    const user = await prisma.user.update({
+      where: { id: currentUser.id },
+      data: {
+        displayName: payload.displayName,
+      },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+      },
+    });
+
+    return reply.send({ ok: true, data: user });
+  });
 }
+
+export const __testables = {
+  assertLoginUserOrThrow,
+};

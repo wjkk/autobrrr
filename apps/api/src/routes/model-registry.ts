@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
+import { notFound, parseOrThrow } from '../lib/app-error.js';
 import { requireUser } from '../lib/auth.js';
 import { resolveModelSelection } from '../lib/model-registry.js';
 import { prisma } from '../lib/prisma.js';
@@ -31,19 +32,10 @@ export async function registerModelRegistryRoutes(app: FastifyInstance) {
       return;
     }
 
-    const query = listFamiliesQuerySchema.safeParse(request.query);
-    if (!query.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid model family query.',
-        },
-      });
-    }
+    const query = parseOrThrow(listFamiliesQuerySchema, request.query, 'Invalid model family query.');
 
     const families = await prisma.modelFamily.findMany({
-      where: query.data.modelKind ? { modelKind: query.data.modelKind.toUpperCase() as 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO' | 'LIPSYNC' } : undefined,
+      where: query.modelKind ? { modelKind: query.modelKind.toUpperCase() as 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO' | 'LIPSYNC' } : undefined,
       orderBy: [{ modelKind: 'asc' }, { slug: 'asc' }],
     });
 
@@ -65,34 +57,25 @@ export async function registerModelRegistryRoutes(app: FastifyInstance) {
       return;
     }
 
-    const query = listEndpointsQuerySchema.safeParse(request.query);
-    if (!query.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid model endpoint query.',
-        },
-      });
-    }
+    const query = parseOrThrow(listEndpointsQuerySchema, request.query, 'Invalid model endpoint query.');
 
     let endpoints: Array<Prisma.ModelEndpointGetPayload<{ include: { family: true; provider: true } }>> = [];
     let userDefaultEndpointSlug: string | null = null;
 
-    if (query.data.scope === 'userEnabled' && query.data.modelKind && ['image', 'video', 'text'].includes(query.data.modelKind)) {
+    if (query.scope === 'userEnabled' && query.modelKind && ['image', 'video', 'text'].includes(query.modelKind)) {
       const result = await listUserEnabledModelEndpoints(
         user.id,
-        query.data.modelKind.toUpperCase() as 'IMAGE' | 'VIDEO' | 'TEXT',
+        query.modelKind.toUpperCase() as 'IMAGE' | 'VIDEO' | 'TEXT',
       );
       userDefaultEndpointSlug = result.defaultEndpointSlug;
-      endpoints = query.data.familySlug
-        ? result.endpoints.filter((endpoint) => endpoint.family.slug === query.data.familySlug)
+      endpoints = query.familySlug
+        ? result.endpoints.filter((endpoint) => endpoint.family.slug === query.familySlug)
         : result.endpoints;
     } else {
       endpoints = await prisma.modelEndpoint.findMany({
         where: {
-          ...(query.data.familySlug ? { family: { slug: query.data.familySlug } } : {}),
-          ...(query.data.modelKind ? { family: { ...(query.data.familySlug ? { slug: query.data.familySlug } : {}), modelKind: query.data.modelKind.toUpperCase() as 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO' | 'LIPSYNC' } } : {}),
+          ...(query.familySlug ? { family: { slug: query.familySlug } } : {}),
+          ...(query.modelKind ? { family: { ...(query.familySlug ? { slug: query.familySlug } : {}), modelKind: query.modelKind.toUpperCase() as 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO' | 'LIPSYNC' } } : {}),
         },
         include: {
           family: true,
@@ -137,33 +120,17 @@ export async function registerModelRegistryRoutes(app: FastifyInstance) {
       return;
     }
 
-    const payload = resolveSchema.safeParse(request.body);
-    if (!payload.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid model resolution payload.',
-          details: payload.error.flatten(),
-        },
-      });
-    }
+    const payload = parseOrThrow(resolveSchema, request.body, 'Invalid model resolution payload.');
 
     const resolved = await resolveModelSelection({
-      modelKind: payload.data.modelKind.toUpperCase() as 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO' | 'LIPSYNC',
-      familySlug: payload.data.familySlug,
-      endpointSlug: payload.data.endpointSlug,
-      strategy: payload.data.strategy,
+      modelKind: payload.modelKind.toUpperCase() as 'IMAGE' | 'VIDEO' | 'TEXT' | 'AUDIO' | 'LIPSYNC',
+      familySlug: payload.familySlug,
+      endpointSlug: payload.endpointSlug,
+      strategy: payload.strategy,
     });
 
     if (!resolved) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'MODEL_NOT_FOUND',
-          message: 'No active model endpoint matched the selection.',
-        },
-      });
+      throw notFound('No active model endpoint matched the selection.', 'MODEL_NOT_FOUND');
     }
 
     return reply.send({

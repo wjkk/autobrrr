@@ -4,6 +4,7 @@ import type { PlannerStepStatus } from '@aiv/domain';
 import { useMemo } from 'react';
 
 import type { ApiPlannerWorkspace } from '../lib/planner-api';
+import { DEFAULT_REFINEMENT_STEP_TITLES } from '../lib/planner-defaults';
 import {
   buildPlannerEpisodes,
   type PlannerHistoryVersionView,
@@ -17,7 +18,6 @@ import {
   runtimeSubjectsToImageCards,
 } from '../lib/planner-structured-doc';
 import type { SekoActDraft, SekoImageCard, SekoPlanData } from '@aiv/mock-data';
-import { sekoPlanThreadData } from '@aiv/mock-data';
 import { findPlannerVideoModelOption } from '../lib/planner-video-model-options';
 
 interface UsePlannerDisplayStateOptions {
@@ -174,7 +174,7 @@ export function usePlannerDisplayState(options: UsePlannerDisplayStateOptions) {
                 ? step.detail.details.filter((detail): detail is string => typeof detail === 'string')
                 : [],
           }))
-        : sekoPlanThreadData.refinementSteps.map((title, index) => ({
+        : DEFAULT_REFINEMENT_STEP_TITLES.map((title, index) => ({
             title,
             status: options.activeVersion?.steps[index] ?? ('waiting' as PlannerStepStatus),
             tags: index === 2 ? ['设计角色特征'] : index === 3 ? ['设计短片主要场景细节'] : [],

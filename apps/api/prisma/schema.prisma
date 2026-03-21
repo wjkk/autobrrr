@@ -161,7 +161,6 @@ enum RunType {
   LIPSYNC_GENERATION
   EXPORT
   PUBLISH
-  RECIPE_EXECUTION
 }
 
 enum RunStatus {
@@ -240,8 +239,6 @@ model Project {
   shotVersions     ShotVersion[]
   assets           Asset[]
   runs             Run[]
-  recipes          GenerationRecipe[]
-  recipeExecutions RecipeExecution[]
   creationConfig   ProjectCreationConfig?
   externalApiCallLogs ExternalApiCallLog[]
 
@@ -756,44 +753,6 @@ model ModelEndpoint {
   @@index([familyId, status, priority])
   @@index([providerId, status, priority])
   @@map("model_endpoints")
-}
-
-model GenerationRecipe {
-  id               String              @id @default(cuid())
-  projectId        String              @map("project_id")
-  sourceRunId      String?             @map("source_run_id")
-  name             String              @db.VarChar(255)
-  recipeKind       String              @map("recipe_kind") @db.VarChar(64)
-  definitionJson   Json                @map("definition_json")
-  version          Int                 @default(1)
-  isTemplate       Boolean             @map("is_template") @default(false)
-  createdByUserId  String              @map("created_by_user_id")
-  createdAt        DateTime            @default(now()) @map("created_at")
-  updatedAt        DateTime            @updatedAt @map("updated_at")
-  project          Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  executions       RecipeExecution[]
-
-  @@index([projectId, createdAt])
-  @@map("generation_recipes")
-}
-
-model RecipeExecution {
-  id                 String      @id @default(cuid())
-  recipeId           String      @map("recipe_id")
-  projectId          String      @map("project_id")
-  status             RunStatus   @default(QUEUED)
-  inputAssetBundleJson Json?     @map("input_asset_bundle_json")
-  resolvedConfigJson Json?       @map("resolved_config_json")
-  outputProjectId    String?     @map("output_project_id")
-  runGroupKey        String?     @map("run_group_key") @db.VarChar(191)
-  createdAt          DateTime    @default(now()) @map("created_at")
-  updatedAt          DateTime    @updatedAt @map("updated_at")
-  recipe             GenerationRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
-  project            Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@index([recipeId, createdAt])
-  @@index([projectId, status, createdAt])
-  @@map("recipe_executions")
 }
 
 model SubjectProfile {

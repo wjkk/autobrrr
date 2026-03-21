@@ -13,8 +13,10 @@ export {
   inferPlatouVideoState,
   inferPlatouVideoTaskId,
   normalizeProviderStatus,
+  resolveProviderCompletionUrl,
   readAdapterOptions,
   readObject,
   readString,
   secondsFromNow,
+  withNormalizedCompletedOutput,
 } from './shared.js';

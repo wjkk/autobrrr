@@ -1,31 +1,54 @@
-DONE
-- [x] Remove Planner single global page context
-- [x] Split Planner page state into `shell` / `thread` / `document` / `dialogs`
-- [x] Rewire Planner page panels to consume explicit slices
-- [x] Split Planner thread panel into runtime feed / seed feed / composer seams
-- [x] Split Planner runtime message parsing into dedicated presenter helpers
-- [x] Split `apps/web/src/features/planner/components/planner-document-panel.tsx` into section-level components
-- [x] Add focused Planner tests for slice builders and runtime message presenters
-- [x] Slim `catalog-management-page.tsx` into a page shell and move orchestration into hook/client seams
-- [x] Split catalog management state into auth / filter / editor / image / crud sub-hooks
-- [x] Split catalog management request layer into auth / query / image / save clients
-- [x] Normalize catalog draft helpers into `create-empty` / `from-entity` / `to-payload`
-- [x] Add focused catalog tests for drafts, filters, auth client, image client and save client
-- [x] Slim `provider-config-page.tsx` into page shell + page state + shell sections
-- [x] Split `apps/api/src/lib/planner/refinement/entity-service.ts` into facade + access / recommendation / mutation / asset / shot seams
-- [x] Split `apps/api/src/lib/planner/workspace-service.ts` into facade + query + assembler + presenter seams
-- [x] Split `apps/api/src/lib/studio-project-service.ts` into facade + list / create / detail seams
-- [x] Add focused backend tests for planner workspace assembler and presenter seams
-- [x] Correct route documentation for Web proxy vs Fastify backend
-- [x] Refresh current architecture / roadmap / execution docs to match code reality
-- [x] Run `pnpm typecheck`
-- [x] Run `pnpm typecheck:api`
-- [x] Run `pnpm --filter @aiv/web test:unit`
-- [x] Run `pnpm --filter @aiv/api test:unit`
+CURRENT EXECUTION PLAN
 
-POST-REFACTOR BASELINE
-- [x] Planner frontend uses explicit slice assembly, split thread renderers and split document sections
-- [x] Settings catalog uses sub-hooks, resource clients and normalized draft payload mappers
-- [x] Planner backend uses thin facades with deeper domain seams for workspace / refinement entity / studio project flows
-- [x] Architecture docs reflect current code structure instead of future-state speculation
-- [x] Current architecture assessment reaches 9/10 maintainability target
+P0 MUST
+- [x] Remove runtime `@aiv/mock-data` dependency from `apps/web/src/features/planner/hooks/use-planner-page-state.ts`
+- [x] Replace fixture-driven `plannerDoc` fallback with explicit runtime/bootstrap/empty-state flow
+- [x] Remove fixture-driven `stepCount` and prompt fallback from Planner run submission flow
+- [x] Introduce real types in `apps/web/src/features/planner/hooks/planner-page-state-slices.ts` for thread/document/dialog slices
+- [x] Reduce `any` usage in `planner-page-state-slices.ts` to a minimal intentional set
+- [x] Update `apps/web/src/features/planner/hooks/planner-page-state-slices.test.ts` for typed slice contracts
+- [x] Add minimal `AppError` model in API layer with `code`, `httpStatus`, `message`, `details`
+- [x] Wire global error mapping into `apps/api/src/server.ts`
+- [x] Migrate `apps/api/src/routes/workspaces.ts` to unified error model
+- [x] Migrate `apps/api/src/routes/planner-commands.ts` to unified error model
+- [x] Migrate `apps/api/src/routes/creation-commands.ts` to unified error model
+- [x] Add focused backend tests for error mapping and error response envelopes
+
+P1 HIGH
+- [x] Split `apps/api/src/lib/run-lifecycle.ts` into terminal transition / generated asset persistence / planner-shot finalize seams
+- [x] Keep `run-lifecycle.ts` as thin orchestration entry after split
+- [x] Normalize provider completed output contract so finalizers do not rely on broad `findStringDeep(...)` fallback
+- [x] Update provider adapters to emit consistent download URL fields for completed runs
+- [x] Document worker concurrency semantics for claim / poll / finalize flow
+- [x] Add claim concurrency tests to `apps/api/src/lib/run-worker.test.ts`
+- [x] Add poll priority tests to `apps/api/src/lib/run-worker.test.ts`
+- [x] Add finalize idempotency/risk coverage to `apps/api/src/lib/run-lifecycle.test.ts`
+- [x] Audit all `apps/web/src/app/api/**/route.ts` handlers that use `proxyAivApiRoute(...)`
+- [x] Classify BFF routes into keep / merge / delete based on actual SSR/cookie/aggregation value
+- [x] Remove or merge the first batch of low-risk pure proxy routes
+- [x] Record which Web API routes remain and why
+
+P2 REQUIRED FOR 8/10
+- [x] Add Planner integration coverage for outline -> refinement lifecycle
+- [x] Add Planner integration coverage for stream snapshot + workspace refresh coordination
+- [x] Add Planner integration coverage for image generation -> asset persistence -> workspace visibility
+- [x] Add Creation integration coverage for image/video run -> shotVersion / asset / run status lifecycle
+- [x] Add provider callback/polling integration coverage for terminal completion flow
+- [x] Add or document a repeatable smoke command for the above critical flows
+- [x] Group Fastify route registration in `apps/api/src/server.ts` by domain namespace without breaking external paths
+- [x] Make planner / creation / publish route grouping explicit in `server.ts`
+- [x] Confirm `GenerationRecipe` / `RecipeExecution` / `RECIPE_EXECUTION` are dormant in current runtime
+- [x] Remove dormant schema models/enums if confirmed unused, or explicitly demote them from current-path design docs
+
+P3 CLEANUP AND CLOSEOUT
+- [x] Update `docs/reviews/aiv-studio-architecture-review.md` after code and test milestones land
+- [x] Keep `docs/specs/architecture-8-score-roadmap-v0.1.md` in sync with actual implementation status
+- [x] Remove any stale progress claims from docs once real execution starts
+- [x] Record final verification commands and results in docs after completion
+
+DONE BASELINE
+- [x] Planner page uses explicit `shell` / `thread` / `document` / `dialogs` slices
+- [x] Planner thread/document rendering already split into smaller seams
+- [x] Catalog management already uses sub-hooks and request clients
+- [x] Planner backend already has workspace / refinement entity / studio project facades
+- [x] Over-optimistic 9-point architecture docs removed

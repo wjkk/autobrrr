@@ -5,6 +5,7 @@ import {
   collectPlannerAssetIds,
   mapPlannerLatestRun,
   readPlannerDebugApplySource,
+  resolvePlannerRuntimeStatus,
 } from './workspace-presenters.js';
 
 test('collectPlannerAssetIds merges subject scene and shot asset ids', () => {
@@ -62,4 +63,20 @@ test('readPlannerDebugApplySource extracts debug metadata', () => {
   );
 
   assert.equal(readPlannerDebugApplySource('subject', null), null);
+});
+
+test('resolvePlannerRuntimeStatus exposes backend-derived planner runtime state', () => {
+  assert.equal(resolvePlannerRuntimeStatus({
+    plannerSession: { outlineConfirmedAt: null },
+    activeOutline: { id: 'outline-1', status: 'READY' },
+    activeRefinement: null,
+    latestPlannerRun: null,
+  }), 'outline_ready');
+
+  assert.equal(resolvePlannerRuntimeStatus({
+    plannerSession: { outlineConfirmedAt: new Date('2026-03-21T08:00:00.000Z') },
+    activeOutline: null,
+    activeRefinement: { id: 'ref-1', status: 'RUNNING' },
+    latestPlannerRun: { status: 'RUNNING' },
+  }), 'refinement_running');
 });

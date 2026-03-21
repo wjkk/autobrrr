@@ -17,8 +17,10 @@ import {
   inferPlatouVideoState,
   inferPlatouVideoTaskId,
   readAdapterOptions,
+  resolveProviderCompletionUrl,
   readString,
   secondsFromNow,
+  withNormalizedCompletedOutput,
 } from './shared-export.js';
 import { mockProxyAdapter } from './mock-proxy.js';
 
@@ -56,7 +58,7 @@ export const platouAdapter: ProviderAdapter = {
     const options = readAdapterOptions(run);
 
     if (getModelKind(run) === 'text') {
-      const response = await submitTextGeneration({
+      const rawResponse = await submitTextGeneration({
         providerCode: runtimeConfig.providerCode ?? 'platou',
         baseUrl: runtimeConfig.baseUrl,
         apiKey: runtimeConfig.apiKey,
@@ -64,15 +66,17 @@ export const platouAdapter: ProviderAdapter = {
         prompt,
         hookMetadata,
       });
+      const response = withNormalizedCompletedOutput(rawResponse) ?? rawResponse;
       return {
         type: 'completed',
         providerStatus: 'succeeded',
+        completionUrl: resolveProviderCompletionUrl(response),
         providerOutput: response,
       };
     }
 
     if (getModelKind(run) === 'image') {
-      const response = await submitImageGeneration({
+      const rawResponse = await submitImageGeneration({
         providerCode: runtimeConfig.providerCode ?? 'platou',
         baseUrl: runtimeConfig.baseUrl,
         apiKey: runtimeConfig.apiKey,
@@ -80,9 +84,11 @@ export const platouAdapter: ProviderAdapter = {
         prompt,
         hookMetadata,
       });
+      const response = withNormalizedCompletedOutput(rawResponse) ?? rawResponse;
       return {
         type: 'completed',
         providerStatus: 'succeeded',
+        completionUrl: resolveProviderCompletionUrl(response),
         providerOutput: response,
       };
     }
@@ -143,19 +149,21 @@ export const platouAdapter: ProviderAdapter = {
       };
     }
 
-    const response = await queryVideoGenerationTask({
+    const rawResponse = await queryVideoGenerationTask({
       providerCode: runtimeConfig.providerCode ?? 'platou',
       baseUrl: runtimeConfig.baseUrl,
       apiKey: runtimeConfig.apiKey,
       taskId: run.providerJobId,
       hookMetadata,
     });
+    const response = withNormalizedCompletedOutput(rawResponse) ?? rawResponse;
     const state = inferPlatouVideoState(response);
 
     if (state === 'completed' || state === 'succeeded' || state === 'success') {
       return {
         type: 'completed',
         providerStatus: 'succeeded',
+        completionUrl: resolveProviderCompletionUrl(response),
         providerOutput: response,
       };
     }

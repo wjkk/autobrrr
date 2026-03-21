@@ -1,7 +1,22 @@
 {
   "permissions": {
     "allow": [
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(wc -l /Users/jiankunwu/project/aiv/packages/domain/src/*.ts)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(find apps/api/src/lib -type f -name \"*.ts\" ! -name \"*.test.ts\" -exec wc -l {} +)",
+      "Bash(find apps/web/src -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" \\\\\\) ! -name \"*.test.ts\" -exec wc -l {} +)",
+      "Bash(ls -lt /Users/jiankunwu/project/aiv/apps/api/src/lib/*.ts)",
+      "Bash(ls -lt /Users/jiankunwu/project/aiv/apps/web/src/features/planner/components/*.tsx)",
+      "Bash(ls:*)",
+      "Bash(grep -E \"\\\\.ts$\")",
+      "Bash(wc:*)",
+      "Bash(git -C /Users/jiankunwu/project/aiv log --since=\"3 days ago\" --oneline apps/api/src/lib/)",
+      "Bash(git -C /Users/jiankunwu/project/aiv log --since=\"3 days ago\" --oneline apps/web/src/features/)",
+      "Bash(grep -c \"AppError\\\\|invalidArgument\\\\|notFound\\\\|unauthorized\\\\|conflict\\\\|sendAppError\" /Users/jiankunwu/project/aiv/apps/api/src/routes/*.ts)",
+      "Bash(grep -v \":0$\")",
+      "Bash(grep -E \"planner.*\\\\.ts$\")",
+      "Bash(grep:*)"
     ]
   }
 }

@@ -35,7 +35,6 @@ export function CatalogManagementPage(props: CatalogManagementPageProps) {
       pageTitle={state.shell.pageTitle}
       navItems={state.shell.navItems}
       topActions={state.shell.topActions}
-      badge={state.shell.badge}
     >
       <div className={styles.contentShell}>
         <CatalogLibraryToolbar {...state.toolbar} />

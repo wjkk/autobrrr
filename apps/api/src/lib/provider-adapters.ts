@@ -13,8 +13,10 @@ import {
   inferPlatouVideoState,
   inferPlatouVideoTaskId,
   normalizeProviderStatus,
+  resolveProviderCompletionUrl,
   readObject,
   readString,
+  withNormalizedCompletedOutput,
 } from './provider/adapters/shared-export.js';
 
 export type { ProviderAdapter, ProviderAdapterUpdate, ProviderCallbackPayload } from './provider/adapters/types.js';
@@ -34,6 +36,8 @@ export const __testables = {
   inferPlatouVideoTaskId,
   inferArkVideoState,
   inferArkVideoTaskId,
+  withNormalizedCompletedOutput,
+  resolveProviderCompletionUrl,
   officialAdapter,
   mockProxyAdapter,
 };

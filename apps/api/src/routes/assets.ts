@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { mapAsset } from '../lib/api-mappers.js';
+import { notFound, parseOrThrow } from '../lib/app-error.js';
 import { requireUser } from '../lib/auth.js';
 import { findOwnedEpisode, findOwnedProject } from '../lib/ownership.js';
 import { prisma } from '../lib/prisma.js';
@@ -31,6 +32,13 @@ const listAssetsQuerySchema = z.object({
   mediaKind: z.enum(['image', 'video']).optional(),
 });
 
+function assertOwnedResourceOrThrow<T>(resource: T | null, message: string) {
+  if (!resource) {
+    throw notFound(message);
+  }
+  return resource;
+}
+
 export async function registerAssetRoutes(app: FastifyInstance) {
   app.get('/api/projects/:projectId/assets', async (request, reply) => {
     const user = await requireUser(request, reply);
@@ -38,47 +46,20 @@ export async function registerAssetRoutes(app: FastifyInstance) {
       return;
     }
 
-    const params = projectParamsSchema.safeParse(request.params);
-    const query = listAssetsQuerySchema.safeParse(request.query);
-    if (!params.success || !query.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid asset list request.',
-        },
-      });
-    }
+    const params = parseOrThrow(projectParamsSchema, request.params, 'Invalid asset list request.');
+    const query = parseOrThrow(listAssetsQuerySchema, request.query, 'Invalid asset list request.');
 
-    const project = await findOwnedProject(params.data.projectId, user.id);
-    if (!project) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Project not found.',
-        },
-      });
-    }
+    const project = assertOwnedResourceOrThrow(await findOwnedProject(params.projectId, user.id), 'Project not found.');
 
-    if (query.data.episodeId) {
-      const episode = await findOwnedEpisode(project.id, query.data.episodeId, user.id);
-      if (!episode) {
-        return reply.code(404).send({
-          ok: false,
-          error: {
-            code: 'NOT_FOUND',
-            message: 'Episode not found.',
-          },
-        });
-      }
+    if (query.episodeId) {
+      assertOwnedResourceOrThrow(await findOwnedEpisode(project.id, query.episodeId, user.id), 'Episode not found.');
     }
 
     const assets = await prisma.asset.findMany({
       where: {
         projectId: project.id,
-        episodeId: query.data.episodeId,
-        ...(query.data.mediaKind ? { mediaKind: query.data.mediaKind.toUpperCase() as 'IMAGE' | 'VIDEO' } : {}),
+        episodeId: query.episodeId,
+        ...(query.mediaKind ? { mediaKind: query.mediaKind.toUpperCase() as 'IMAGE' | 'VIDEO' } : {}),
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -95,59 +76,31 @@ export async function registerAssetRoutes(app: FastifyInstance) {
       return;
     }
 
-    const params = projectParamsSchema.safeParse(request.params);
-    const payload = createAssetSchema.safeParse(request.body);
-    if (!params.success || !payload.success) {
-      return reply.code(400).send({
-        ok: false,
-        error: {
-          code: 'INVALID_ARGUMENT',
-          message: 'Invalid asset payload.',
-          details: payload.success ? undefined : payload.error.flatten(),
-        },
-      });
-    }
+    const params = parseOrThrow(projectParamsSchema, request.params, 'Invalid asset payload.');
+    const payload = parseOrThrow(createAssetSchema, request.body, 'Invalid asset payload.');
 
-    const project = await findOwnedProject(params.data.projectId, user.id);
-    if (!project) {
-      return reply.code(404).send({
-        ok: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Project not found.',
-        },
-      });
-    }
+    const project = assertOwnedResourceOrThrow(await findOwnedProject(params.projectId, user.id), 'Project not found.');
 
-    if (payload.data.episodeId) {
-      const episode = await findOwnedEpisode(project.id, payload.data.episodeId, user.id);
-      if (!episode) {
-        return reply.code(404).send({
-          ok: false,
-          error: {
-            code: 'NOT_FOUND',
-            message: 'Episode not found.',
-          },
-        });
-      }
+    if (payload.episodeId) {
+      assertOwnedResourceOrThrow(await findOwnedEpisode(project.id, payload.episodeId, user.id), 'Episode not found.');
     }
 
     const asset = await prisma.asset.create({
       data: {
         ownerUserId: user.id,
         projectId: project.id,
-        episodeId: payload.data.episodeId ?? null,
-        mediaKind: payload.data.mediaKind.toUpperCase() as 'IMAGE' | 'VIDEO',
-        sourceKind: payload.data.sourceKind.toUpperCase() as 'UPLOAD' | 'GENERATED' | 'IMPORTED' | 'REFERENCE',
-        fileName: payload.data.fileName,
-        mimeType: payload.data.mimeType ?? null,
-        fileSizeBytes: payload.data.fileSizeBytes ?? null,
-        width: payload.data.width ?? null,
-        height: payload.data.height ?? null,
-        durationMs: payload.data.durationMs ?? null,
-        storageKey: payload.data.storageKey ?? null,
-        sourceUrl: payload.data.sourceUrl ?? null,
-        ...(payload.data.metadata ? { metadataJson: payload.data.metadata as Prisma.InputJsonValue } : {}),
+        episodeId: payload.episodeId ?? null,
+        mediaKind: payload.mediaKind.toUpperCase() as 'IMAGE' | 'VIDEO',
+        sourceKind: payload.sourceKind.toUpperCase() as 'UPLOAD' | 'GENERATED' | 'IMPORTED' | 'REFERENCE',
+        fileName: payload.fileName,
+        mimeType: payload.mimeType ?? null,
+        fileSizeBytes: payload.fileSizeBytes ?? null,
+        width: payload.width ?? null,
+        height: payload.height ?? null,
+        durationMs: payload.durationMs ?? null,
+        storageKey: payload.storageKey ?? null,
+        sourceUrl: payload.sourceUrl ?? null,
+        ...(payload.metadata ? { metadataJson: payload.metadata as Prisma.InputJsonValue } : {}),
       },
     });
 
@@ -157,3 +110,7 @@ export async function registerAssetRoutes(app: FastifyInstance) {
     });
   });
 }
+
+export const __testables = {
+  assertOwnedResourceOrThrow,
+};

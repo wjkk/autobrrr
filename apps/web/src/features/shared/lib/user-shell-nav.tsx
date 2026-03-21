@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import type { SystemShellNavItem } from '../components/system-shell';
 
-export type UserShellActiveKey = 'home' | 'projects' | 'subjects' | 'avatar';
+export type UserShellActiveKey = 'home' | 'projects' | 'subjects' | 'avatar' | 'none';
 
 function homeIcon(): ReactNode {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 10L12 3l9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><line x1="12" y1="12" x2="12" y2="18"></line></svg>;

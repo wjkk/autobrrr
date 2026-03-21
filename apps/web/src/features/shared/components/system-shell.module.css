@@ -101,6 +101,15 @@
   color: var(--text-primary);
 }
 
+.utilBtnActive {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.utilBtnActive .avatar {
+  background: var(--bg-subtle);
+}
+
 .avatar {
   width: 32px;
   height: 32px;

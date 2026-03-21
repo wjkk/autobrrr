@@ -2,7 +2,10 @@
 
 版本：v0.1
 日期：2026-03-19
-状态：现行救援计划
+状态：已被 `architecture-8-score-roadmap-v0.1.md` 替代，仅保留为历史参考
+
+> 当前执行请改读 [architecture-8-score-roadmap-v0.1.md](/Users/jiankunwu/project/aiv/docs/specs/architecture-8-score-roadmap-v0.1.md)。
+> 本文记录的是上一轮“结构救援式重构”的阶段计划，不再作为本轮成熟度收口的执行依据。
 
 ## 1. 目标
 

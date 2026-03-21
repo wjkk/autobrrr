@@ -1,19 +1,17 @@
 'use client';
 
 import type { ApiPlannerWorkspace, PlannerRuntimeApiContext } from '../lib/planner-api';
-import { buildPlannerNoticeFromError, toPlannerNotice, type PlannerNotice, type PlannerNoticeInput } from '../lib/planner-notice';
+import { buildPlannerNoticeFromError } from '../lib/planner-notice';
 import type { PlannerPageData } from '../lib/planner-page-data';
 import {
   mapWorkspaceMessagesToThread,
   nextLocalId,
   ratioCardWidth,
   ratioToCssValue,
-  readPreferredStoryboardModelId,
   SCENE_IMAGE_POOL,
   SUBJECT_IMAGE_POOL,
   type PlannerAssetRatio,
   type PlannerMode,
-  type PlannerRuntimeAssetOption,
 } from '../lib/planner-page-helpers';
 import type { PlannerStructuredDoc } from '../lib/planner-structured-doc';
 import { outlineToPreviewStructuredPlannerDoc, toPlannerSeedData } from '../lib/planner-structured-doc';
@@ -32,12 +30,17 @@ import { usePlannerShotEditor } from './use-planner-shot-editor';
 import { usePlannerShotPromptPreview } from './use-planner-shot-prompt-preview';
 import { usePlannerStream } from './use-planner-stream';
 import { usePlannerPageBaseState } from './use-planner-page-base-state';
+import {
+  buildPlannerDialogState,
+  buildPlannerDocumentState,
+  buildPlannerShellState,
+  buildPlannerThreadState,
+} from './planner-page-state-slices';
 import { useCallback, useEffect, useMemo, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { sekoPlanData, sekoPlanThreadData } from '@aiv/mock-data';
 
 import { buildPlannerDebugSearch } from '@/features/planner-debug/lib/planner-debug-runtime';
-import type { PlannerThreadMessage } from '../lib/planner-thread';
 
 export interface UsePlannerPageStateOptions {
   studio: PlannerPageData;
@@ -501,17 +504,32 @@ export function usePlannerPageState(options: UsePlannerPageStateOptions) {
     setHistoryMenuOpen(false);
   }, [activateHistoryVersion, selectVersion, setNotice, usingRuntimePlanner]);
 
-  return {
-    studio,
-    runtimeApi,
+  const shell = buildPlannerShellState({
     plannerMode,
     displayTitle,
-    plannerDebugSearch,
+    brief: studio.project.brief,
+    runtimeEnabled: Boolean(runtimeApi),
     openAgentDebug,
     backToExplore,
     activeEpisodeId,
     setActiveEpisodeId,
     plannerEpisodes,
+    activeEpisodeNumber,
+    activeEpisodeTitle: activeEpisode?.title ?? '',
+    fallbackEpisodeTitle: plannerDoc.episodeTitle,
+    saveState,
+    latestExecutionMode: latestPlannerExecutionMode,
+    activeDebugApplySource,
+    historyMenuOpen,
+    historyVersions,
+    historyActiveVersionId,
+    openDebugRun,
+    toggleHistoryMenu: () => setHistoryMenuOpen((current) => !current),
+    handleSelectHistoryVersion,
+  });
+
+  const thread = buildPlannerThreadState({
+    studio,
     usingRuntimePlanner,
     messages,
     requirement,
@@ -528,29 +546,27 @@ export function usePlannerPageState(options: UsePlannerPageStateOptions) {
     openDebugRun,
     handleComposerSubmit: composerActions.handleComposerSubmit,
     handleConfirmOutline: composerActions.handleConfirmOutline,
-    activeEpisodeNumber,
-    activeEpisode,
-    plannerDoc,
-    saveState,
-    latestPlannerExecutionMode,
-    historyMenuOpen,
-    toggleHistoryMenu: () => setHistoryMenuOpen((current) => !current),
-    historyVersions,
-    historyActiveVersionId,
-    handleSelectHistoryVersion,
+  });
+
+  const document = buildPlannerDocumentState({
     hasDisplayVersion,
+    runtimeActiveOutline,
+    runtimeActiveRefinement,
     displayVersionStatus,
     displayVersionProgress,
     displaySections,
+    plannerDoc,
     activeStyle,
     mediaCardStyle,
     displaySubjectCards,
+    openSubjectAdjustDialog: assetDrafts.openSubjectAdjustDialog,
     displaySceneCards,
+    openSceneAdjustDialog: assetDrafts.openSceneAdjustDialog,
     displayScriptActs,
+    plannerSubmitting,
+    runtimeEnabled: Boolean(runtimeApi),
     editingShot: shotEditor.editingShot,
     shotDraft: shotEditor.shotDraft,
-    openSubjectAdjustDialog: assetDrafts.openSubjectAdjustDialog,
-    openSceneAdjustDialog: assetDrafts.openSceneAdjustDialog,
     openShotInlineEditor: shotEditor.openShotInlineEditor,
     openShotDeleteDialog: shotEditor.openShotDeleteDialog,
     rerunActAdjust: shotActions.rerunActAdjust,
@@ -570,6 +586,12 @@ export function usePlannerPageState(options: UsePlannerPageStateOptions) {
     startCreation: creationFlow.startCreation,
     creationActionLabel: creationFlow.creationActionLabel,
     creationActionDisabled: creationFlow.creationActionDisabled,
+    shotTitleById,
+  });
+
+  const dialogs = buildPlannerDialogState({
+    plannerSubmitting,
+    runtimeEnabled: Boolean(runtimeApi),
     assetUploadPending,
     booting: creationFlow.booting,
     bootProgress: creationFlow.bootProgress,
@@ -580,7 +602,7 @@ export function usePlannerPageState(options: UsePlannerPageStateOptions) {
     subjectNameDraft: assetDrafts.subjectNameDraft,
     subjectPromptDraft: assetDrafts.subjectPromptDraft,
     subjectAdjustMode: assetDrafts.subjectAdjustMode,
-    activeSubjectAssetLabel: dialogDisplayState.activeSubjectAssetLabel,
+    activeSubjectAssetLabel: dialogDisplayState.activeSubjectAssetLabel ?? '',
     subjectAssetThumbs: dialogDisplayState.subjectAssetThumbs,
     subjectAssetDraftId: assetDrafts.subjectAssetDraftId,
     subjectRecommendations: assetActions.subjectRecommendations,
@@ -602,7 +624,7 @@ export function usePlannerPageState(options: UsePlannerPageStateOptions) {
     sceneNameDraft: assetDrafts.sceneNameDraft,
     scenePromptDraft: assetDrafts.scenePromptDraft,
     sceneAdjustMode: assetDrafts.sceneAdjustMode,
-    activeSceneAssetLabel: dialogDisplayState.activeSceneAssetLabel,
+    activeSceneAssetLabel: dialogDisplayState.activeSceneAssetLabel ?? '',
     sceneAssetThumbs: dialogDisplayState.sceneAssetThumbs,
     sceneAssetDraftId: assetDrafts.sceneAssetDraftId,
     sceneRecommendations: assetActions.sceneRecommendations,
@@ -622,8 +644,9 @@ export function usePlannerPageState(options: UsePlannerPageStateOptions) {
     deletingShot: shotEditor.deletingShot,
     closeShotDeleteDialog: shotEditor.closeShotDeleteDialog,
     confirmDeleteShot: shotActions.confirmDeleteShot,
-    shotTitleById,
-  };
+  });
+
+  return { shell, thread, document, dialogs };
 }
 
 export type UsePlannerPageStateResult = ReturnType<typeof usePlannerPageState>;

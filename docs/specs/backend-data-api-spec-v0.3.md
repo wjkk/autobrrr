@@ -138,31 +138,31 @@ interface CreateProjectRequestVNext {
 
 ## 6. Planner 主流程接口
 
-1. `POST /api/planner/projects/:projectId/generate-doc`
-2. `GET /api/planner/projects/:projectId/workspace`
-3. `GET /api/planner/projects/:projectId/stream`
-4. `POST /api/planner/projects/:projectId/finalize`
-5. `POST /api/planner/projects/:projectId/outline-versions/:versionId/activate`
-6. `POST /api/planner/projects/:projectId/outline-versions/:versionId/confirm`
-7. `POST /api/planner/projects/:projectId/refinement-versions/:versionId/activate`
-8. `POST /api/planner/projects/:projectId/refinement-versions/:versionId/create-draft`
-9. `POST /api/planner/projects/:projectId/partial-rerun`
-10. `PUT /api/planner/projects/:projectId/document`
-11. `GET /api/planner/projects/:projectId/shot-prompts`
+1. `POST /api/projects/:projectId/planner/generate-doc`
+2. `GET /api/projects/:projectId/planner/workspace`
+3. `GET /api/projects/:projectId/planner/stream`
+4. `POST /api/projects/:projectId/planner/finalize`
+5. `POST /api/projects/:projectId/planner/outline-versions/:versionId/activate`
+6. `POST /api/projects/:projectId/planner/outline-versions/:versionId/confirm`
+7. `POST /api/projects/:projectId/planner/refinement-versions/:versionId/activate`
+8. `POST /api/projects/:projectId/planner/refinement-versions/:versionId/create-draft`
+9. `POST /api/projects/:projectId/planner/partial-rerun`
+10. `PUT /api/projects/:projectId/planner/document`
+11. `GET /api/projects/:projectId/planner/shot-prompts`
 
 ### 6.1 Planner 派生实体接口
 
-1. `PATCH /api/planner/projects/:projectId/subjects/:subjectId`
-2. `PUT /api/planner/projects/:projectId/subjects/:subjectId/assets`
-3. `POST /api/planner/projects/:projectId/subjects/:subjectId/generate-image`
-4. `GET /api/planner/projects/:projectId/subjects/:subjectId/recommendations`
-5. `PATCH /api/planner/projects/:projectId/scenes/:sceneId`
-6. `PUT /api/planner/projects/:projectId/scenes/:sceneId/assets`
-7. `POST /api/planner/projects/:projectId/scenes/:sceneId/generate-image`
-8. `GET /api/planner/projects/:projectId/scenes/:sceneId/recommendations`
-9. `PATCH /api/planner/projects/:projectId/shot-scripts/:shotScriptId`
-10. `DELETE /api/planner/projects/:projectId/shot-scripts/:shotScriptId`
-11. `POST /api/planner/projects/:projectId/shot-scripts/:shotScriptId/generate-image`
+1. `PATCH /api/projects/:projectId/planner/subjects/:subjectId`
+2. `PUT /api/projects/:projectId/planner/subjects/:subjectId/assets`
+3. `POST /api/projects/:projectId/planner/subjects/:subjectId/generate-image`
+4. `GET /api/projects/:projectId/planner/subjects/:subjectId/recommendations`
+5. `PATCH /api/projects/:projectId/planner/scenes/:sceneId`
+6. `PUT /api/projects/:projectId/planner/scenes/:sceneId/assets`
+7. `POST /api/projects/:projectId/planner/scenes/:sceneId/generate-image`
+8. `GET /api/projects/:projectId/planner/scenes/:sceneId/recommendations`
+9. `PATCH /api/projects/:projectId/planner/shot-scripts/:shotScriptId`
+10. `DELETE /api/projects/:projectId/planner/shot-scripts/:shotScriptId`
+11. `POST /api/projects/:projectId/planner/shot-scripts/:shotScriptId/generate-image`
 
 ## 7. Planner Agent 管理与调试接口
 
@@ -191,24 +191,24 @@ interface CreateProjectRequestVNext {
 
 ### 8.1 Shot 与生成命令
 
-1. `POST /api/creation/projects/:projectId/shots/:shotId/generate-image`
-2. `POST /api/creation/projects/:projectId/shots/:shotId/generate-video`
+1. `POST /api/projects/:projectId/shots/:shotId/generate-image`
+2. `POST /api/projects/:projectId/shots/:shotId/generate-video`
 
 ### 8.2 Creation Workspace
 
-1. `GET /api/creation/projects/:projectId/workspace`
+1. `GET /api/projects/:projectId/creation/workspace`
 
 ## 9. Publish 接口
 
-1. `GET /api/publish/projects/:projectId/workspace`
-2. `POST /api/publish/projects/:projectId/submit`
+1. `GET /api/projects/:projectId/publish/workspace`
+2. `POST /api/projects/:projectId/publish/submit`
 
 ## 10. 资产与运行接口
 
 ### 10.1 资产
 
-1. `GET /api/planner/projects/:projectId/assets`
-2. `POST /api/planner/projects/:projectId/assets/upload`
+1. `GET /api/projects/:projectId/assets`
+2. `POST /api/projects/:projectId/assets`
 
 ### 10.2 Run
 
@@ -236,9 +236,9 @@ interface CreateProjectRequestVNext {
 1. `/api/explore/subjects/generate-image`
 2. `/api/planner/debug/*`
 3. `/api/planner/sub-agent-profiles/*`
-4. `/api/planner/projects/:projectId/subjects/:subjectId/generate-image`
-5. `/api/planner/projects/:projectId/scenes/:sceneId/generate-image`
-6. `/api/planner/projects/:projectId/shot-scripts/:shotScriptId/generate-image`
+4. `/api/projects/:projectId/planner/subjects/:subjectId/generate-image`
+5. `/api/projects/:projectId/planner/scenes/:sceneId/generate-image`
+6. `/api/projects/:projectId/planner/shot-scripts/:shotScriptId/generate-image`
 
 ### 12.2 当前已变化的接口形态
 

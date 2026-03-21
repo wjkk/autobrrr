@@ -4,11 +4,13 @@
 
 推荐阅读顺序：
 
-1. `backend-implementation-checklist-v0.3.md`
-2. `backend-data-api-spec-v0.3.md`
-3. `internal-execution-api-spec-v0.3.md`
-4. `database-schema-spec-v0.3.md`
+1. `current-architecture-baseline-v0.1.md`
+2. `backend-implementation-checklist-v0.3.md`
+3. `backend-data-api-spec-v0.3.md`
+4. `backend-system-design-spec-v0.3.md`
 5. `refactor-next-phase-plan-v0.3.md`
+6. `planner-state-and-doc-alignment-plan-v0.1.md`
+7. `architecture-9-score-roadmap-v0.1.md`
 
 分类建议：
 

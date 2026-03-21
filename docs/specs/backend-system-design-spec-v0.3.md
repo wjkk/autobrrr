@@ -130,8 +130,8 @@ Planner 的真实特点：
 
 真实实现中：
 
-1. `POST /api/creation/projects/:projectId/shots/:shotId/generate-image`
-2. `POST /api/creation/projects/:projectId/shots/:shotId/generate-video`
+1. `POST /api/projects/:projectId/shots/:shotId/generate-image`
+2. `POST /api/projects/:projectId/shots/:shotId/generate-video`
 
 都会创建 `Run`，再由 worker 驱动执行。
 

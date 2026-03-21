@@ -4,8 +4,11 @@
 日期：2026-03-16
 状态：现行执行基线（用于收口 AI 重构架构口径）
 
-> 路由口径说明（2026-03-20）：
-> 本文若引用旧写法 `/api/projects/:projectId/planner/*`，当前实际外部路由统一以 `/api/planner/projects/:projectId/*` 为准。
+> 路由口径说明（2026-03-21）：
+> - Next.js Web 代理对外路径使用 `/api/planner/projects/:projectId/*`、`/api/creation/projects/:projectId/*`、`/api/publish/projects/:projectId/*`
+> - Fastify 后端实现路径使用 `/api/projects/:projectId/planner/*`、`/api/projects/:projectId/creation/*`、`/api/projects/:projectId/publish/*`
+> - 本文若未特别说明，默认使用后端实现路径
+
 
 ## 1. 文档目的
 

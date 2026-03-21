@@ -1,6 +1,6 @@
 'use client';
 
-import { makeEmptyStyleDraft, makeEmptySubjectDraft } from './catalog-management-page-helpers';
+import { makeEmptyStyleDraft, makeEmptySubjectDraft } from '../lib/catalog-management-drafts';
 import { CatalogStyleDialog } from './catalog-style-dialog';
 import { CatalogSubjectDialog } from './catalog-subject-dialog';
 

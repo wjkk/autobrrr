@@ -2,7 +2,7 @@
 
 import { cx } from '@aiv/ui';
 
-import { usePlannerPageContext } from '../lib/planner-page-context';
+import type { UsePlannerPageStateResult } from '../hooks/use-planner-page-state';
 import { plannerModeLabel } from '../lib/planner-page-helpers';
 import { PlannerDocumentPanel } from './planner-document-panel';
 import { PlannerEpisodeRail } from './planner-episode-rail';
@@ -12,57 +12,62 @@ import { PlannerResultHeader } from './planner-result-header';
 import { PlannerThreadPanel } from './planner-thread-panel';
 import styles from './planner-page.module.css';
 
-export function PlannerPageContent() {
-  const state = usePlannerPageContext();
+interface PlannerPageContentProps {
+  shell: UsePlannerPageStateResult['shell'];
+  thread: UsePlannerPageStateResult['thread'];
+  document: UsePlannerPageStateResult['document'];
+  dialogs: UsePlannerPageStateResult['dialogs'];
+}
 
+export function PlannerPageContent({ shell, thread, document, dialogs }: PlannerPageContentProps) {
   return (
     <>
       <div className={styles.page}>
         <PlannerPageHeader
-          title={state.displayTitle}
-          brief={state.studio.project.brief}
-          plannerModeLabel={plannerModeLabel(state.plannerMode)}
-          onOpenAgentDebug={state.runtimeApi ? state.openAgentDebug : undefined}
-          onBackToExplore={state.backToExplore}
+          title={shell.displayTitle}
+          brief={shell.brief}
+          plannerModeLabel={plannerModeLabel(shell.plannerMode)}
+          onOpenAgentDebug={shell.runtimeEnabled ? shell.openAgentDebug : undefined}
+          onBackToExplore={shell.backToExplore}
         />
 
         <div className={styles.workspace}>
           <section className={styles.leftPanel}>
-            <div className={cx(styles.leftPanelInner, state.plannerMode === 'single' && styles.leftPanelSingle)}>
-              {state.plannerMode === 'series' ? (
+            <div className={cx(styles.leftPanelInner, shell.plannerMode === 'single' && styles.leftPanelSingle)}>
+              {shell.plannerMode === 'series' ? (
                 <PlannerEpisodeRail
-                  episodes={state.plannerEpisodes}
-                  activeEpisodeId={state.activeEpisodeId}
-                  onSelectEpisode={state.setActiveEpisodeId}
+                  episodes={shell.plannerEpisodes}
+                  activeEpisodeId={shell.activeEpisodeId}
+                  onSelectEpisode={shell.setActiveEpisodeId}
                 />
               ) : null}
 
-              <PlannerThreadPanel />
+              <PlannerThreadPanel thread={thread} />
             </div>
           </section>
 
           <section className={styles.rightPanel}>
             <PlannerResultHeader
-              activeEpisodeNumber={state.activeEpisodeNumber}
-              activeEpisodeTitle={state.activeEpisode?.title ?? ''}
-              fallbackEpisodeTitle={state.plannerDoc.episodeTitle}
-              saveState={state.saveState}
-              latestExecutionMode={state.latestPlannerExecutionMode}
-              activeDebugApplySource={state.activeDebugApplySource}
-              historyMenuOpen={state.historyMenuOpen}
-              historyVersions={state.historyVersions}
-              historyActiveVersionId={state.historyActiveVersionId}
-              onOpenDebugRun={state.openDebugRun}
-              onToggleHistory={state.toggleHistoryMenu}
-              onSelectHistoryVersion={state.handleSelectHistoryVersion}
+              activeEpisodeNumber={shell.activeEpisodeNumber}
+              activeEpisodeTitle={shell.activeEpisodeTitle}
+              fallbackEpisodeTitle={shell.fallbackEpisodeTitle}
+              saveState={shell.saveState}
+              latestExecutionMode={shell.latestExecutionMode}
+              activeDebugApplySource={shell.activeDebugApplySource}
+              historyMenuOpen={shell.historyMenuOpen}
+              historyVersions={shell.historyVersions}
+              historyActiveVersionId={shell.historyActiveVersionId}
+              onOpenDebugRun={shell.openDebugRun}
+              onToggleHistory={shell.toggleHistoryMenu}
+              onSelectHistoryVersion={shell.handleSelectHistoryVersion}
             />
 
-            <PlannerDocumentPanel />
+            <PlannerDocumentPanel document={document} />
           </section>
         </div>
       </div>
 
-      <PlannerPageDialogs />
+      <PlannerPageDialogs dialogs={dialogs} />
     </>
   );
 }

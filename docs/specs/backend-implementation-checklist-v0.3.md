@@ -725,7 +725,7 @@ DoD：
 
 目标：
 
-- 新增 SSE 端点：`GET /api/planner/projects/:projectId/stream`
+- 新增 SSE 端点：`GET /api/projects/:projectId/planner/stream`
 - `planner-orchestrator.ts` 执行过程中，通过 SSE 推送步骤事件：
   - `{ event: 'step_started', stepKey, stepTitle }`
   - `{ event: 'step_done', stepKey, details[] }`
@@ -773,7 +773,7 @@ DoD：
 
 建议接口：
 
-- `POST /api/planner/projects/:projectId/refinement-versions/:versionId/create-draft`
+- `POST /api/projects/:projectId/planner/refinement-versions/:versionId/create-draft`
 
 DoD：
 
@@ -790,7 +790,7 @@ DoD：
 
 目标：
 
-- 新增接口：`POST /api/planner/projects/:projectId/finalize`
+- 新增接口：`POST /api/projects/:projectId/planner/finalize`
 - 动作：
   1. 当前 `activeRefinement` 标记 `isConfirmed = true`
   2. 按 `ShotScript[]` 批量创建或更新 `Shot` 记录

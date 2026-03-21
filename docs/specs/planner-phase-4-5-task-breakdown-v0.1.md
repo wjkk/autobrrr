@@ -4,38 +4,11 @@
 日期：2026-03-16
 状态：现行执行拆解（Planner 专项）
 
-> 路由口径说明（2026-03-20）：
-> 本文若引用旧写法 `/api/projects/:projectId/planner/*`，当前实际外部路由统一以 `/api/planner/projects/:projectId/*` 为准。
+> 路由口径说明（2026-03-21）：
+> - Next.js Web 代理对外路径使用 `/api/planner/projects/:projectId/*`、`/api/creation/projects/:projectId/*`、`/api/publish/projects/:projectId/*`
+> - Fastify 后端实现路径使用 `/api/projects/:projectId/planner/*`、`/api/projects/:projectId/creation/*`、`/api/projects/:projectId/publish/*`
+> - 本文若未特别说明，默认使用后端实现路径
 
-当前进度（2026-03-16）：
-
-1. `model-capability.ts` 已落地第一版，开始把 `model_families.capabilityJson` 收口成稳定类型
-2. `shot-prompt-generator.ts` 已落地第一版，已能区分多镜头与单镜头输出
-3. `smoke-planner-refactor.ts` 已验证 `Seedance 2.0` 多镜头 prompt、单镜头 prompt 和 Planner 资产投影
-4. `smoke-planner-api-refactor.ts` 已通过，覆盖标题改写后实体 ID 稳定、Planner 资产回写同步、typed `rerunScope` 落库
-5. `planner-shot-prompts.ts` 与 web proxy 已落地，真实 API smoke 已覆盖 `shot-prompts` 预览请求
-6. Planner `generate-doc / partial-rerun` 已把目标视频模型能力摘要注入 refinement prompt，并将 `targetModelFamilySlug` 写入 run input、structured doc、`PlannerShotScript` 与 workspace
-7. Planner 页已可切换真实视频模型并查看 `shot-prompts` 预览，不再停留在静态 selector
-8. 已确认版本创建草稿副本已落地；确认版上的继续修改、局部 patch、AI 重跑会先创建草稿副本，并为新副本重写独立实体 ID / `entityKey`
-9. `planner/finalize` 已落地；active refinement 可正式写入 Creation `Shot`，并携带 prompt、目标模型、草稿图绑定和来源追踪
-10. Planner SSE 已落地；queued/running 阶段会先基于 run input 的 `stepDefinitions` 输出实时步骤，refinement 落库后切到真实 `stepAnalysis`
-11. Planner partial rerun 已在前后端统一到 typed `rerunScope`；页面已支持单 shot 精细重跑与 act 级局部重排入口
-12. Planner refinement `subjects / scenes` 已新增显式 `entityType`，并由后端收敛为“模型声明 + 语义校验”双保险；相关 parser / projection / web structured-doc adapter 已同步
-13. Outline 阶段已前推轻量实体约束：`mainCharacters` 不再承载地点语义，关键空间信息要求进入 `storyArc.summary`
-
-状态收口结论：
-
-1. `工作流 B：模型能力查询服务` 可视为已完成第一阶段实现
-2. `工作流 C：分镜提示词生成服务` 可视为已完成第一阶段实现
-3. `工作流 D：Planner orchestrator 模型感知注入` 已完成当前阶段实现
-4. `工作流 E：shot-prompts 预览接口` 已完成当前阶段实现
-5. `工作流 I：已确认版本创建草稿副本` 已完成当前阶段实现
-6. `工作流 F：planner/finalize` 已完成当前阶段实现
-7. `工作流 G：Planner SSE 实时步骤推送` 已完成当前阶段实现
-8. `工作流 H：shot 级精细化重跑` 已完成当前阶段实现
-9. `工作流 J：前端 Planner 页整合` 已完成当前阶段实现
-10. `planner-page.tsx` 当前已拆出 `planner-page-header.tsx`、`planner-episode-rail.tsx`、`planner-script-acts.tsx`、`planner-thread-panel.tsx`、`planner-asset-dialog.tsx`、`planner-document-panel.tsx`、`planner-result-header.tsx`、`planner-delete-shot-dialog.tsx`、`planner-creation-boot-dialog.tsx`，并新增 `use-planner-runtime-workspace.ts`、`use-planner-run-submission.ts`、`use-planner-asset-drafts.ts`、`use-planner-asset-actions.ts`、`use-planner-document-persistence.ts`、`use-planner-composer-actions.ts`、`use-planner-shot-editor.ts`、`use-planner-shot-actions.ts`、`use-planner-shot-prompt-preview.ts`、`use-planner-creation-flow.ts`、`use-planner-display-state.ts`、`use-planner-dialog-display-state.ts`，以及 `planner-page-helpers.ts`、`planner-page-dialogs.tsx` 等收口文件；`planner-page.tsx` 已降到约 658 行，Planner 页“进入创作”已通过真实浏览器回归，覆盖“同模型直接进入创作”和“切模型重新 finalize 后进入创作”
-11. Planner 文档实体语义已完成第一轮收敛：refinement 产物具备显式 `entityType`，outline 也已补前置约束，适合开始基于稳定实体类型推进新功能
 
 ## 1. 文档目的
 

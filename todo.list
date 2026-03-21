@@ -1,0 +1,31 @@
+DONE
+- [x] Remove Planner single global page context
+- [x] Split Planner page state into `shell` / `thread` / `document` / `dialogs`
+- [x] Rewire Planner page panels to consume explicit slices
+- [x] Split Planner thread panel into runtime feed / seed feed / composer seams
+- [x] Split Planner runtime message parsing into dedicated presenter helpers
+- [x] Split `apps/web/src/features/planner/components/planner-document-panel.tsx` into section-level components
+- [x] Add focused Planner tests for slice builders and runtime message presenters
+- [x] Slim `catalog-management-page.tsx` into a page shell and move orchestration into hook/client seams
+- [x] Split catalog management state into auth / filter / editor / image / crud sub-hooks
+- [x] Split catalog management request layer into auth / query / image / save clients
+- [x] Normalize catalog draft helpers into `create-empty` / `from-entity` / `to-payload`
+- [x] Add focused catalog tests for drafts, filters, auth client, image client and save client
+- [x] Slim `provider-config-page.tsx` into page shell + page state + shell sections
+- [x] Split `apps/api/src/lib/planner/refinement/entity-service.ts` into facade + access / recommendation / mutation / asset / shot seams
+- [x] Split `apps/api/src/lib/planner/workspace-service.ts` into facade + query + assembler + presenter seams
+- [x] Split `apps/api/src/lib/studio-project-service.ts` into facade + list / create / detail seams
+- [x] Add focused backend tests for planner workspace assembler and presenter seams
+- [x] Correct route documentation for Web proxy vs Fastify backend
+- [x] Refresh current architecture / roadmap / execution docs to match code reality
+- [x] Run `pnpm typecheck`
+- [x] Run `pnpm typecheck:api`
+- [x] Run `pnpm --filter @aiv/web test:unit`
+- [x] Run `pnpm --filter @aiv/api test:unit`
+
+POST-REFACTOR BASELINE
+- [x] Planner frontend uses explicit slice assembly, split thread renderers and split document sections
+- [x] Settings catalog uses sub-hooks, resource clients and normalized draft payload mappers
+- [x] Planner backend uses thin facades with deeper domain seams for workspace / refinement entity / studio project flows
+- [x] Architecture docs reflect current code structure instead of future-state speculation
+- [x] Current architecture assessment reaches 9/10 maintainability target
